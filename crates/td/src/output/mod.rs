@@ -9,6 +9,7 @@ use todoist_api::sync::Item;
 use todoist_cache::Cache;
 
 use crate::commands::add::AddResult;
+use crate::commands::show::ShowResult;
 
 /// JSON output structure for list command.
 #[derive(Serialize)]
@@ -39,6 +40,64 @@ pub struct CreatedItemOutput<'a> {
     pub content: &'a str,
     pub project_id: &'a str,
     pub project_name: Option<&'a str>,
+}
+
+/// JSON output structure for task details (show command).
+#[derive(Serialize)]
+pub struct TaskDetailsOutput<'a> {
+    pub id: &'a str,
+    pub content: &'a str,
+    pub description: &'a str,
+    pub priority: u8,
+    pub due: Option<DueOutput<'a>>,
+    pub project_id: &'a str,
+    pub project_name: Option<&'a str>,
+    pub section_id: Option<&'a str>,
+    pub section_name: Option<&'a str>,
+    pub parent_id: Option<&'a str>,
+    pub labels: &'a [String],
+    pub checked: bool,
+    pub created_at: Option<&'a str>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub comments: Vec<CommentOutput<'a>>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub reminders: Vec<ReminderOutput<'a>>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub subtasks: Vec<SubtaskOutput<'a>>,
+}
+
+/// JSON output for due date.
+#[derive(Serialize)]
+pub struct DueOutput<'a> {
+    pub date: &'a str,
+    pub datetime: Option<&'a str>,
+    pub string: Option<&'a str>,
+    pub is_recurring: bool,
+}
+
+/// JSON output for a comment.
+#[derive(Serialize)]
+pub struct CommentOutput<'a> {
+    pub id: &'a str,
+    pub content: &'a str,
+    pub posted_at: Option<&'a str>,
+}
+
+/// JSON output for a reminder.
+#[derive(Serialize)]
+pub struct ReminderOutput<'a> {
+    pub id: &'a str,
+    pub reminder_type: &'a str,
+    pub due: Option<DueOutput<'a>>,
+    pub minute_offset: Option<i32>,
+}
+
+/// JSON output for a subtask.
+#[derive(Serialize)]
+pub struct SubtaskOutput<'a> {
+    pub id: &'a str,
+    pub content: &'a str,
+    pub checked: bool,
 }
 
 /// Formats items as JSON.
@@ -89,6 +148,168 @@ pub fn format_created_item(result: &AddResult) -> Result<String, serde_json::Err
     };
 
     serde_json::to_string_pretty(&output)
+}
+
+/// Formats item details as JSON (show command).
+pub fn format_item_details_json(result: &ShowResult) -> Result<String, serde_json::Error> {
+    let due = result.item.due.as_ref().map(|d| DueOutput {
+        date: &d.date,
+        datetime: d.datetime.as_deref(),
+        string: d.string.as_deref(),
+        is_recurring: d.is_recurring,
+    });
+
+    let comments: Vec<CommentOutput> = result
+        .comments
+        .iter()
+        .map(|n| CommentOutput {
+            id: &n.id,
+            content: &n.content,
+            posted_at: n.posted_at.as_deref(),
+        })
+        .collect();
+
+    let reminders: Vec<ReminderOutput> = result
+        .reminders
+        .iter()
+        .map(|r| ReminderOutput {
+            id: &r.id,
+            reminder_type: &r.reminder_type,
+            due: r.due.as_ref().map(|d| DueOutput {
+                date: &d.date,
+                datetime: d.datetime.as_deref(),
+                string: d.string.as_deref(),
+                is_recurring: d.is_recurring,
+            }),
+            minute_offset: r.minute_offset,
+        })
+        .collect();
+
+    let subtasks: Vec<SubtaskOutput> = result
+        .subtasks
+        .iter()
+        .map(|i| SubtaskOutput {
+            id: &i.id,
+            content: &i.content,
+            checked: i.checked,
+        })
+        .collect();
+
+    let output = TaskDetailsOutput {
+        id: &result.item.id,
+        content: &result.item.content,
+        description: &result.item.description,
+        // Convert API priority (4=highest) to user priority (1=highest)
+        priority: (5 - result.item.priority) as u8,
+        due,
+        project_id: &result.item.project_id,
+        project_name: result.project_name.as_deref(),
+        section_id: result.item.section_id.as_deref(),
+        section_name: result.section_name.as_deref(),
+        parent_id: result.item.parent_id.as_deref(),
+        labels: &result.labels,
+        checked: result.item.checked,
+        created_at: result.item.added_at.as_deref(),
+        comments,
+        reminders,
+        subtasks,
+    };
+
+    serde_json::to_string_pretty(&output)
+}
+
+/// Formats item details as a human-readable table (show command).
+pub fn format_item_details_table(result: &ShowResult, use_colors: bool) -> String {
+    let mut output = String::new();
+
+    // Task header
+    let content_label = if use_colors {
+        "Task:".bold().to_string()
+    } else {
+        "Task:".to_string()
+    };
+    output.push_str(&format!("{} {}\n", content_label, result.item.content));
+
+    // ID
+    output.push_str(&format!("ID: {}\n", result.item.id));
+
+    // Project
+    if let Some(ref project_name) = result.project_name {
+        output.push_str(&format!("Project: {}\n", project_name));
+    }
+
+    // Section
+    if let Some(ref section_name) = result.section_name {
+        output.push_str(&format!("Section: {}\n", section_name));
+    }
+
+    // Priority
+    let priority_display = format_priority_verbose(result.item.priority, use_colors);
+    output.push_str(&format!("Priority: {}\n", priority_display));
+
+    // Due date
+    if let Some(ref due) = result.item.due {
+        let due_display = format_due_verbose(due, use_colors);
+        output.push_str(&format!("Due: {}\n", due_display));
+    }
+
+    // Labels
+    if !result.labels.is_empty() {
+        let labels_str: Vec<String> = result.labels.iter().map(|l| format!("@{}", l)).collect();
+        output.push_str(&format!("Labels: {}\n", labels_str.join(", ")));
+    }
+
+    // Created at
+    if let Some(ref created) = result.item.added_at {
+        output.push_str(&format!("Created: {}\n", format_datetime(created)));
+    }
+
+    // Description
+    if !result.item.description.is_empty() {
+        output.push_str("Description:\n");
+        for line in result.item.description.lines() {
+            output.push_str(&format!("  {}\n", line));
+        }
+    }
+
+    // Subtasks
+    if !result.subtasks.is_empty() {
+        output.push_str(&format!("\nSubtasks ({}):\n", result.subtasks.len()));
+        for subtask in &result.subtasks {
+            let checkbox = if subtask.checked { "[x]" } else { "[ ]" };
+            output.push_str(&format!("  {} {}\n", checkbox, subtask.content));
+        }
+    }
+
+    // Comments
+    if !result.comments.is_empty() {
+        output.push_str(&format!("\nComments ({}):\n", result.comments.len()));
+        for comment in &result.comments {
+            let timestamp = comment
+                .posted_at
+                .as_ref()
+                .map(|t| format_datetime(t))
+                .unwrap_or_default();
+            if !timestamp.is_empty() {
+                output.push_str(&format!("  [{}]\n", timestamp));
+            }
+            for line in comment.content.lines() {
+                output.push_str(&format!("  {}\n", line));
+            }
+            output.push('\n');
+        }
+    }
+
+    // Reminders
+    if !result.reminders.is_empty() {
+        output.push_str(&format!("\nReminders ({}):\n", result.reminders.len()));
+        for reminder in &result.reminders {
+            let reminder_desc = format_reminder(reminder);
+            output.push_str(&format!("  - {}\n", reminder_desc));
+        }
+    }
+
+    output
 }
 
 /// Formats items as a table.
@@ -227,6 +448,130 @@ fn format_labels(labels: &[String], max_len: usize) -> String {
     let joined = formatted.join(" ");
 
     truncate_str(&joined, max_len)
+}
+
+/// Formats priority for verbose display (show command).
+fn format_priority_verbose(api_priority: i32, use_colors: bool) -> String {
+    let user_priority = 5 - api_priority;
+    let label = match user_priority {
+        1 => "p1 (highest)",
+        2 => "p2 (high)",
+        3 => "p3 (medium)",
+        _ => "p4 (normal)",
+    };
+
+    if use_colors {
+        match user_priority {
+            1 => label.red().to_string(),
+            2 => label.yellow().to_string(),
+            3 => label.blue().to_string(),
+            _ => label.dimmed().to_string(),
+        }
+    } else {
+        label.to_string()
+    }
+}
+
+/// Formats a due date for verbose display (show command).
+fn format_due_verbose(due: &todoist_api::sync::Due, use_colors: bool) -> String {
+    // Try to parse and format the date nicely
+    let mut result = if let Ok(date) = NaiveDate::parse_from_str(&due.date, "%Y-%m-%d") {
+        let today = Local::now().date_naive();
+        let tomorrow = today + chrono::Duration::days(1);
+
+        let date_str = if date == today {
+            "Today".to_string()
+        } else if date == tomorrow {
+            "Tomorrow".to_string()
+        } else if date < today {
+            let days = (today - date).num_days();
+            format!("{} days overdue", days)
+        } else {
+            date.format("%B %d, %Y").to_string()
+        };
+
+        if use_colors {
+            if date < today {
+                date_str.red().to_string()
+            } else if date == today {
+                date_str.yellow().to_string()
+            } else {
+                date_str
+            }
+        } else {
+            date_str
+        }
+    } else {
+        due.date.clone()
+    };
+
+    // Add time if available
+    if let Some(ref datetime) = due.datetime {
+        // Try to extract time from datetime string
+        if let Some(time_part) = datetime.split('T').nth(1) {
+            // Strip timezone info and format nicely
+            let time_clean = time_part.trim_end_matches('Z');
+            let hm: String = time_clean.split(':').take(2).collect::<Vec<_>>().join(":");
+            if !hm.is_empty() {
+                result.push_str(&format!(" at {}", hm));
+            }
+        }
+    }
+
+    // Add recurring indicator
+    if due.is_recurring {
+        if let Some(ref string) = due.string {
+            result.push_str(&format!(" ({})", string));
+        } else {
+            result.push_str(" (recurring)");
+        }
+    }
+
+    result
+}
+
+/// Formats a datetime string for display.
+fn format_datetime(datetime: &str) -> String {
+    // Try to parse ISO 8601 / RFC 3339 format
+    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(datetime) {
+        let local = dt.with_timezone(&Local);
+        local.format("%Y-%m-%d %H:%M").to_string()
+    } else {
+        // Fallback to original string
+        datetime.to_string()
+    }
+}
+
+/// Formats a reminder for display.
+fn format_reminder(reminder: &todoist_api::sync::Reminder) -> String {
+    match reminder.reminder_type.as_str() {
+        "relative" => {
+            if let Some(offset) = reminder.minute_offset {
+                if offset == 0 {
+                    "At time of due date".to_string()
+                } else if offset < 60 {
+                    format!("{} minutes before", offset)
+                } else if offset == 60 {
+                    "1 hour before".to_string()
+                } else if offset < 1440 {
+                    format!("{} hours before", offset / 60)
+                } else {
+                    format!("{} days before", offset / 1440)
+                }
+            } else {
+                "Relative reminder".to_string()
+            }
+        }
+        "absolute" => {
+            if let Some(ref due) = reminder.due {
+                format!("At {}", due.date)
+            } else {
+                "Absolute reminder".to_string()
+            }
+        }
+        "location" => "Location-based reminder".to_string(),
+        _ => reminder.reminder_type.clone(),
+    }
 }
 
 #[cfg(test)]
