@@ -8,6 +8,8 @@ use serde::Serialize;
 use todoist_api::sync::Item;
 use todoist_cache::Cache;
 
+use crate::commands::add::AddResult;
+
 /// JSON output structure for list command.
 #[derive(Serialize)]
 pub struct ListOutput<'a> {
@@ -28,6 +30,15 @@ pub struct TaskOutput<'a> {
     pub project_name: Option<&'a str>,
     pub section_id: Option<&'a str>,
     pub labels: &'a [String],
+}
+
+/// JSON output structure for a created item.
+#[derive(Serialize)]
+pub struct CreatedItemOutput<'a> {
+    pub id: &'a str,
+    pub content: &'a str,
+    pub project_id: &'a str,
+    pub project_name: Option<&'a str>,
 }
 
 /// Formats items as JSON.
@@ -63,6 +74,18 @@ pub fn format_items_json(
         tasks,
         cursor: None,     // Pagination not implemented yet
         has_more: false,  // Pagination not implemented yet
+    };
+
+    serde_json::to_string_pretty(&output)
+}
+
+/// Formats a created item as JSON.
+pub fn format_created_item(result: &AddResult) -> Result<String, serde_json::Error> {
+    let output = CreatedItemOutput {
+        id: &result.id,
+        content: &result.content,
+        project_id: &result.project_id,
+        project_name: result.project_name.as_deref(),
     };
 
     serde_json::to_string_pretty(&output)

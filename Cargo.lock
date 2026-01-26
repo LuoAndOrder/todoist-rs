@@ -1359,6 +1359,7 @@ dependencies = [
  "todoist-cache",
  "tokio",
  "toml",
+ "uuid",
 ]
 
 [[package]]

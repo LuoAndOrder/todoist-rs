@@ -29,6 +29,7 @@ directories = "5"
 # Optional
 keyring = "3"
 owo-colors = "4"
+uuid = { version = "1", features = ["v4"] }
 
 # Workspace crates
 todoist-api = { path = "crates/todoist-api" }

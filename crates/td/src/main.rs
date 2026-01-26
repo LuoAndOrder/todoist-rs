@@ -72,6 +72,29 @@ async fn run(cli: &Cli) -> commands::Result<()> {
             commands::list::execute(&ctx, &opts, &token).await
         }
 
+        Some(Commands::Add {
+            content,
+            project,
+            priority,
+            due,
+            label,
+            section,
+            parent,
+            description,
+        }) => {
+            let opts = commands::add::AddOptions {
+                content: content.clone(),
+                project: project.clone(),
+                priority: *priority,
+                due: due.clone(),
+                labels: label.clone(),
+                section: section.clone(),
+                parent: parent.clone(),
+                description: description.clone(),
+            };
+            commands::add::execute(&ctx, &opts, &token).await
+        }
+
         Some(cmd) => {
             // Other commands not yet implemented
             if cli.json {
