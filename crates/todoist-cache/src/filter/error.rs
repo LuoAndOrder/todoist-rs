@@ -1,5 +1,6 @@
 //! Error types for the filter parser.
 
+use super::lexer::LexerError;
 use thiserror::Error;
 
 /// A specialized Result type for filter parsing operations.
@@ -40,6 +41,26 @@ pub enum FilterError {
         /// The unrecognized keyword.
         keyword: String,
     },
+
+    /// Unknown characters were encountered during lexing.
+    #[error("unknown character(s) in filter: {}", format_lexer_errors(.errors))]
+    UnknownCharacters {
+        /// The lexer errors for each unknown character.
+        errors: Vec<LexerError>,
+    },
+}
+
+/// Formats a list of lexer errors for display.
+fn format_lexer_errors(errors: &[LexerError]) -> String {
+    if errors.len() == 1 {
+        format!("'{}' at position {}", errors[0].character, errors[0].position)
+    } else {
+        errors
+            .iter()
+            .map(|e| format!("'{}' at {}", e.character, e.position))
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
 }
 
 impl FilterError {

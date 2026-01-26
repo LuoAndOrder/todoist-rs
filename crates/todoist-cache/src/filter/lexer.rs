@@ -3,6 +3,36 @@
 use std::iter::Peekable;
 use std::str::Chars;
 
+/// Error encountered during lexical analysis.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LexerError {
+    /// The character that could not be tokenized.
+    pub character: char,
+    /// The position (0-indexed byte offset) where the error occurred.
+    pub position: usize,
+}
+
+impl std::fmt::Display for LexerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "unexpected character '{}' at position {}",
+            self.character, self.position
+        )
+    }
+}
+
+impl std::error::Error for LexerError {}
+
+/// Result of tokenizing a filter expression.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LexerResult {
+    /// The tokens successfully parsed.
+    pub tokens: Vec<FilterToken>,
+    /// Any errors encountered (unknown characters).
+    pub errors: Vec<LexerError>,
+}
+
 /// A token in a filter expression.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FilterToken {
@@ -56,6 +86,10 @@ pub enum FilterToken {
 /// Lexer for tokenizing filter expressions.
 pub struct Lexer<'a> {
     chars: Peekable<Chars<'a>>,
+    /// Current byte position in the input string.
+    position: usize,
+    /// Errors encountered during tokenization.
+    errors: Vec<LexerError>,
 }
 
 impl<'a> Lexer<'a> {
@@ -63,6 +97,8 @@ impl<'a> Lexer<'a> {
     pub fn new(input: &'a str) -> Self {
         Self {
             chars: input.chars().peekable(),
+            position: 0,
+            errors: Vec::new(),
         }
     }
 
@@ -71,9 +107,18 @@ impl<'a> Lexer<'a> {
         self.chars.peek()
     }
 
-    /// Consumes and returns the next character.
+    /// Consumes and returns the next character, updating position.
     fn next_char(&mut self) -> Option<char> {
-        self.chars.next()
+        let c = self.chars.next();
+        if let Some(ch) = c {
+            self.position += ch.len_utf8();
+        }
+        c
+    }
+
+    /// Returns the current position (for error reporting).
+    fn current_position(&self) -> usize {
+        self.position
     }
 
     /// Skips whitespace characters.
@@ -219,9 +264,14 @@ impl<'a> Lexer<'a> {
                 self.try_keyword(&lower)
             }
 
-            // Unknown character - skip it
+            // Unknown character - record error and continue
             _ => {
-                self.next_char();
+                let error_pos = self.current_position();
+                let unknown_char = self.next_char().unwrap();
+                self.errors.push(LexerError {
+                    character: unknown_char,
+                    position: error_pos,
+                });
                 self.next_token()
             }
         }
@@ -252,12 +302,27 @@ impl<'a> Lexer<'a> {
     }
 
     /// Collects all tokens into a vector.
-    pub fn tokenize(mut self) -> Vec<FilterToken> {
+    ///
+    /// This method is provided for backward compatibility. For error reporting,
+    /// use [`tokenize_with_errors`] instead.
+    #[cfg(test)]
+    pub fn tokenize(self) -> Vec<FilterToken> {
+        self.tokenize_with_errors().tokens
+    }
+
+    /// Collects all tokens and any errors encountered.
+    ///
+    /// Returns a [`LexerResult`] containing both the successfully parsed tokens
+    /// and any errors for unknown characters.
+    pub fn tokenize_with_errors(mut self) -> LexerResult {
         let mut tokens = Vec::new();
         while let Some(token) = self.next_token() {
             tokens.push(token);
         }
-        tokens
+        LexerResult {
+            tokens,
+            errors: self.errors,
+        }
     }
 }
 

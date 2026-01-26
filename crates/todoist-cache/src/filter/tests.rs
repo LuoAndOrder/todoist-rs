@@ -374,3 +374,61 @@ fn test_filter_error_display() {
     let err = FilterError::UnclosedParenthesis;
     assert_eq!(format!("{}", err), "unclosed parenthesis");
 }
+
+// ==================== Unknown Character Error Tests ====================
+
+#[test]
+fn test_error_unknown_character() {
+    let result = FilterParser::parse("today $ p1");
+    match result {
+        Err(FilterError::UnknownCharacters { errors }) => {
+            assert_eq!(errors.len(), 1);
+            assert_eq!(errors[0].character, '$');
+            assert_eq!(errors[0].position, 6); // "today " = 6 bytes
+        }
+        other => panic!("Expected UnknownCharacters error, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_error_multiple_unknown_characters() {
+    let result = FilterParser::parse("$today % p1");
+    match result {
+        Err(FilterError::UnknownCharacters { errors }) => {
+            assert_eq!(errors.len(), 2);
+            assert_eq!(errors[0].character, '$');
+            assert_eq!(errors[0].position, 0);
+            assert_eq!(errors[1].character, '%');
+            assert_eq!(errors[1].position, 7); // "$today " = 7 bytes
+        }
+        other => panic!("Expected UnknownCharacters error, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_error_unknown_character_display() {
+    use super::lexer::LexerError;
+    let err = FilterError::UnknownCharacters {
+        errors: vec![LexerError {
+            character: '$',
+            position: 6,
+        }],
+    };
+    let msg = format!("{}", err);
+    assert!(msg.contains("'$'"));
+    assert!(msg.contains("position 6"));
+}
+
+#[test]
+fn test_error_unknown_character_unicode() {
+    // Test with a Unicode character
+    let result = FilterParser::parse("today 🎉 p1");
+    match result {
+        Err(FilterError::UnknownCharacters { errors }) => {
+            assert_eq!(errors.len(), 1);
+            assert_eq!(errors[0].character, '🎉');
+            assert_eq!(errors[0].position, 6);
+        }
+        other => panic!("Expected UnknownCharacters error, got {:?}", other),
+    }
+}

@@ -64,6 +64,9 @@ impl FilterParser {
     /// Returns `FilterError::EmptyExpression` if the input is empty or contains
     /// no valid tokens.
     ///
+    /// Returns `FilterError::UnknownCharacters` if unknown characters are encountered
+    /// during lexing (e.g., `$`, `%`, etc.).
+    ///
     /// Returns `FilterError::UnexpectedToken` if an unexpected token is encountered.
     ///
     /// Returns `FilterError::UnclosedParenthesis` if parentheses are not balanced.
@@ -73,7 +76,16 @@ impl FilterParser {
             return Err(FilterError::EmptyExpression);
         }
 
-        let tokens = Lexer::new(trimmed).tokenize();
+        let lexer_result = Lexer::new(trimmed).tokenize_with_errors();
+
+        // Report lexer errors (unknown characters)
+        if !lexer_result.errors.is_empty() {
+            return Err(FilterError::UnknownCharacters {
+                errors: lexer_result.errors,
+            });
+        }
+
+        let tokens = lexer_result.tokens;
         if tokens.is_empty() {
             return Err(FilterError::EmptyExpression);
         }
