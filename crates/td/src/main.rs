@@ -1,22 +1,80 @@
 use clap::Parser;
+use std::process::ExitCode;
 
 mod cli;
+mod commands;
+mod output;
 
-use cli::Cli;
+use cli::{Cli, Commands};
+use commands::{CommandContext, CommandError};
 
-fn main() {
+#[tokio::main]
+async fn main() -> ExitCode {
     let cli = Cli::parse();
 
-    // Handle verbosity
-    if cli.verbose {
-        eprintln!("Verbose mode enabled");
-    }
-
-    // For now, just print what command was invoked
-    match &cli.command {
-        Some(cmd) => {
+    match run(&cli).await {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
             if cli.json {
-                // JSON output mode
+                let error_json = serde_json::json!({
+                    "error": {
+                        "code": error_code(&e),
+                        "message": e.to_string(),
+                    }
+                });
+                eprintln!("{}", serde_json::to_string_pretty(&error_json).unwrap());
+            } else {
+                eprintln!("Error: {e}");
+            }
+            error_exit_code(&e)
+        }
+    }
+}
+
+async fn run(cli: &Cli) -> commands::Result<()> {
+    let ctx = CommandContext::from_cli(cli);
+
+    // Get token from CLI or environment
+    let token = cli
+        .token
+        .clone()
+        .ok_or_else(|| CommandError::Config("No API token provided. Use --token or set TODOIST_TOKEN environment variable.".to_string()))?;
+
+    match &cli.command {
+        Some(Commands::List {
+            filter,
+            project,
+            label,
+            priority,
+            section,
+            overdue,
+            no_due,
+            limit,
+            all,
+            cursor,
+            sort,
+            reverse,
+        }) => {
+            let opts = commands::list::ListOptions {
+                filter: filter.clone(),
+                project: project.clone(),
+                label: label.clone(),
+                priority: *priority,
+                section: section.clone(),
+                overdue: *overdue,
+                no_due: *no_due,
+                limit: *limit,
+                all: *all,
+                cursor: cursor.clone(),
+                sort: sort.clone(),
+                reverse: *reverse,
+            };
+            commands::list::execute(&ctx, &opts, &token).await
+        }
+
+        Some(cmd) => {
+            // Other commands not yet implemented
+            if cli.json {
                 println!(
                     "{}",
                     serde_json::json!({
@@ -25,14 +83,44 @@ fn main() {
                     })
                 );
             } else if !cli.quiet {
-                println!("Command: {:?}", cmd);
+                println!("Command not yet implemented: {:?}", cmd);
             }
+            Ok(())
         }
+
         None => {
             if !cli.quiet {
                 println!("td - Todoist CLI");
                 println!("Use --help for usage information");
             }
+            Ok(())
         }
+    }
+}
+
+/// Returns the error code string for JSON output.
+fn error_code(e: &CommandError) -> &'static str {
+    match e {
+        CommandError::Sync(_) => "SYNC_ERROR",
+        CommandError::CacheStore(_) => "CACHE_ERROR",
+        CommandError::Filter(_) => "FILTER_ERROR",
+        CommandError::Api(_) => "API_ERROR",
+        CommandError::Config(_) => "CONFIG_ERROR",
+        CommandError::Io(_) => "IO_ERROR",
+        CommandError::Json(_) => "JSON_ERROR",
+    }
+}
+
+/// Returns the exit code for an error.
+fn error_exit_code(e: &CommandError) -> ExitCode {
+    match e {
+        CommandError::Config(_) => ExitCode::from(5),
+        CommandError::Filter(_) => ExitCode::from(1),
+        CommandError::Api(_) => ExitCode::from(2),
+        CommandError::Sync(todoist_cache::SyncError::Api(_)) => ExitCode::from(2),
+        CommandError::Sync(todoist_cache::SyncError::Cache(_)) => ExitCode::from(5),
+        CommandError::CacheStore(_) => ExitCode::from(5),
+        CommandError::Io(_) => ExitCode::from(3),
+        CommandError::Json(_) => ExitCode::from(1),
     }
 }
