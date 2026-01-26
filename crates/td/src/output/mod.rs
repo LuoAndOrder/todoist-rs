@@ -9,7 +9,7 @@ use todoist_api::sync::Item;
 use todoist_cache::Cache;
 
 use crate::commands::add::AddResult;
-use crate::commands::projects::{ProjectAddResult, ProjectArchiveResult, ProjectEditResult, ProjectsShowResult};
+use crate::commands::projects::{ProjectAddResult, ProjectArchiveResult, ProjectEditResult, ProjectsShowResult, ProjectUnarchiveResult};
 use crate::commands::quick::QuickResult;
 use crate::commands::show::ShowResult;
 
@@ -674,6 +674,25 @@ pub fn format_archived_project(result: &ProjectArchiveResult) -> Result<String, 
         id: &result.id,
         name: &result.name,
         status: "archived",
+    };
+
+    serde_json::to_string_pretty(&output)
+}
+
+/// JSON output structure for an unarchived project.
+#[derive(Serialize)]
+pub struct UnarchivedProjectOutput<'a> {
+    pub id: &'a str,
+    pub name: &'a str,
+    pub status: &'static str,
+}
+
+/// Formats an unarchived project as JSON.
+pub fn format_unarchived_project(result: &ProjectUnarchiveResult) -> Result<String, serde_json::Error> {
+    let output = UnarchivedProjectOutput {
+        id: &result.id,
+        name: &result.name,
+        status: "unarchived",
     };
 
     serde_json::to_string_pretty(&output)

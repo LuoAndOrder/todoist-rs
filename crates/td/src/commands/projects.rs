@@ -703,6 +703,141 @@ pub async fn execute_archive(ctx: &CommandContext, opts: &ProjectsArchiveOptions
     Ok(())
 }
 
+// ============================================================================
+// Projects Unarchive Command
+// ============================================================================
+
+/// Options for the projects unarchive command.
+#[derive(Debug)]
+pub struct ProjectsUnarchiveOptions {
+    /// Project ID (full ID or prefix).
+    pub project_id: String,
+}
+
+/// Result of a successful project unarchive operation.
+#[derive(Debug)]
+pub struct ProjectUnarchiveResult {
+    /// The ID of the unarchived project.
+    pub id: String,
+    /// The name of the unarchived project.
+    pub name: String,
+}
+
+/// Executes the projects unarchive command.
+///
+/// # Arguments
+///
+/// * `ctx` - Command context with output settings
+/// * `opts` - Projects unarchive command options
+/// * `token` - API token
+///
+/// # Errors
+///
+/// Returns an error if syncing fails, project lookup fails, or the API returns an error.
+pub async fn execute_unarchive(ctx: &CommandContext, opts: &ProjectsUnarchiveOptions, token: &str) -> Result<()> {
+    // Initialize sync manager to resolve project ID
+    let client = TodoistClient::new(token);
+    let store = CacheStore::new()?;
+    let mut manager = SyncManager::new(client, store)?;
+
+    // Sync to get current state (for project lookup)
+    manager.sync().await?;
+    let cache = manager.cache();
+
+    // Find the project by ID or prefix (include archived projects)
+    let project = find_project_by_id_or_prefix_include_archived(cache, &opts.project_id)?;
+    let project_id = project.id.clone();
+    let project_name = project.name.clone();
+
+    // Check if project is not archived
+    if !project.is_archived {
+        return Err(CommandError::Config(format!(
+            "Project '{}' is not archived",
+            project_name
+        )));
+    }
+
+    // Build the project_unarchive command arguments
+    let args = serde_json::json!({
+        "id": project_id,
+    });
+
+    // Create the command
+    let command = SyncCommand::new("project_unarchive", args);
+
+    // Execute the command
+    let api_client = TodoistClient::new(token);
+    let request = SyncRequest::with_commands(vec![command]);
+    let response = api_client.sync(request).await?;
+
+    // Check for errors
+    if response.has_errors() {
+        let errors = response.errors();
+        if let Some((_, error)) = errors.first() {
+            return Err(CommandError::Api(todoist_api::error::Error::Api(
+                todoist_api::error::ApiError::Validation {
+                    field: None,
+                    message: format!("Error {}: {}", error.error_code, error.error),
+                },
+            )));
+        }
+    }
+
+    let result = ProjectUnarchiveResult {
+        id: project_id,
+        name: project_name,
+    };
+
+    // Output
+    if ctx.json_output {
+        let output = crate::output::format_unarchived_project(&result)?;
+        println!("{output}");
+    } else if !ctx.quiet {
+        if ctx.verbose {
+            println!("Unarchived project: {} ({})", result.name, result.id);
+        } else {
+            let prefix = &result.id[..6.min(result.id.len())];
+            println!("Unarchived: {} ({})", result.name, prefix);
+        }
+    }
+
+    Ok(())
+}
+
+/// Finds a project by full ID or unique prefix, including archived projects.
+fn find_project_by_id_or_prefix_include_archived<'a>(cache: &'a Cache, id: &str) -> Result<&'a Project> {
+    // First try exact match
+    if let Some(project) = cache.projects.iter().find(|p| p.id == id && !p.is_deleted) {
+        return Ok(project);
+    }
+
+    // Try prefix match
+    let matches: Vec<&Project> = cache
+        .projects
+        .iter()
+        .filter(|p| p.id.starts_with(id) && !p.is_deleted)
+        .collect();
+
+    match matches.len() {
+        0 => Err(CommandError::Config(format!("Project not found: {id}"))),
+        1 => Ok(matches[0]),
+        _ => {
+            // Ambiguous prefix - provide helpful error message
+            let mut msg = format!("Ambiguous project ID \"{id}\"\n\nMultiple projects match this prefix:");
+            for project in matches.iter().take(5) {
+                let prefix = &project.id[..6.min(project.id.len())];
+                let archived_indicator = if project.is_archived { " [archived]" } else { "" };
+                msg.push_str(&format!("\n  {}  {}{}", prefix, project.name, archived_indicator));
+            }
+            if matches.len() > 5 {
+                msg.push_str(&format!("\n  ... and {} more", matches.len() - 5));
+            }
+            msg.push_str("\n\nPlease use a longer prefix.");
+            Err(CommandError::Config(msg))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -963,5 +1098,25 @@ mod tests {
 
         assert_eq!(result.id, "proj-789");
         assert_eq!(result.name, "Archived Project");
+    }
+
+    #[test]
+    fn test_projects_unarchive_options() {
+        let opts = ProjectsUnarchiveOptions {
+            project_id: "proj-123".to_string(),
+        };
+
+        assert_eq!(opts.project_id, "proj-123");
+    }
+
+    #[test]
+    fn test_project_unarchive_result() {
+        let result = ProjectUnarchiveResult {
+            id: "proj-456".to_string(),
+            name: "Unarchived Project".to_string(),
+        };
+
+        assert_eq!(result.id, "proj-456");
+        assert_eq!(result.name, "Unarchived Project");
     }
 }

@@ -234,6 +234,12 @@ async fn run(cli: &Cli) -> commands::Result<()> {
                     };
                     commands::projects::execute_archive(&ctx, &opts, &token).await
                 }
+                Some(ProjectsCommands::Unarchive { project_id }) => {
+                    let opts = commands::projects::ProjectsUnarchiveOptions {
+                        project_id: project_id.clone(),
+                    };
+                    commands::projects::execute_unarchive(&ctx, &opts, &token).await
+                }
                 None => {
                     // Default to List if no subcommand provided
                     let opts = commands::projects::ProjectsListOptions {
