@@ -190,6 +190,11 @@ async fn run(cli: &Cli) -> commands::Result<()> {
             commands::quick::execute(&ctx, &opts, &token).await
         }
 
+        Some(Commands::Sync { full }) => {
+            let opts = commands::sync::SyncOptions { full: *full };
+            commands::sync::execute(&ctx, &opts, &token).await
+        }
+
         Some(Commands::Projects { command }) => {
             match command {
                 Some(ProjectsCommands::List { tree, archived, limit }) => {

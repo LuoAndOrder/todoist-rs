@@ -15,6 +15,7 @@ pub mod reminders;
 pub mod reopen;
 pub mod sections;
 pub mod show;
+pub mod sync;
 pub mod today;
 
 use crate::cli::Cli;
