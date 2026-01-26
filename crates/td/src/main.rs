@@ -209,6 +209,14 @@ async fn run(cli: &Cli) -> commands::Result<()> {
                     };
                     commands::projects::execute_add(&ctx, &opts, &token).await
                 }
+                Some(ProjectsCommands::Show { project_id, sections, tasks }) => {
+                    let opts = commands::projects::ProjectsShowOptions {
+                        project_id: project_id.clone(),
+                        sections: *sections,
+                        tasks: *tasks,
+                    };
+                    commands::projects::execute_show(&ctx, &opts, &token).await
+                }
                 None => {
                     // Default to List if no subcommand provided
                     let opts = commands::projects::ProjectsListOptions {

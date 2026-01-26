@@ -378,6 +378,14 @@ pub enum ProjectsCommands {
     Show {
         /// Project ID
         project_id: String,
+
+        /// List sections in this project
+        #[arg(long)]
+        sections: bool,
+
+        /// List tasks in this project
+        #[arg(long)]
+        tasks: bool,
     },
 
     /// Edit a project

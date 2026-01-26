@@ -9,7 +9,7 @@ use todoist_api::sync::Item;
 use todoist_cache::Cache;
 
 use crate::commands::add::AddResult;
-use crate::commands::projects::ProjectAddResult;
+use crate::commands::projects::{ProjectAddResult, ProjectsShowResult};
 use crate::commands::quick::QuickResult;
 use crate::commands::show::ShowResult;
 
@@ -871,6 +871,192 @@ fn format_project_name(project: &Project, use_colors: bool) -> String {
     }
 
     name
+}
+
+// ============================================================================
+// Project Details Output Formatting (projects show command)
+// ============================================================================
+
+/// JSON output structure for project details (projects show command).
+#[derive(Serialize)]
+pub struct ProjectDetailsOutput<'a> {
+    pub id: &'a str,
+    pub name: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub color: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_name: Option<&'a str>,
+    pub is_favorite: bool,
+    pub is_archived: bool,
+    pub is_inbox: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub view_style: Option<&'a str>,
+    pub task_count: usize,
+    pub section_count: usize,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub sections: Vec<SectionOutput<'a>>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub tasks: Vec<ProjectTaskOutput<'a>>,
+}
+
+/// JSON output for a section in project details.
+#[derive(Serialize)]
+pub struct SectionOutput<'a> {
+    pub id: &'a str,
+    pub name: &'a str,
+    pub order: i32,
+}
+
+/// JSON output for a task in project details.
+#[derive(Serialize)]
+pub struct ProjectTaskOutput<'a> {
+    pub id: &'a str,
+    pub content: &'a str,
+    pub priority: u8,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub due: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub section_id: Option<&'a str>,
+}
+
+/// Formats project details as JSON (projects show command).
+pub fn format_project_details_json(result: &ProjectsShowResult) -> Result<String, serde_json::Error> {
+    let sections: Vec<SectionOutput> = result
+        .sections
+        .iter()
+        .map(|s| SectionOutput {
+            id: &s.id,
+            name: &s.name,
+            order: s.section_order,
+        })
+        .collect();
+
+    let tasks: Vec<ProjectTaskOutput> = result
+        .tasks
+        .iter()
+        .map(|t| ProjectTaskOutput {
+            id: &t.id,
+            content: &t.content,
+            // Convert API priority (4=highest) to user priority (1=highest)
+            priority: (5 - t.priority) as u8,
+            due: t.due.as_ref().map(|d| d.date.as_str()),
+            section_id: t.section_id.as_deref(),
+        })
+        .collect();
+
+    let output = ProjectDetailsOutput {
+        id: &result.project.id,
+        name: &result.project.name,
+        color: result.project.color.as_deref(),
+        parent_id: result.project.parent_id.as_deref(),
+        parent_name: result.parent_name.as_deref(),
+        is_favorite: result.project.is_favorite,
+        is_archived: result.project.is_archived,
+        is_inbox: result.project.inbox_project,
+        view_style: result.project.view_style.as_deref(),
+        task_count: result.task_count,
+        section_count: result.section_count,
+        sections,
+        tasks,
+    };
+
+    serde_json::to_string_pretty(&output)
+}
+
+/// Formats project details as a human-readable table (projects show command).
+pub fn format_project_details_table(result: &ProjectsShowResult, use_colors: bool) -> String {
+    let mut output = String::new();
+
+    // Project header
+    let name_label = if use_colors {
+        "Project:".bold().to_string()
+    } else {
+        "Project:".to_string()
+    };
+    output.push_str(&format!("{} {}\n", name_label, result.project.name));
+
+    // ID
+    output.push_str(&format!("ID: {}\n", result.project.id));
+
+    // Parent project
+    if let Some(ref parent_name) = result.parent_name {
+        output.push_str(&format!("Parent: {}\n", parent_name));
+    }
+
+    // Color
+    if let Some(ref color) = result.project.color {
+        output.push_str(&format!("Color: {}\n", color));
+    }
+
+    // View style
+    if let Some(ref view_style) = result.project.view_style {
+        output.push_str(&format!("View style: {}\n", view_style));
+    }
+
+    // Favorite
+    if result.project.is_favorite {
+        let fav = if use_colors {
+            "★ Yes".yellow().to_string()
+        } else {
+            "Yes".to_string()
+        };
+        output.push_str(&format!("Favorite: {}\n", fav));
+    }
+
+    // Inbox indicator
+    if result.project.inbox_project {
+        let inbox = if use_colors {
+            "Yes".cyan().to_string()
+        } else {
+            "Yes".to_string()
+        };
+        output.push_str(&format!("Inbox: {}\n", inbox));
+    }
+
+    // Archived indicator
+    if result.project.is_archived {
+        let archived = if use_colors {
+            "Yes".dimmed().to_string()
+        } else {
+            "Yes".to_string()
+        };
+        output.push_str(&format!("Archived: {}\n", archived));
+    }
+
+    // Task and section counts
+    output.push_str(&format!("Tasks: {}\n", result.task_count));
+    output.push_str(&format!("Sections: {}\n", result.section_count));
+
+    // Sections list (if requested)
+    if !result.sections.is_empty() {
+        output.push_str(&format!("\nSections ({}):\n", result.sections.len()));
+        let mut sorted_sections = result.sections.clone();
+        sorted_sections.sort_by_key(|s| s.section_order);
+        for section in &sorted_sections {
+            let id_prefix = truncate_id(&section.id);
+            output.push_str(&format!("  {} {}\n", id_prefix, section.name));
+        }
+    }
+
+    // Tasks list (if requested)
+    if !result.tasks.is_empty() {
+        output.push_str(&format!("\nTasks ({}):\n", result.tasks.len()));
+        for task in &result.tasks {
+            let id_prefix = truncate_id(&task.id);
+            let priority = format_priority(task.priority, use_colors);
+            let due = format_due(task.due.as_ref().map(|d| &d.date), use_colors);
+            let due_str = if due.is_empty() {
+                String::new()
+            } else {
+                format!(" [{}]", due)
+            };
+            output.push_str(&format!("  {} {} {}{}\n", id_prefix, priority, task.content, due_str));
+        }
+    }
+
+    output
 }
 
 #[cfg(test)]

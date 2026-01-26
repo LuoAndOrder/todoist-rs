@@ -271,6 +271,164 @@ fn is_valid_color(color: &str) -> bool {
     VALID_COLORS.contains(&color)
 }
 
+// ============================================================================
+// Projects Show Command
+// ============================================================================
+
+/// Options for the projects show command.
+#[derive(Debug)]
+pub struct ProjectsShowOptions {
+    /// Project ID (full ID or prefix).
+    pub project_id: String,
+    /// List sections in this project.
+    pub sections: bool,
+    /// List tasks in this project.
+    pub tasks: bool,
+}
+
+/// Result data for the projects show command.
+pub struct ProjectsShowResult<'a> {
+    /// The project.
+    pub project: &'a Project,
+    /// Parent project name (if any).
+    pub parent_name: Option<String>,
+    /// Number of active tasks in this project.
+    pub task_count: usize,
+    /// Number of sections in this project.
+    pub section_count: usize,
+    /// Sections in this project (if requested).
+    pub sections: Vec<&'a todoist_api::sync::Section>,
+    /// Tasks in this project (if requested).
+    pub tasks: Vec<&'a todoist_api::sync::Item>,
+}
+
+/// Executes the projects show command.
+///
+/// # Arguments
+///
+/// * `ctx` - Command context with output settings
+/// * `opts` - Projects show command options
+/// * `token` - API token
+///
+/// # Errors
+///
+/// Returns an error if syncing fails or if the project is not found.
+pub async fn execute_show(ctx: &CommandContext, opts: &ProjectsShowOptions, token: &str) -> Result<()> {
+    // Initialize sync manager
+    let client = TodoistClient::new(token);
+    let store = CacheStore::new()?;
+    let mut manager = SyncManager::new(client, store)?;
+
+    // Sync if needed
+    let now = Utc::now();
+    if manager.needs_sync(now) {
+        if ctx.verbose {
+            eprintln!("Syncing with Todoist...");
+        }
+        manager.sync().await?;
+    }
+
+    let cache = manager.cache();
+
+    // Find the project by ID or prefix
+    let project = find_project_by_id_or_prefix(cache, &opts.project_id)?;
+
+    // Get parent project name
+    let parent_name = project.parent_id.as_ref().and_then(|pid| {
+        cache
+            .projects
+            .iter()
+            .find(|p| &p.id == pid)
+            .map(|p| p.name.clone())
+    });
+
+    // Count active tasks in this project
+    let task_count = cache
+        .items
+        .iter()
+        .filter(|i| i.project_id == project.id && !i.is_deleted && !i.checked)
+        .count();
+
+    // Get sections for this project
+    let all_sections: Vec<&todoist_api::sync::Section> = cache
+        .sections
+        .iter()
+        .filter(|s| s.project_id == project.id && !s.is_deleted)
+        .collect();
+    let section_count = all_sections.len();
+
+    // Only include sections if requested
+    let sections = if opts.sections {
+        all_sections
+    } else {
+        vec![]
+    };
+
+    // Get tasks for this project if requested
+    let tasks: Vec<&todoist_api::sync::Item> = if opts.tasks {
+        cache
+            .items
+            .iter()
+            .filter(|i| i.project_id == project.id && !i.is_deleted && !i.checked)
+            .collect()
+    } else {
+        vec![]
+    };
+
+    let result = ProjectsShowResult {
+        project,
+        parent_name,
+        task_count,
+        section_count,
+        sections,
+        tasks,
+    };
+
+    // Output
+    if ctx.json_output {
+        let output = crate::output::format_project_details_json(&result)?;
+        println!("{output}");
+    } else if !ctx.quiet {
+        let output = crate::output::format_project_details_table(&result, ctx.use_colors);
+        print!("{output}");
+    }
+
+    Ok(())
+}
+
+/// Finds a project by full ID or unique prefix.
+fn find_project_by_id_or_prefix<'a>(cache: &'a Cache, id: &str) -> Result<&'a Project> {
+    // First try exact match
+    if let Some(project) = cache.projects.iter().find(|p| p.id == id && !p.is_deleted) {
+        return Ok(project);
+    }
+
+    // Try prefix match
+    let matches: Vec<&Project> = cache
+        .projects
+        .iter()
+        .filter(|p| p.id.starts_with(id) && !p.is_deleted)
+        .collect();
+
+    match matches.len() {
+        0 => Err(CommandError::Config(format!("Project not found: {id}"))),
+        1 => Ok(matches[0]),
+        _ => {
+            // Ambiguous prefix - provide helpful error message
+            let mut msg = format!("Ambiguous project ID \"{id}\"\n\nMultiple projects match this prefix:");
+            for project in matches.iter().take(5) {
+                let prefix = &project.id[..6.min(project.id.len())];
+                msg.push_str(&format!("\n  {}  {}", prefix, project.name));
+            }
+            if matches.len() > 5 {
+                msg.push_str(&format!("\n  ... and {} more", matches.len() - 5));
+            }
+            msg.push_str("\n\nPlease use a longer prefix.");
+            Err(CommandError::Config(msg))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -321,5 +479,135 @@ mod tests {
         assert!(!is_valid_color("invalid"));
         assert!(!is_valid_color(""));
         assert!(!is_valid_color("Blue")); // Case-sensitive
+    }
+
+    #[test]
+    fn test_projects_show_options() {
+        let opts = ProjectsShowOptions {
+            project_id: "abc123".to_string(),
+            sections: false,
+            tasks: false,
+        };
+
+        assert_eq!(opts.project_id, "abc123");
+        assert!(!opts.sections);
+        assert!(!opts.tasks);
+    }
+
+    #[test]
+    fn test_projects_show_options_with_flags() {
+        let opts = ProjectsShowOptions {
+            project_id: "project-123-abc".to_string(),
+            sections: true,
+            tasks: true,
+        };
+
+        assert_eq!(opts.project_id, "project-123-abc");
+        assert!(opts.sections);
+        assert!(opts.tasks);
+    }
+
+    #[test]
+    fn test_find_project_by_id_or_prefix_exact_match() {
+        let cache = make_test_cache_with_projects();
+        let result = find_project_by_id_or_prefix(&cache, "proj-123-abc");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().id, "proj-123-abc");
+    }
+
+    #[test]
+    fn test_find_project_by_id_or_prefix_unique_prefix() {
+        let cache = make_test_cache_with_projects();
+        let result = find_project_by_id_or_prefix(&cache, "proj-123");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().id, "proj-123-abc");
+    }
+
+    #[test]
+    fn test_find_project_by_id_or_prefix_not_found() {
+        let cache = make_test_cache_with_projects();
+        let result = find_project_by_id_or_prefix(&cache, "nonexistent");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Project not found"));
+    }
+
+    #[test]
+    fn test_find_project_by_id_or_prefix_ambiguous() {
+        let cache = make_cache_with_ambiguous_project_ids();
+        let result = find_project_by_id_or_prefix(&cache, "proj-");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Ambiguous"));
+    }
+
+    #[test]
+    fn test_find_project_by_id_or_prefix_ignores_deleted() {
+        let mut cache = make_test_cache_with_projects();
+        // Mark the project as deleted
+        cache.projects[0].is_deleted = true;
+
+        let result = find_project_by_id_or_prefix(&cache, "proj-123");
+        assert!(result.is_err());
+    }
+
+    // Helper function to create a test cache with projects
+    fn make_test_cache_with_projects() -> Cache {
+        Cache {
+            sync_token: "test".to_string(),
+            full_sync_date_utc: None,
+            last_sync: None,
+            items: vec![],
+            projects: vec![make_test_project("proj-123-abc", "Test Project")],
+            labels: vec![],
+            sections: vec![],
+            notes: vec![],
+            project_notes: vec![],
+            reminders: vec![],
+            filters: vec![],
+            user: None,
+        }
+    }
+
+    fn make_cache_with_ambiguous_project_ids() -> Cache {
+        Cache {
+            sync_token: "test".to_string(),
+            full_sync_date_utc: None,
+            last_sync: None,
+            items: vec![],
+            projects: vec![
+                make_test_project("proj-aaa-111", "Project 1"),
+                make_test_project("proj-aaa-222", "Project 2"),
+                make_test_project("proj-bbb-333", "Project 3"),
+            ],
+            labels: vec![],
+            sections: vec![],
+            notes: vec![],
+            project_notes: vec![],
+            reminders: vec![],
+            filters: vec![],
+            user: None,
+        }
+    }
+
+    fn make_test_project(id: &str, name: &str) -> Project {
+        Project {
+            id: id.to_string(),
+            name: name.to_string(),
+            color: None,
+            parent_id: None,
+            child_order: 0,
+            is_collapsed: false,
+            is_favorite: false,
+            is_deleted: false,
+            is_archived: false,
+            inbox_project: false,
+            view_style: None,
+            shared: false,
+            can_assign_tasks: false,
+            folder_id: None,
+            created_at: None,
+            updated_at: None,
+        }
     }
 }
