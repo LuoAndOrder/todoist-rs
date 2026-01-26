@@ -149,8 +149,7 @@ pub struct CommandContext {
     /// Whether to be verbose.
     pub verbose: bool,
     /// Whether to sync before executing the command.
-    /// Used by read commands in Phase 2 (tasks 2.2-2.4) of the cache refactor.
-    #[allow(dead_code)]
+    /// Used by read commands with the --sync flag.
     pub sync_first: bool,
 }
 
