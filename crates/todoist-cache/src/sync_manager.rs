@@ -275,7 +275,11 @@ impl SyncManager {
     /// }
     /// ```
     pub async fn execute_commands(&mut self, commands: Vec<SyncCommand>) -> Result<SyncResponse> {
-        let request = SyncRequest::with_commands(commands);
+        // Request all resource types along with commands so the API returns
+        // affected resources (items, projects, etc.) in the response.
+        // Without resource_types, the API only returns sync_status and temp_id_mapping.
+        let request = SyncRequest::with_commands(commands)
+            .with_resource_types(vec!["all".to_string()]);
         let response = self.client.sync(request).await?;
 
         // Apply the mutation response to update cache with affected resources

@@ -1,9 +1,10 @@
 //! Add command implementation.
 //!
 //! Creates a new task via the Sync API's `item_add` command.
+//! Uses SyncManager::execute_commands() to automatically update the cache.
 
 use todoist_api::client::TodoistClient;
-use todoist_api::sync::{SyncCommand, SyncRequest};
+use todoist_api::sync::SyncCommand;
 use todoist_cache::{CacheStore, SyncManager};
 
 use super::{CommandContext, CommandError, Result};
@@ -53,15 +54,15 @@ pub struct AddResult {
 ///
 /// # Errors
 ///
-/// Returns an error if syncing fails, project/section lookup fails, or the API returns an error.
+/// Returns an error if project/section lookup fails or the API returns an error.
 pub async fn execute(ctx: &CommandContext, opts: &AddOptions, token: &str) -> Result<()> {
-    // Initialize sync manager to resolve names to IDs
+    // Initialize sync manager (loads cache from disk)
     let client = TodoistClient::new(token);
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
-    // Sync to get current state (for project/section/label lookup)
-    manager.sync().await?;
+    // Use cache for lookups (no pre-mutation sync needed)
+    // In Phase 3, we'll add auto-sync fallback if lookup fails
     let cache = manager.cache();
 
     // Resolve project name to ID
@@ -138,15 +139,12 @@ pub async fn execute(ctx: &CommandContext, opts: &AddOptions, token: &str) -> Re
         args["parent_id"] = serde_json::json!(parent_id);
     }
 
-    // Create the command
+    // Create and execute the command via SyncManager
+    // This sends the command, applies the response to cache, and saves to disk
     let command = SyncCommand::with_temp_id("item_add", &temp_id, args);
+    let response = manager.execute_commands(vec![command]).await?;
 
-    // Execute the command
-    let api_client = TodoistClient::new(token);
-    let request = SyncRequest::with_commands(vec![command]);
-    let response = api_client.sync(request).await?;
-
-    // Check for errors
+    // Check for command errors in the response
     if response.has_errors() {
         let errors = response.errors();
         if let Some((_, error)) = errors.first() {
@@ -167,8 +165,9 @@ pub async fn execute(ctx: &CommandContext, opts: &AddOptions, token: &str) -> Re
         })?
         .clone();
 
-    // Get project name for output
-    let project_name = cache
+    // Get project name for output from the updated cache
+    let project_name = manager
+        .cache()
         .projects
         .iter()
         .find(|p| p.id == project_id)
