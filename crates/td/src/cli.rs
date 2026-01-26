@@ -207,6 +207,10 @@ pub enum Commands {
         /// Task ID(s)
         #[arg(required = true)]
         task_ids: Vec<String>,
+
+        /// Skip confirmation for multiple tasks
+        #[arg(short, long)]
+        force: bool,
     },
 
     /// Delete task(s)

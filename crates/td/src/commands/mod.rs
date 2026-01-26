@@ -5,6 +5,7 @@
 pub mod add;
 pub mod done;
 pub mod list;
+pub mod reopen;
 pub mod show;
 
 use crate::cli::Cli;

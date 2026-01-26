@@ -121,6 +121,14 @@ async fn run(cli: &Cli) -> commands::Result<()> {
             commands::done::execute(&ctx, &opts, &token).await
         }
 
+        Some(Commands::Reopen { task_ids, force }) => {
+            let opts = commands::reopen::ReopenOptions {
+                task_ids: task_ids.clone(),
+                force: *force,
+            };
+            commands::reopen::execute(&ctx, &opts, &token).await
+        }
+
         Some(cmd) => {
             // Other commands not yet implemented
             if cli.json {
