@@ -429,6 +429,158 @@ fn find_project_by_id_or_prefix<'a>(cache: &'a Cache, id: &str) -> Result<&'a Pr
     }
 }
 
+// ============================================================================
+// Projects Edit Command
+// ============================================================================
+
+/// Options for the projects edit command.
+#[derive(Debug)]
+pub struct ProjectsEditOptions {
+    /// Project ID (full ID or prefix).
+    pub project_id: String,
+    /// New project name.
+    pub name: Option<String>,
+    /// New project color.
+    pub color: Option<String>,
+    /// Set favorite status.
+    pub favorite: Option<bool>,
+    /// View style (list, board).
+    pub view_style: Option<String>,
+}
+
+/// Result of a successful project edit operation.
+#[derive(Debug)]
+pub struct ProjectEditResult {
+    /// The ID of the edited project.
+    pub id: String,
+    /// The name of the project (possibly updated).
+    pub name: String,
+    /// Fields that were updated.
+    pub updated_fields: Vec<String>,
+}
+
+/// Executes the projects edit command.
+///
+/// # Arguments
+///
+/// * `ctx` - Command context with output settings
+/// * `opts` - Projects edit command options
+/// * `token` - API token
+///
+/// # Errors
+///
+/// Returns an error if syncing fails, project lookup fails, or the API returns an error.
+pub async fn execute_edit(ctx: &CommandContext, opts: &ProjectsEditOptions, token: &str) -> Result<()> {
+    // Check if any options were provided
+    if opts.name.is_none() && opts.color.is_none() && opts.favorite.is_none() && opts.view_style.is_none() {
+        return Err(CommandError::Config(
+            "No changes specified. Use --name, --color, --favorite, or --view-style.".to_string()
+        ));
+    }
+
+    // Initialize sync manager to resolve project ID
+    let client = TodoistClient::new(token);
+    let store = CacheStore::new()?;
+    let mut manager = SyncManager::new(client, store)?;
+
+    // Sync to get current state (for project lookup)
+    manager.sync().await?;
+    let cache = manager.cache();
+
+    // Find the project by ID or prefix
+    let project = find_project_by_id_or_prefix(cache, &opts.project_id)?;
+    let project_id = project.id.clone();
+    let project_name = project.name.clone();
+
+    // Validate color if provided
+    if let Some(ref color) = opts.color {
+        if !is_valid_color(color) {
+            return Err(CommandError::Config(format!(
+                "Invalid color: {color}. Valid colors: berry_red, red, orange, yellow, olive_green, lime_green, green, mint_green, teal, sky_blue, light_blue, blue, grape, violet, lavender, magenta, salmon, charcoal, grey, taupe"
+            )));
+        }
+    }
+
+    // Validate view_style if provided
+    if let Some(ref view_style) = opts.view_style {
+        if view_style != "list" && view_style != "board" {
+            return Err(CommandError::Config(format!(
+                "Invalid view style: {view_style}. Valid options: list, board"
+            )));
+        }
+    }
+
+    // Build the project_update command arguments
+    let mut args = serde_json::json!({
+        "id": project_id,
+    });
+
+    let mut updated_fields = Vec::new();
+
+    if let Some(ref name) = opts.name {
+        args["name"] = serde_json::json!(name);
+        updated_fields.push("name".to_string());
+    }
+
+    if let Some(ref color) = opts.color {
+        args["color"] = serde_json::json!(color);
+        updated_fields.push("color".to_string());
+    }
+
+    if let Some(favorite) = opts.favorite {
+        args["is_favorite"] = serde_json::json!(favorite);
+        updated_fields.push("favorite".to_string());
+    }
+
+    if let Some(ref view_style) = opts.view_style {
+        args["view_style"] = serde_json::json!(view_style);
+        updated_fields.push("view_style".to_string());
+    }
+
+    // Create the command
+    let command = SyncCommand::new("project_update", args);
+
+    // Execute the command
+    let api_client = TodoistClient::new(token);
+    let request = SyncRequest::with_commands(vec![command]);
+    let response = api_client.sync(request).await?;
+
+    // Check for errors
+    if response.has_errors() {
+        let errors = response.errors();
+        if let Some((_, error)) = errors.first() {
+            return Err(CommandError::Api(todoist_api::error::Error::Api(
+                todoist_api::error::ApiError::Validation {
+                    field: None,
+                    message: format!("Error {}: {}", error.error_code, error.error),
+                },
+            )));
+        }
+    }
+
+    let result = ProjectEditResult {
+        id: project_id,
+        name: opts.name.clone().unwrap_or(project_name),
+        updated_fields,
+    };
+
+    // Output
+    if ctx.json_output {
+        let output = crate::output::format_edited_project(&result)?;
+        println!("{output}");
+    } else if !ctx.quiet {
+        if ctx.verbose {
+            println!("Updated project: {} ({})", result.name, result.id);
+            println!("  Changed fields: {}", result.updated_fields.join(", "));
+        } else {
+            let prefix = &result.id[..6.min(result.id.len())];
+            println!("Updated: {} ({})", result.name, prefix);
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -609,5 +761,52 @@ mod tests {
             created_at: None,
             updated_at: None,
         }
+    }
+
+    #[test]
+    fn test_projects_edit_options() {
+        let opts = ProjectsEditOptions {
+            project_id: "proj-123".to_string(),
+            name: Some("New Name".to_string()),
+            color: Some("blue".to_string()),
+            favorite: Some(true),
+            view_style: Some("board".to_string()),
+        };
+
+        assert_eq!(opts.project_id, "proj-123");
+        assert_eq!(opts.name, Some("New Name".to_string()));
+        assert_eq!(opts.color, Some("blue".to_string()));
+        assert_eq!(opts.favorite, Some(true));
+        assert_eq!(opts.view_style, Some("board".to_string()));
+    }
+
+    #[test]
+    fn test_projects_edit_options_minimal() {
+        let opts = ProjectsEditOptions {
+            project_id: "proj-456".to_string(),
+            name: None,
+            color: None,
+            favorite: None,
+            view_style: Some("list".to_string()),
+        };
+
+        assert_eq!(opts.project_id, "proj-456");
+        assert!(opts.name.is_none());
+        assert!(opts.color.is_none());
+        assert!(opts.favorite.is_none());
+        assert_eq!(opts.view_style, Some("list".to_string()));
+    }
+
+    #[test]
+    fn test_project_edit_result() {
+        let result = ProjectEditResult {
+            id: "proj-123".to_string(),
+            name: "Updated Project".to_string(),
+            updated_fields: vec!["name".to_string(), "color".to_string()],
+        };
+
+        assert_eq!(result.id, "proj-123");
+        assert_eq!(result.name, "Updated Project");
+        assert_eq!(result.updated_fields, vec!["name", "color"]);
     }
 }

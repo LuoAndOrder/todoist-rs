@@ -401,9 +401,13 @@ pub enum ProjectsCommands {
         #[arg(long)]
         color: Option<String>,
 
-        /// Toggle favorite
+        /// Set favorite status
         #[arg(long)]
         favorite: Option<bool>,
+
+        /// View style (list, board)
+        #[arg(long)]
+        view_style: Option<String>,
     },
 
     /// Archive a project

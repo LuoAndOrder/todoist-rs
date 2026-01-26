@@ -9,7 +9,7 @@ use todoist_api::sync::Item;
 use todoist_cache::Cache;
 
 use crate::commands::add::AddResult;
-use crate::commands::projects::{ProjectAddResult, ProjectsShowResult};
+use crate::commands::projects::{ProjectAddResult, ProjectEditResult, ProjectsShowResult};
 use crate::commands::quick::QuickResult;
 use crate::commands::show::ShowResult;
 
@@ -636,6 +636,25 @@ pub fn format_created_project(result: &ProjectAddResult) -> Result<String, serde
         parent_id: result.parent_id.as_deref(),
         parent_name: result.parent_name.as_deref(),
         is_favorite: result.is_favorite,
+    };
+
+    serde_json::to_string_pretty(&output)
+}
+
+/// JSON output structure for an edited project.
+#[derive(Serialize)]
+pub struct EditedProjectOutput<'a> {
+    pub id: &'a str,
+    pub name: &'a str,
+    pub updated_fields: &'a [String],
+}
+
+/// Formats an edited project as JSON.
+pub fn format_edited_project(result: &ProjectEditResult) -> Result<String, serde_json::Error> {
+    let output = EditedProjectOutput {
+        id: &result.id,
+        name: &result.name,
+        updated_fields: &result.updated_fields,
     };
 
     serde_json::to_string_pretty(&output)
