@@ -923,6 +923,61 @@ async fn test_filter_single_label() {
 }
 
 #[tokio::test]
+async fn test_filter_no_labels() {
+    let Ok(mut ctx) = FilterTestContext::new().await else {
+        eprintln!("Skipping test: no API token");
+        return;
+    };
+
+    let inbox_id = ctx.inbox_id().to_string();
+
+    // Create a label
+    let label_test = ctx
+        .create_label("e2e_filter_no_labels_test")
+        .await
+        .expect("create label");
+
+    // Create task with label
+    let task_with_label = ctx
+        .create_task(
+            "E2E filter test - with label",
+            &inbox_id,
+            Some(serde_json::json!({"labels": ["e2e_filter_no_labels_test"]})),
+        )
+        .await
+        .expect("create task");
+
+    // Create task without labels
+    let task_no_label = ctx
+        .create_task("E2E filter test - no label", &inbox_id, None)
+        .await
+        .expect("create task");
+
+    // Evaluate filter
+    let matches = ctx.evaluate_filter("no labels");
+
+    // Only unlabeled task should match
+    assert!(
+        matches.iter().any(|i| i.id == task_no_label),
+        "Filter 'no labels' should match task without labels"
+    );
+    assert!(
+        !matches.iter().any(|i| i.id == task_with_label),
+        "Filter 'no labels' should NOT match task with labels"
+    );
+
+    // Cleanup
+    ctx.batch_delete(
+        &[&task_with_label, &task_no_label],
+        &[],
+        &[],
+        &[&label_test],
+    )
+    .await
+    .expect("cleanup");
+}
+
+#[tokio::test]
 async fn test_filter_multiple_labels_and() {
     let Ok(mut ctx) = FilterTestContext::new().await else {
         eprintln!("Skipping test: no API token");

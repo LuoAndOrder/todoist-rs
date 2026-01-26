@@ -202,6 +202,9 @@ impl FilterParser {
             FilterToken::Next7Days => Ok(Filter::Next7Days),
             FilterToken::SpecificDate { month, day } => Ok(Filter::SpecificDate { month, day }),
 
+            // Label keywords
+            FilterToken::NoLabels => Ok(Filter::NoLabels),
+
             // Priority
             FilterToken::Priority(level) => match level {
                 1 => Ok(Filter::Priority1),

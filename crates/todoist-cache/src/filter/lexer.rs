@@ -58,6 +58,9 @@ pub enum FilterToken {
     /// The `no date` keyword (parsed as two words).
     NoDate,
 
+    /// The `no labels` keyword (parsed as two words).
+    NoLabels,
+
     /// The `7 days` keyword - tasks due within the next 7 days.
     Next7Days,
 
@@ -391,14 +394,20 @@ impl<'a> Lexer<'a> {
                 position,
             }),
             "no" => {
-                // Check for "no date"
+                // Check for "no date" or "no labels"
                 self.skip_whitespace();
                 if let Some(&c) = self.peek() {
                     if c.is_alphabetic() {
                         let next_word = self.read_identifier();
-                        if next_word.to_lowercase() == "date" {
+                        let lower = next_word.to_lowercase();
+                        if lower == "date" {
                             return Some(PositionedToken {
                                 token: FilterToken::NoDate,
+                                position,
+                            });
+                        } else if lower == "labels" {
+                            return Some(PositionedToken {
+                                token: FilterToken::NoLabels,
                                 position,
                             });
                         }
@@ -494,6 +503,24 @@ mod tests {
 
         let tokens = Lexer::new("No Date").tokenize();
         assert_eq!(tokens, vec![FilterToken::NoDate]);
+    }
+
+    #[test]
+    fn test_tokenize_no_labels() {
+        let tokens = Lexer::new("no labels").tokenize();
+        assert_eq!(tokens, vec![FilterToken::NoLabels]);
+    }
+
+    #[test]
+    fn test_tokenize_no_labels_case_insensitive() {
+        let tokens = Lexer::new("NO LABELS").tokenize();
+        assert_eq!(tokens, vec![FilterToken::NoLabels]);
+
+        let tokens = Lexer::new("No Labels").tokenize();
+        assert_eq!(tokens, vec![FilterToken::NoLabels]);
+
+        let tokens = Lexer::new("NO labels").tokenize();
+        assert_eq!(tokens, vec![FilterToken::NoLabels]);
     }
 
     #[test]

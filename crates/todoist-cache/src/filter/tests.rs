@@ -68,6 +68,45 @@ fn test_parse_no_date_with_extra_whitespace() {
     assert_eq!(FilterParser::parse("no\tdate").unwrap(), Filter::NoDate);
 }
 
+// ==================== No Labels Tests ====================
+
+#[test]
+fn test_parse_no_labels() {
+    let filter = FilterParser::parse("no labels").unwrap();
+    assert_eq!(filter, Filter::NoLabels);
+}
+
+#[test]
+fn test_parse_no_labels_case_insensitive() {
+    assert_eq!(FilterParser::parse("NO LABELS").unwrap(), Filter::NoLabels);
+    assert_eq!(FilterParser::parse("No Labels").unwrap(), Filter::NoLabels);
+    assert_eq!(FilterParser::parse("no LABELS").unwrap(), Filter::NoLabels);
+}
+
+#[test]
+fn test_parse_no_labels_with_extra_whitespace() {
+    // Multiple spaces between "no" and "labels"
+    assert_eq!(FilterParser::parse("no   labels").unwrap(), Filter::NoLabels);
+    assert_eq!(FilterParser::parse("no\tlabels").unwrap(), Filter::NoLabels);
+}
+
+#[test]
+fn test_parse_no_labels_with_operators() {
+    // Combined with other filters
+    let filter = FilterParser::parse("no labels & p1").unwrap();
+    assert_eq!(filter, Filter::and(Filter::NoLabels, Filter::Priority1));
+
+    let filter = FilterParser::parse("no labels | today").unwrap();
+    assert_eq!(filter, Filter::or(Filter::NoLabels, Filter::Today));
+}
+
+#[test]
+fn test_parse_no_labels_negation() {
+    // "!no labels" should match tasks that HAVE labels
+    let filter = FilterParser::parse("!no labels").unwrap();
+    assert_eq!(filter, Filter::negate(Filter::NoLabels));
+}
+
 // ==================== Specific Date Tests ====================
 
 #[test]

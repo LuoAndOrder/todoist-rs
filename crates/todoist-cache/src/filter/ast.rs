@@ -44,9 +44,12 @@ pub enum Filter {
     /// Matches items with priority level 4 (lowest/blue, default).
     Priority4,
 
-    // ==================== Label Filter ====================
+    // ==================== Label Filters ====================
     /// Matches items with the specified label.
     Label(String),
+
+    /// Matches items without any labels.
+    NoLabels,
 
     // ==================== Project Filters ====================
     /// Matches items in the specified project (exact match).

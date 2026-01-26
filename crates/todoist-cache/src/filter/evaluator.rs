@@ -187,8 +187,9 @@ impl<'a> FilterEvaluator<'a> {
             Filter::Priority3 => item.priority == 2,
             Filter::Priority4 => item.priority == 1,
 
-            // Label filter
+            // Label filters
             Filter::Label(name) => self.has_label(item, name),
+            Filter::NoLabels => self.has_no_labels(item),
 
             // Project filters
             Filter::Project(name) => self.in_project(item, name),
@@ -287,6 +288,11 @@ impl<'a> FilterEvaluator<'a> {
         item.labels
             .iter()
             .any(|l| l.to_lowercase() == label_lower)
+    }
+
+    /// Checks if the item has no labels.
+    fn has_no_labels(&self, item: &Item) -> bool {
+        item.labels.is_empty()
     }
 
     /// Checks if the item is in the specified project (case-insensitive).
@@ -879,6 +885,91 @@ mod tests {
         item.labels = vec!["urgent".to_string(), "work".to_string()];
 
         assert!(evaluator.matches(&item));
+    }
+
+    // ==================== No Labels Filter Tests ====================
+
+    #[test]
+    fn test_filter_no_labels_matches() {
+        let context = FilterContext::new(&[], &[], &[]);
+        let filter = Filter::NoLabels;
+        let evaluator = FilterEvaluator::new(&filter, &context);
+
+        // Item with no labels should match
+        let item = make_item("1", "Task without labels");
+        assert!(evaluator.matches(&item));
+    }
+
+    #[test]
+    fn test_filter_no_labels_no_match_with_labels() {
+        let labels = vec![make_label("l1", "urgent")];
+        let context = FilterContext::new(&[], &[], &labels);
+        let filter = Filter::NoLabels;
+        let evaluator = FilterEvaluator::new(&filter, &context);
+
+        // Item with labels should NOT match
+        let mut item = make_item("1", "Task with labels");
+        item.labels = vec!["urgent".to_string()];
+
+        assert!(!evaluator.matches(&item));
+    }
+
+    #[test]
+    fn test_filter_no_labels_no_match_multiple_labels() {
+        let labels = vec![
+            make_label("l1", "urgent"),
+            make_label("l2", "work"),
+        ];
+        let context = FilterContext::new(&[], &[], &labels);
+        let filter = Filter::NoLabels;
+        let evaluator = FilterEvaluator::new(&filter, &context);
+
+        // Item with multiple labels should NOT match
+        let mut item = make_item("1", "Task");
+        item.labels = vec!["urgent".to_string(), "work".to_string()];
+
+        assert!(!evaluator.matches(&item));
+    }
+
+    #[test]
+    fn test_filter_no_labels_negation() {
+        let labels = vec![make_label("l1", "urgent")];
+        let context = FilterContext::new(&[], &[], &labels);
+        // "!no labels" means items that HAVE labels
+        let filter = Filter::negate(Filter::NoLabels);
+        let evaluator = FilterEvaluator::new(&filter, &context);
+
+        // Item without labels should NOT match (double negation)
+        let item_no_labels = make_item("1", "Task without labels");
+        assert!(!evaluator.matches(&item_no_labels));
+
+        // Item with labels should match
+        let mut item_with_labels = make_item("2", "Task with labels");
+        item_with_labels.labels = vec!["urgent".to_string()];
+        assert!(evaluator.matches(&item_with_labels));
+    }
+
+    #[test]
+    fn test_filter_no_labels_combined_with_priority() {
+        let context = FilterContext::new(&[], &[], &[]);
+        // Tasks with no labels AND p1
+        let filter = Filter::and(Filter::NoLabels, Filter::Priority1);
+        let evaluator = FilterEvaluator::new(&filter, &context);
+
+        // p1 task without labels should match
+        let mut item1 = make_item("1", "P1 no labels");
+        item1.priority = 4; // p1 in API
+        assert!(evaluator.matches(&item1));
+
+        // p4 task without labels should NOT match
+        let item2 = make_item("2", "P4 no labels");
+        assert!(!evaluator.matches(&item2));
+
+        // p1 task with labels should NOT match
+        let mut item3 = make_item("3", "P1 with labels");
+        item3.priority = 4;
+        item3.labels = vec!["urgent".to_string()];
+        assert!(!evaluator.matches(&item3));
     }
 
     // ==================== Project Filter Tests ====================
