@@ -11,6 +11,7 @@ pub mod list;
 pub mod projects;
 pub mod quick;
 pub mod reopen;
+pub mod sections;
 pub mod show;
 pub mod today;
 

@@ -5,7 +5,7 @@ mod cli;
 mod commands;
 mod output;
 
-use cli::{Cli, Commands, LabelsCommands, ProjectsCommands};
+use cli::{Cli, Commands, LabelsCommands, ProjectsCommands, SectionsCommands};
 use commands::{CommandContext, CommandError};
 
 #[tokio::main]
@@ -293,6 +293,47 @@ async fn run(cli: &Cli) -> commands::Result<()> {
                     // Default to List if no subcommand provided
                     let opts = commands::labels::LabelsListOptions::default();
                     commands::labels::execute(&ctx, &opts, &token).await
+                }
+            }
+        }
+
+        Some(Commands::Sections { project, command }) => {
+            match command {
+                Some(SectionsCommands::List) => {
+                    let opts = commands::sections::SectionsListOptions {
+                        project: project.clone(),
+                        limit: None,
+                    };
+                    commands::sections::execute(&ctx, &opts, &token).await
+                }
+                Some(SectionsCommands::Add { name, project: proj }) => {
+                    let opts = commands::sections::SectionsAddOptions {
+                        name: name.clone(),
+                        project: proj.clone(),
+                    };
+                    commands::sections::execute_add(&ctx, &opts, &token).await
+                }
+                Some(SectionsCommands::Edit { section_id, name }) => {
+                    let opts = commands::sections::SectionsEditOptions {
+                        section_id: section_id.clone(),
+                        name: name.clone(),
+                    };
+                    commands::sections::execute_edit(&ctx, &opts, &token).await
+                }
+                Some(SectionsCommands::Delete { section_id, force }) => {
+                    let opts = commands::sections::SectionsDeleteOptions {
+                        section_id: section_id.clone(),
+                        force: *force,
+                    };
+                    commands::sections::execute_delete(&ctx, &opts, &token).await
+                }
+                None => {
+                    // Default to List if no subcommand provided
+                    let opts = commands::sections::SectionsListOptions {
+                        project: project.clone(),
+                        limit: None,
+                    };
+                    commands::sections::execute(&ctx, &opts, &token).await
                 }
             }
         }
