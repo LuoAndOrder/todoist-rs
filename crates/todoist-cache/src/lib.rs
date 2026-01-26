@@ -36,6 +36,8 @@ mod sync_manager;
 pub use store::{CacheStore, CacheStoreError, Result as CacheStoreResult};
 pub use sync_manager::{Result as SyncResult, SyncError, SyncManager};
 
+use std::collections::HashMap;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use todoist_api::sync::{
@@ -268,28 +270,51 @@ impl Cache {
     /// - If `is_deleted` is true: remove from cache
     /// - If resource exists in cache: update it
     /// - Otherwise: add it
+    ///
+    /// Uses a HashMap index for O(1) lookups instead of linear search,
+    /// reducing overall complexity from O(n×m) to O(n+m).
     fn merge_resources<T, F, D>(existing: &mut Vec<T>, incoming: &[T], get_id: F, is_deleted: D)
     where
         T: Clone,
         F: Fn(&T) -> &String,
         D: Fn(&T) -> bool,
     {
+        // Build index: id -> position in existing vec
+        // Clone IDs to avoid borrowing existing while mutating it
+        let mut index: HashMap<String, usize> = existing
+            .iter()
+            .enumerate()
+            .map(|(i, item)| (get_id(item).clone(), i))
+            .collect();
+
+        // Track indices to remove (in reverse order to preserve indices during removal)
+        let mut to_remove: Vec<usize> = Vec::new();
+
         for item in incoming {
             let id = get_id(item);
-            let pos = existing.iter().position(|e| get_id(e) == id);
+            let pos = index.get(id).copied();
 
             if is_deleted(item) {
-                // Remove if deleted
+                // Mark for removal if exists
                 if let Some(idx) = pos {
-                    existing.remove(idx);
+                    to_remove.push(idx);
+                    index.remove(id);
                 }
             } else if let Some(idx) = pos {
                 // Update existing
                 existing[idx] = item.clone();
             } else {
-                // Add new
+                // Add new - update index with new position
+                let new_idx = existing.len();
+                index.insert(id.clone(), new_idx);
                 existing.push(item.clone());
             }
+        }
+
+        // Remove deleted items in reverse order to preserve indices
+        to_remove.sort_unstable();
+        for idx in to_remove.into_iter().rev() {
+            existing.remove(idx);
         }
     }
 }
