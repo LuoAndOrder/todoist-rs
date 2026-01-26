@@ -1447,7 +1447,7 @@ pub fn format_deleted_section(result: &SectionDeleteResult) -> Result<String, se
 // Comment Output Formatting
 // ============================================================================
 
-use crate::commands::comments::{Comment, CommentAddResult};
+use crate::commands::comments::{Comment, CommentAddResult, CommentEditResult};
 
 /// JSON output structure for comments list command.
 #[derive(Serialize)]
@@ -1525,6 +1525,31 @@ pub struct CreatedCommentOutput<'a> {
 pub fn format_created_comment(result: &CommentAddResult) -> Result<String, serde_json::Error> {
     let parent_type = if result.is_task_comment { "task" } else { "project" };
     let output = CreatedCommentOutput {
+        id: &result.id,
+        content: &result.content,
+        parent_id: &result.parent_id,
+        parent_type,
+        parent_name: result.parent_name.as_deref(),
+    };
+
+    serde_json::to_string_pretty(&output)
+}
+
+/// JSON output structure for an edited comment.
+#[derive(Serialize)]
+pub struct EditedCommentOutput<'a> {
+    pub id: &'a str,
+    pub content: &'a str,
+    pub parent_id: &'a str,
+    pub parent_type: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_name: Option<&'a str>,
+}
+
+/// Formats an edited comment as JSON.
+pub fn format_edited_comment(result: &CommentEditResult) -> Result<String, serde_json::Error> {
+    let parent_type = if result.is_task_comment { "task" } else { "project" };
+    let output = EditedCommentOutput {
         id: &result.id,
         content: &result.content,
         parent_id: &result.parent_id,

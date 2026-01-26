@@ -401,6 +401,226 @@ pub async fn execute_add(
     Ok(())
 }
 
+// ============================================================================
+// Comments Edit Command
+// ============================================================================
+
+/// Options for the comments edit command.
+#[derive(Debug)]
+pub struct CommentsEditOptions {
+    /// Comment ID to edit.
+    pub comment_id: String,
+    /// New content for the comment.
+    pub content: String,
+}
+
+/// Result of a successful comment edit operation.
+#[derive(Debug)]
+pub struct CommentEditResult {
+    /// The ID of the edited comment.
+    pub id: String,
+    /// The new content of the comment.
+    pub content: String,
+    /// Whether this is a task comment (vs project comment).
+    pub is_task_comment: bool,
+    /// The parent ID (task_id or project_id).
+    pub parent_id: String,
+    /// The parent name (task content or project name).
+    pub parent_name: Option<String>,
+}
+
+/// Executes the comments edit command.
+///
+/// # Arguments
+///
+/// * `ctx` - Command context with output settings
+/// * `opts` - Comments edit command options
+/// * `token` - API token
+///
+/// # Errors
+///
+/// Returns an error if the comment is not found or the API returns an error.
+pub async fn execute_edit(
+    ctx: &CommandContext,
+    opts: &CommentsEditOptions,
+    token: &str,
+) -> Result<()> {
+    // Initialize sync manager to resolve comment ID
+    let client = TodoistClient::new(token);
+    let store = CacheStore::new()?;
+    let mut manager = SyncManager::new(client, store)?;
+
+    // Sync to get current state (for comment lookup)
+    manager.sync().await?;
+    let cache = manager.cache();
+
+    // Find the comment by ID (check both task notes and project notes)
+    let (comment_id, is_task_comment, parent_id, parent_name) =
+        resolve_comment(cache, &opts.comment_id)?;
+
+    // Build the note_update command
+    let args = serde_json::json!({
+        "id": comment_id,
+        "content": opts.content,
+    });
+
+    let command = SyncCommand::new("note_update", args);
+
+    // Execute the command
+    let api_client = TodoistClient::new(token);
+    let request = SyncRequest::with_commands(vec![command]);
+    let response = api_client.sync(request).await?;
+
+    // Check for errors
+    if response.has_errors() {
+        let errors = response.errors();
+        if let Some((_, error)) = errors.first() {
+            return Err(CommandError::Api(todoist_api::error::Error::Api(
+                todoist_api::error::ApiError::Validation {
+                    field: None,
+                    message: format!("Error {}: {}", error.error_code, error.error),
+                },
+            )));
+        }
+    }
+
+    let result = CommentEditResult {
+        id: comment_id,
+        content: opts.content.clone(),
+        is_task_comment,
+        parent_id,
+        parent_name,
+    };
+
+    // Output
+    if ctx.json_output {
+        let output = crate::output::format_edited_comment(&result)?;
+        println!("{output}");
+    } else if !ctx.quiet {
+        let parent_type = if result.is_task_comment {
+            "task"
+        } else {
+            "project"
+        };
+        let parent_display = result.parent_name.as_deref().unwrap_or(&result.parent_id);
+        if ctx.verbose {
+            println!("Updated comment: {}", result.id);
+            println!("  On {}: {}", parent_type, parent_display);
+            println!("  Content: {}", result.content);
+        } else {
+            let prefix = &result.id[..6.min(result.id.len())];
+            // Truncate content for display
+            let content_display = if result.content.len() > 40 {
+                format!("{}...", &result.content[..37])
+            } else {
+                result.content.clone()
+            };
+            println!("Updated comment ({}) on {}: {}", prefix, parent_display, content_display);
+        }
+    }
+
+    Ok(())
+}
+
+/// Resolves a comment ID from either task notes or project notes.
+/// Returns (full_id, is_task_comment, parent_id, parent_name).
+fn resolve_comment(
+    cache: &Cache,
+    comment_id: &str,
+) -> Result<(String, bool, String, Option<String>)> {
+    // First try exact ID match in task notes
+    for note in &cache.notes {
+        if note.id == comment_id && !note.is_deleted {
+            let parent_name = cache
+                .items
+                .iter()
+                .find(|i| i.id == note.item_id && !i.is_deleted)
+                .map(|i| i.content.clone());
+            return Ok((note.id.clone(), true, note.item_id.clone(), parent_name));
+        }
+    }
+
+    // Try exact ID match in project notes
+    for note in &cache.project_notes {
+        if note.id == comment_id && !note.is_deleted {
+            let parent_name = cache
+                .projects
+                .iter()
+                .find(|p| p.id == note.project_id && !p.is_deleted)
+                .map(|p| p.name.clone());
+            return Ok((note.id.clone(), false, note.project_id.clone(), parent_name));
+        }
+    }
+
+    // Try ID prefix match (6+ chars) in task notes
+    if comment_id.len() >= 6 {
+        let task_note_matches: Vec<_> = cache
+            .notes
+            .iter()
+            .filter(|n| n.id.starts_with(comment_id) && !n.is_deleted)
+            .collect();
+
+        let project_note_matches: Vec<_> = cache
+            .project_notes
+            .iter()
+            .filter(|n| n.id.starts_with(comment_id) && !n.is_deleted)
+            .collect();
+
+        let total_matches = task_note_matches.len() + project_note_matches.len();
+
+        if total_matches == 1 {
+            if let Some(note) = task_note_matches.first() {
+                let parent_name = cache
+                    .items
+                    .iter()
+                    .find(|i| i.id == note.item_id && !i.is_deleted)
+                    .map(|i| i.content.clone());
+                return Ok((note.id.clone(), true, note.item_id.clone(), parent_name));
+            }
+            if let Some(note) = project_note_matches.first() {
+                let parent_name = cache
+                    .projects
+                    .iter()
+                    .find(|p| p.id == note.project_id && !p.is_deleted)
+                    .map(|p| p.name.clone());
+                return Ok((note.id.clone(), false, note.project_id.clone(), parent_name));
+            }
+        }
+
+        if total_matches > 1 {
+            let mut msg =
+                format!("Ambiguous comment ID \"{comment_id}\"\n\nMultiple comments match this prefix:");
+            for note in task_note_matches.iter().take(3) {
+                let prefix = &note.id[..6.min(note.id.len())];
+                let content_preview = if note.content.len() > 30 {
+                    format!("{}...", &note.content[..27])
+                } else {
+                    note.content.clone()
+                };
+                msg.push_str(&format!("\n  {} (task): {}", prefix, content_preview));
+            }
+            for note in project_note_matches.iter().take(3) {
+                let prefix = &note.id[..6.min(note.id.len())];
+                let content_preview = if note.content.len() > 30 {
+                    format!("{}...", &note.content[..27])
+                } else {
+                    note.content.clone()
+                };
+                msg.push_str(&format!("\n  {} (project): {}", prefix, content_preview));
+            }
+            if total_matches > 6 {
+                msg.push_str(&format!("\n  ... and {} more", total_matches - 6));
+            }
+            msg.push_str("\n\nPlease use a longer prefix.");
+            return Err(CommandError::Config(msg));
+        }
+    }
+
+    Err(CommandError::Config(format!(
+        "Comment not found: {comment_id}"
+    )))
+}
+
 /// Filters comments based on task_id or project_id.
 fn filter_comments(
     cache: &Cache,
@@ -737,5 +957,124 @@ mod tests {
             created_at: None,
             updated_at: None,
         }
+    }
+
+    // ========================================================================
+    // Comments Edit Tests
+    // ========================================================================
+
+    #[test]
+    fn test_comments_edit_options() {
+        let opts = CommentsEditOptions {
+            comment_id: "note-123".to_string(),
+            content: "Updated content".to_string(),
+        };
+
+        assert_eq!(opts.comment_id, "note-123");
+        assert_eq!(opts.content, "Updated content");
+    }
+
+    #[test]
+    fn test_comment_edit_result_task() {
+        let result = CommentEditResult {
+            id: "note-123".to_string(),
+            content: "Updated comment".to_string(),
+            is_task_comment: true,
+            parent_id: "task-1".to_string(),
+            parent_name: Some("My Task".to_string()),
+        };
+
+        assert_eq!(result.id, "note-123");
+        assert_eq!(result.content, "Updated comment");
+        assert!(result.is_task_comment);
+        assert_eq!(result.parent_id, "task-1");
+        assert_eq!(result.parent_name, Some("My Task".to_string()));
+    }
+
+    #[test]
+    fn test_comment_edit_result_project() {
+        let result = CommentEditResult {
+            id: "pnote-456".to_string(),
+            content: "Updated project comment".to_string(),
+            is_task_comment: false,
+            parent_id: "project-1".to_string(),
+            parent_name: Some("My Project".to_string()),
+        };
+
+        assert_eq!(result.id, "pnote-456");
+        assert_eq!(result.content, "Updated project comment");
+        assert!(!result.is_task_comment);
+        assert_eq!(result.parent_id, "project-1");
+        assert_eq!(result.parent_name, Some("My Project".to_string()));
+    }
+
+    #[test]
+    fn test_resolve_comment_exact_task_note() {
+        let cache = make_test_cache();
+        let result = resolve_comment(&cache, "note-1");
+        assert!(result.is_ok());
+        let (id, is_task, parent_id, parent_name) = result.unwrap();
+        assert_eq!(id, "note-1");
+        assert!(is_task);
+        assert_eq!(parent_id, "task-1");
+        assert_eq!(parent_name, Some("Test Task".to_string()));
+    }
+
+    #[test]
+    fn test_resolve_comment_exact_project_note() {
+        let cache = make_test_cache();
+        let result = resolve_comment(&cache, "pnote-1");
+        assert!(result.is_ok());
+        let (id, is_task, parent_id, parent_name) = result.unwrap();
+        assert_eq!(id, "pnote-1");
+        assert!(!is_task);
+        assert_eq!(parent_id, "project-1");
+        assert_eq!(parent_name, Some("Test Project".to_string()));
+    }
+
+    #[test]
+    fn test_resolve_comment_not_found() {
+        let cache = make_test_cache();
+        let result = resolve_comment(&cache, "nonexistent");
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Comment not found"));
+    }
+
+    #[test]
+    fn test_resolve_comment_excludes_deleted() {
+        let mut cache = make_test_cache();
+        cache.notes[0].is_deleted = true;
+
+        let result = resolve_comment(&cache, "note-1");
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Comment not found"));
+    }
+
+    #[test]
+    fn test_resolve_comment_prefix_match() {
+        let mut cache = make_test_cache();
+        // Add a note with a longer ID for prefix matching
+        cache.notes.push(Note {
+            id: "note-abc123def456".to_string(),
+            item_id: "task-1".to_string(),
+            content: "Prefixed comment".to_string(),
+            posted_at: Some("2025-01-26T13:00:00Z".to_string()),
+            is_deleted: false,
+            posted_uid: None,
+            file_attachment: None,
+        });
+
+        // Should match with 6+ char prefix
+        let result = resolve_comment(&cache, "note-a");
+        assert!(result.is_ok());
+        let (id, is_task, _, _) = result.unwrap();
+        assert_eq!(id, "note-abc123def456");
+        assert!(is_task);
     }
 }

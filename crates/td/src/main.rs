@@ -358,6 +358,13 @@ async fn run(cli: &Cli) -> commands::Result<()> {
                     };
                     commands::comments::execute_add(&ctx, &opts, &token).await
                 }
+                Some(CommentsCommands::Edit { comment_id, text }) => {
+                    let opts = commands::comments::CommentsEditOptions {
+                        comment_id: comment_id.clone(),
+                        content: text.clone(),
+                    };
+                    commands::comments::execute_edit(&ctx, &opts, &token).await
+                }
                 None => {
                     // Default to List if no subcommand provided
                     let opts = commands::comments::CommentsListOptions {
