@@ -8,14 +8,15 @@
 
 1. **Complete API Coverage** - Expose all Todoist v1 API capabilities via CLI commands
 2. **AI Agent Friendly** - Auto-detect TTY for JSON output, strict exit codes, machine-parseable errors
-3. **Fast & Reliable** - <100ms cold start target, local caching with manual sync, auto-retry on rate limits
-4. **Excellent UX** - Color-coded output, intuitive commands, shell completions, helpful error messages
+3. **Fast & Reliable** - <100ms warm start target, local caching with sync, auto-retry on rate limits
+4. **Sync-First Architecture** - Use Sync API for efficient incremental updates and batched operations
+5. **Excellent UX** - Color-coded output, intuitive commands, shell completions, helpful error messages
 
 ## Non-Goals
 
 - Interactive TUI (text user interface)
 - Team/workspace collaboration features (personal use focus)
-- Offline-first operation (cache is for speed, not offline use)
+- Offline-first operation (cache is read-only fallback, not offline editing)
 - GUI wrapper or web interface
 
 ---
@@ -69,6 +70,86 @@ todoist-rs/
 | Terminal Colors | owo-colors or colored | ANSI color support |
 | Date/Time | chrono | Date parsing and formatting |
 | Keyring | keyring | Cross-platform secret storage |
+
+---
+
+## Sync-First Architecture
+
+### Why Sync API?
+
+The Todoist v1 API provides both REST endpoints and a Sync endpoint (`POST /api/v1/sync`). This CLI uses the **Sync API as the primary mechanism** because it aligns perfectly with local caching:
+
+| Feature | Sync API | REST API |
+|---------|----------|----------|
+| Incremental updates | ✓ Via sync_token | ✗ Full refetch |
+| Batch operations | ✓ Multiple commands | ✗ One request per op |
+| All resources at once | ✓ Single request | ✗ Multiple endpoints |
+| Temp ID references | ✓ Cross-command refs | ✗ Sequential only |
+| Command idempotency | ✓ UUID-based | ✗ Requires X-Request-Id |
+
+### Sync Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Initial Sync                             │
+│  sync_token='*' + resource_types='["all"]'                       │
+│  → Returns all data + new sync_token                             │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│                       Cache Populated                            │
+│  Store: sync_token, projects, items, labels, sections, etc.      │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│                      Incremental Sync                            │
+│  sync_token=<stored> + resource_types='["all"]'                  │
+│  → Returns only changes + new sync_token                         │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│                      Write Operations                            │
+│  commands=[{type, uuid, temp_id, args}, ...]                     │
+│  → Returns sync_status + temp_id_mapping + new sync_token        │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### REST API Usage (Exceptions)
+
+Some operations still use REST endpoints when Sync API doesn't provide equivalent functionality:
+
+| Operation | Endpoint | Reason |
+|-----------|----------|--------|
+| Quick Add | `POST /api/v1/tasks/quick_add` | NLP parsing server-side |
+| File Upload | `POST /api/v1/attachments` | Binary upload |
+| Get Completed Tasks | `GET /api/v1/tasks/completed` | Historical data not in sync |
+
+### Command Batching
+
+Write operations are batched into single sync requests when possible:
+
+```rust
+// Example: Complete multiple tasks in one request
+let commands = vec![
+    SyncCommand::item_close("task-id-1"),
+    SyncCommand::item_close("task-id-2"),
+    SyncCommand::item_close("task-id-3"),
+];
+client.sync(commands).await?;
+```
+
+### Temporary IDs
+
+When creating related resources, use temp_ids to reference them within the same batch:
+
+```rust
+// Create project and add task in one request
+let project_temp_id = uuid::Uuid::new_v4().to_string();
+let commands = vec![
+    SyncCommand::project_add("Shopping List", &project_temp_id),
+    SyncCommand::item_add("Buy milk", &project_temp_id), // References temp_id
+];
+```
 
 ---
 
@@ -596,31 +677,79 @@ td list --filter "(today | overdue) & p1"
 
 ### Cache Structure
 
+The cache stores the complete sync state, mirroring the Sync API response:
+
 ```json
 {
-  "sync_token": "...",
+  "sync_token": "TnYUZEpuzf2FMA9qzyY3j4xky6dXiYejmSO85S5paZ_...",
+  "full_sync_date_utc": "2026-01-25T10:30:00Z",
   "last_sync": "2026-01-25T10:30:00Z",
   "user": {...},
   "projects": [...],
-  "tasks": [...],
+  "items": [...],
   "labels": [...],
   "sections": [...],
-  "filters": [...]
+  "filters": [...],
+  "reminders": [...],
+  "notes": [...],
+  "collaborators": [...],
+  "day_orders": {...},
+  "completed_info": [...]
 }
 ```
 
+Note: The Sync API calls tasks "items" and comments "notes". The cache uses these names to match the API response directly.
+
 ### Cache Behavior
 
-1. **Read operations** check cache first, use if fresh (<5 minutes)
-2. **Write operations** update cache immediately after API success
-3. **`td sync`** forces full refresh from API
-4. **Cache miss** triggers API call and cache update
+1. **Initial sync** (`sync_token='*'`) - Fetch all data, populate cache
+2. **Incremental sync** - Use stored `sync_token` to fetch only changes
+3. **Read operations** - Read from cache, optionally refresh if stale (>5 min)
+4. **Write operations** - Send commands via Sync API, update cache with response
+5. **`td sync`** - Force incremental sync (or `--full` for complete refresh)
+
+### Sync Strategy
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│                      Read Operations                            │
+│                                                                  │
+│  Cache exists?  ─────No────→  Initial sync (sync_token='*')     │
+│       │                                                          │
+│      Yes                                                         │
+│       │                                                          │
+│  Cache stale?  ─────Yes───→  Incremental sync (stored token)    │
+│  (>5 min old)                                                    │
+│       │                                                          │
+│      No                                                          │
+│       ↓                                                          │
+│  Return cached data                                              │
+└────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────┐
+│                      Write Operations                           │
+│                                                                  │
+│  1. Build command(s) with UUID + optional temp_id               │
+│  2. Send to Sync API                                             │
+│  3. Check sync_status for success/failure per command            │
+│  4. Resolve temp_id_mapping for new resources                    │
+│  5. Update cache with new sync_token                             │
+│  6. Apply changes to cached data                                 │
+└────────────────────────────────────────────────────────────────┘
+```
+
+### Cache Invalidation
+
+The Sync API handles invalidation naturally:
+- Each sync response includes a new `sync_token`
+- Incremental sync returns only changed/deleted resources
+- Deleted resources are indicated by `is_deleted: true`
 
 ### Offline Handling
 
 If API is unreachable:
-- Read operations fall back to cache with warning
-- Write operations fail with network error
+- **Read operations** - Fall back to cache with warning (data may be stale)
+- **Write operations** - Fail with network error (no offline queue)
 
 ---
 
@@ -660,6 +789,28 @@ Please use a longer prefix.
 https://api.todoist.com/api/v1
 ```
 
+### Primary Endpoint: Sync API
+
+Most operations use the Sync endpoint:
+
+```
+POST https://api.todoist.com/api/v1/sync
+Content-Type: application/x-www-form-urlencoded
+Authorization: Bearer <token>
+```
+
+#### Read Operations (Sync)
+
+```
+sync_token=<token_or_*>&resource_types=["all"]
+```
+
+#### Write Operations (Commands)
+
+```
+commands=[{"type":"item_add","uuid":"...","temp_id":"...","args":{...}}]
+```
+
 ### Authentication
 
 All requests include:
@@ -673,16 +824,24 @@ Authorization: Bearer <token>
 - Respect `Retry-After` header
 - Maximum 3 retries before failing
 
-### Request ID
+### Command Idempotency
 
-All write operations include `X-Request-Id` header for idempotency.
+Write operations use command UUIDs for idempotency:
+- Each command has a unique `uuid` field
+- Todoist will not re-execute a command with the same UUID
+- Safe to retry failed requests without duplicate operations
 
-### Batching
+### Sync Command Types
 
-Use Sync endpoint (`/api/v1/sync`) for:
-- Completing multiple tasks
-- Operations with dependencies (create project + add task)
-- Initial sync and full refresh
+| Resource | Add | Update | Delete | Other |
+|----------|-----|--------|--------|-------|
+| Tasks | `item_add` | `item_update` | `item_delete` | `item_close`, `item_uncomplete`, `item_move` |
+| Projects | `project_add` | `project_update` | `project_delete` | `project_archive`, `project_unarchive` |
+| Sections | `section_add` | `section_update` | `section_delete` | `section_move`, `section_archive` |
+| Labels | `label_add` | `label_update` | `label_delete` | `label_update_orders` |
+| Filters | `filter_add` | `filter_update` | `filter_delete` | `filter_update_orders` |
+| Reminders | `reminder_add` | `reminder_update` | `reminder_delete` | |
+| Comments | `note_add` | `note_update` | `note_delete` | `project_note_add`, etc. |
 
 ---
 
@@ -920,19 +1079,42 @@ UTILITY
 
 ## Appendix C: API Endpoint Mapping
 
-| CLI Command | API Endpoint |
-|-------------|--------------|
-| `td list` | `GET /api/v1/tasks` |
-| `td add` | `POST /api/v1/tasks` |
-| `td quick` | `POST /api/v1/tasks/quick_add` |
-| `td show` | `GET /api/v1/tasks/{id}` |
-| `td edit` | `POST /api/v1/tasks/{id}` |
-| `td done` | `POST /api/v1/tasks/{id}/close` |
-| `td reopen` | `POST /api/v1/tasks/{id}/reopen` |
-| `td delete` | `DELETE /api/v1/tasks/{id}` |
-| `td projects` | `GET /api/v1/projects` |
-| `td labels` | `GET /api/v1/labels` |
-| `td sync` | `POST /api/v1/sync` |
+### Sync API Operations (Primary)
+
+Most operations use the Sync API endpoint: `POST /api/v1/sync`
+
+| CLI Command | Sync Command(s) |
+|-------------|-----------------|
+| `td list` | Read from cache (sync if stale) |
+| `td add` | `item_add` |
+| `td show` | Read from cache |
+| `td edit` | `item_update` (and/or `item_move`) |
+| `td done` | `item_close` |
+| `td reopen` | `item_uncomplete` |
+| `td delete` | `item_delete` |
+| `td projects list` | Read from cache |
+| `td projects add` | `project_add` |
+| `td projects edit` | `project_update` |
+| `td projects archive` | `project_archive` |
+| `td projects delete` | `project_delete` |
+| `td labels list` | Read from cache |
+| `td labels add` | `label_add` |
+| `td labels delete` | `label_delete` |
+| `td sections add` | `section_add` |
+| `td sections delete` | `section_delete` |
+| `td comments add` | `note_add` |
+| `td comments delete` | `note_delete` |
+| `td reminders add` | `reminder_add` |
+| `td reminders delete` | `reminder_delete` |
+| `td sync` | Incremental sync (or full with `--full`) |
+
+### REST API Operations (Exceptions)
+
+| CLI Command | REST Endpoint | Reason |
+|-------------|---------------|--------|
+| `td quick` | `POST /api/v1/tasks/quick_add` | NLP parsing server-side |
+| File attachments | `POST /api/v1/attachments` | Binary upload |
+| Completed tasks | `GET /api/v1/tasks/completed` | Historical data |
 
 ---
 
