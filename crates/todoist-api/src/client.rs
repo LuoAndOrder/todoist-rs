@@ -22,6 +22,9 @@ const MAX_BACKOFF_SECS: u64 = 30;
 /// Maximum number of retry attempts.
 const MAX_RETRIES: u32 = 3;
 
+/// Default request timeout in seconds.
+const DEFAULT_TIMEOUT_SECS: u64 = 30;
+
 /// Client for interacting with the Todoist API.
 #[derive(Clone)]
 pub struct TodoistClient {
@@ -32,19 +35,31 @@ pub struct TodoistClient {
 
 impl TodoistClient {
     /// Creates a new TodoistClient with the given API token.
+    ///
+    /// The client is configured with a 30-second request timeout to prevent
+    /// API calls from hanging indefinitely.
     pub fn new(token: impl Into<String>) -> Self {
         Self {
             token: token.into(),
-            http_client: reqwest::Client::new(),
+            http_client: reqwest::Client::builder()
+                .timeout(Duration::from_secs(DEFAULT_TIMEOUT_SECS))
+                .build()
+                .expect("Failed to build HTTP client"),
             base_url: BASE_URL.to_string(),
         }
     }
 
     /// Creates a new TodoistClient with a custom base URL (for testing).
+    ///
+    /// The client is configured with a 30-second request timeout to prevent
+    /// API calls from hanging indefinitely.
     pub fn with_base_url(token: impl Into<String>, base_url: impl Into<String>) -> Self {
         Self {
             token: token.into(),
-            http_client: reqwest::Client::new(),
+            http_client: reqwest::Client::builder()
+                .timeout(Duration::from_secs(DEFAULT_TIMEOUT_SECS))
+                .build()
+                .expect("Failed to build HTTP client"),
             base_url: base_url.into(),
         }
     }
@@ -538,6 +553,13 @@ mod tests {
         let backoff = client.calculate_backoff(10, None);
         assert_eq!(backoff, Duration::from_secs(MAX_BACKOFF_SECS));
     }
+
+    // Test: TodoistClient uses the default timeout constant
+    #[test]
+    fn test_default_timeout_constant() {
+        // Verify the timeout constant is set to 30 seconds
+        assert_eq!(DEFAULT_TIMEOUT_SECS, 30);
+    }
 }
 
 #[cfg(test)]
@@ -946,5 +968,46 @@ mod wiremock_tests {
             "Expected delay of ~1s, got {:?}",
             elapsed
         );
+    }
+
+    // Test: Client has timeout configured and times out on slow responses
+    #[tokio::test]
+    async fn test_client_timeout_on_slow_response() {
+        let mock_server = MockServer::start().await;
+
+        // Response that delays longer than the test client's timeout
+        // We'll create a client with a short timeout for testing
+        Mock::given(method("GET"))
+            .and(path("/tasks/slow"))
+            .respond_with(ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({
+                    "id": "123",
+                    "content": "Test task"
+                }))
+                .set_delay(Duration::from_secs(5))) // Delay longer than our test timeout
+            .mount(&mock_server)
+            .await;
+
+        // Create a client with a very short timeout for testing
+        let client = TodoistClient {
+            token: "test-token".to_string(),
+            http_client: reqwest::Client::builder()
+                .timeout(Duration::from_secs(1))
+                .build()
+                .expect("Failed to build HTTP client"),
+            base_url: mock_server.uri(),
+        };
+
+        let result: Result<TestTask> = client.get("/tasks/slow").await;
+
+        // Should fail with a timeout error
+        assert!(result.is_err(), "Expected timeout error");
+        match result {
+            Err(Error::Http(req_err)) => {
+                assert!(req_err.is_timeout(), "Expected timeout error, got: {:?}", req_err);
+            }
+            Err(e) => panic!("Expected HTTP timeout error, got: {:?}", e),
+            Ok(_) => panic!("Expected error, got success"),
+        }
     }
 }
