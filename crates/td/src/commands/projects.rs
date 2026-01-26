@@ -804,6 +804,120 @@ pub async fn execute_unarchive(ctx: &CommandContext, opts: &ProjectsUnarchiveOpt
     Ok(())
 }
 
+// ============================================================================
+// Projects Delete Command
+// ============================================================================
+
+/// Options for the projects delete command.
+#[derive(Debug)]
+pub struct ProjectsDeleteOptions {
+    /// Project ID (full ID or prefix).
+    pub project_id: String,
+    /// Skip confirmation.
+    pub force: bool,
+}
+
+/// Result of a successful project delete operation.
+#[derive(Debug)]
+pub struct ProjectDeleteResult {
+    /// The ID of the deleted project.
+    pub id: String,
+    /// The name of the deleted project.
+    pub name: String,
+}
+
+/// Executes the projects delete command.
+///
+/// # Arguments
+///
+/// * `ctx` - Command context with output settings
+/// * `opts` - Projects delete command options
+/// * `token` - API token
+///
+/// # Errors
+///
+/// Returns an error if syncing fails, project lookup fails, or the API returns an error.
+pub async fn execute_delete(ctx: &CommandContext, opts: &ProjectsDeleteOptions, token: &str) -> Result<()> {
+    // Initialize sync manager to resolve project ID
+    let client = TodoistClient::new(token);
+    let store = CacheStore::new()?;
+    let mut manager = SyncManager::new(client, store)?;
+
+    // Sync to get current state (for project lookup)
+    manager.sync().await?;
+    let cache = manager.cache();
+
+    // Find the project by ID or prefix (include archived projects since they can be deleted)
+    let project = find_project_by_id_or_prefix_include_archived(cache, &opts.project_id)?;
+    let project_id = project.id.clone();
+    let project_name = project.name.clone();
+
+    // Check if this is the inbox project
+    if project.inbox_project {
+        return Err(CommandError::Config(
+            "Cannot delete the Inbox project".to_string()
+        ));
+    }
+
+    // Confirm if not forced
+    if !opts.force && !ctx.quiet {
+        eprintln!(
+            "Delete project '{}' ({})?",
+            project_name,
+            &project_id[..6.min(project_id.len())]
+        );
+        eprintln!("This will permanently delete the project and all its tasks.");
+        eprintln!("Use --force to skip this confirmation.");
+        return Err(CommandError::Config("Operation cancelled. Use --force to confirm.".to_string()));
+    }
+
+    // Build the project_delete command arguments
+    let args = serde_json::json!({
+        "id": project_id,
+    });
+
+    // Create the command
+    let command = SyncCommand::new("project_delete", args);
+
+    // Execute the command
+    let api_client = TodoistClient::new(token);
+    let request = SyncRequest::with_commands(vec![command]);
+    let response = api_client.sync(request).await?;
+
+    // Check for errors
+    if response.has_errors() {
+        let errors = response.errors();
+        if let Some((_, error)) = errors.first() {
+            return Err(CommandError::Api(todoist_api::error::Error::Api(
+                todoist_api::error::ApiError::Validation {
+                    field: None,
+                    message: format!("Error {}: {}", error.error_code, error.error),
+                },
+            )));
+        }
+    }
+
+    let result = ProjectDeleteResult {
+        id: project_id,
+        name: project_name,
+    };
+
+    // Output
+    if ctx.json_output {
+        let output = crate::output::format_deleted_project(&result)?;
+        println!("{output}");
+    } else if !ctx.quiet {
+        if ctx.verbose {
+            println!("Deleted project: {} ({})", result.name, result.id);
+        } else {
+            let prefix = &result.id[..6.min(result.id.len())];
+            println!("Deleted: {} ({})", result.name, prefix);
+        }
+    }
+
+    Ok(())
+}
+
 /// Finds a project by full ID or unique prefix, including archived projects.
 fn find_project_by_id_or_prefix_include_archived<'a>(cache: &'a Cache, id: &str) -> Result<&'a Project> {
     // First try exact match
@@ -1118,5 +1232,38 @@ mod tests {
 
         assert_eq!(result.id, "proj-456");
         assert_eq!(result.name, "Unarchived Project");
+    }
+
+    #[test]
+    fn test_projects_delete_options() {
+        let opts = ProjectsDeleteOptions {
+            project_id: "proj-123".to_string(),
+            force: false,
+        };
+
+        assert_eq!(opts.project_id, "proj-123");
+        assert!(!opts.force);
+    }
+
+    #[test]
+    fn test_projects_delete_options_with_force() {
+        let opts = ProjectsDeleteOptions {
+            project_id: "proj-456".to_string(),
+            force: true,
+        };
+
+        assert_eq!(opts.project_id, "proj-456");
+        assert!(opts.force);
+    }
+
+    #[test]
+    fn test_project_delete_result() {
+        let result = ProjectDeleteResult {
+            id: "proj-789".to_string(),
+            name: "Deleted Project".to_string(),
+        };
+
+        assert_eq!(result.id, "proj-789");
+        assert_eq!(result.name, "Deleted Project");
     }
 }

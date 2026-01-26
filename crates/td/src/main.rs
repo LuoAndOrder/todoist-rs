@@ -240,6 +240,13 @@ async fn run(cli: &Cli) -> commands::Result<()> {
                     };
                     commands::projects::execute_unarchive(&ctx, &opts, &token).await
                 }
+                Some(ProjectsCommands::Delete { project_id, force }) => {
+                    let opts = commands::projects::ProjectsDeleteOptions {
+                        project_id: project_id.clone(),
+                        force: *force,
+                    };
+                    commands::projects::execute_delete(&ctx, &opts, &token).await
+                }
                 None => {
                     // Default to List if no subcommand provided
                     let opts = commands::projects::ProjectsListOptions {
@@ -248,21 +255,6 @@ async fn run(cli: &Cli) -> commands::Result<()> {
                         limit: None,
                     };
                     commands::projects::execute(&ctx, &opts, &token).await
-                }
-                _ => {
-                    // Other subcommands not yet implemented
-                    if cli.json {
-                        println!(
-                            "{}",
-                            serde_json::json!({
-                                "status": "not_implemented",
-                                "command": "projects subcommand"
-                            })
-                        );
-                    } else if !cli.quiet {
-                        println!("Projects subcommand not yet implemented");
-                    }
-                    Ok(())
                 }
             }
         }

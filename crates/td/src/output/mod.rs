@@ -9,7 +9,7 @@ use todoist_api::sync::Item;
 use todoist_cache::Cache;
 
 use crate::commands::add::AddResult;
-use crate::commands::projects::{ProjectAddResult, ProjectArchiveResult, ProjectEditResult, ProjectsShowResult, ProjectUnarchiveResult};
+use crate::commands::projects::{ProjectAddResult, ProjectArchiveResult, ProjectDeleteResult, ProjectEditResult, ProjectsShowResult, ProjectUnarchiveResult};
 use crate::commands::quick::QuickResult;
 use crate::commands::show::ShowResult;
 
@@ -693,6 +693,25 @@ pub fn format_unarchived_project(result: &ProjectUnarchiveResult) -> Result<Stri
         id: &result.id,
         name: &result.name,
         status: "unarchived",
+    };
+
+    serde_json::to_string_pretty(&output)
+}
+
+/// JSON output structure for a deleted project.
+#[derive(Serialize)]
+pub struct DeletedProjectOutput<'a> {
+    pub id: &'a str,
+    pub name: &'a str,
+    pub status: &'static str,
+}
+
+/// Formats a deleted project as JSON.
+pub fn format_deleted_project(result: &ProjectDeleteResult) -> Result<String, serde_json::Error> {
+    let output = DeletedProjectOutput {
+        id: &result.id,
+        name: &result.name,
+        status: "deleted",
     };
 
     serde_json::to_string_pretty(&output)
