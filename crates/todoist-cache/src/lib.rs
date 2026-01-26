@@ -264,6 +264,79 @@ impl Cache {
         }
     }
 
+    /// Applies a mutation response to the cache.
+    ///
+    /// This method is similar to `apply_sync_response()` but is specifically
+    /// designed for write operation (mutation) responses. It:
+    /// - Updates the sync_token from the response
+    /// - Updates the last_sync timestamp
+    /// - Merges any resources returned in the response (add/update/delete by ID)
+    ///
+    /// Unlike full sync responses, mutation responses always use incremental
+    /// merge logic since they only contain affected resources.
+    ///
+    /// Note: The `temp_id_mapping` from the response should be used by the caller
+    /// to resolve temporary IDs before calling this method, or the caller can
+    /// use the returned response's `temp_id_mapping` to look up real IDs.
+    ///
+    /// # Arguments
+    ///
+    /// * `response` - The sync response from a mutation (write) operation
+    pub fn apply_mutation_response(&mut self, response: &todoist_api::sync::SyncResponse) {
+        let now = Utc::now();
+
+        // Update sync token - critical for subsequent syncs
+        self.sync_token = response.sync_token.clone();
+        self.last_sync = Some(now);
+
+        // Merge resources using incremental logic (mutations never do full sync)
+        // Even if the response has full_sync: true, we treat it as incremental
+        // because we're only applying the affected resources from a mutation
+        Self::merge_resources(&mut self.items, &response.items, |i| &i.id, |i| i.is_deleted);
+        Self::merge_resources(
+            &mut self.projects,
+            &response.projects,
+            |p| &p.id,
+            |p| p.is_deleted,
+        );
+        Self::merge_resources(
+            &mut self.labels,
+            &response.labels,
+            |l| &l.id,
+            |l| l.is_deleted,
+        );
+        Self::merge_resources(
+            &mut self.sections,
+            &response.sections,
+            |s| &s.id,
+            |s| s.is_deleted,
+        );
+        Self::merge_resources(&mut self.notes, &response.notes, |n| &n.id, |n| n.is_deleted);
+        Self::merge_resources(
+            &mut self.project_notes,
+            &response.project_notes,
+            |n| &n.id,
+            |n| n.is_deleted,
+        );
+        Self::merge_resources(
+            &mut self.reminders,
+            &response.reminders,
+            |r| &r.id,
+            |r| r.is_deleted,
+        );
+        Self::merge_resources(
+            &mut self.filters,
+            &response.filters,
+            |f| &f.id,
+            |f| f.is_deleted,
+        );
+
+        // User is replaced if present in response
+        if response.user.is_some() {
+            self.user = response.user.clone();
+        }
+    }
+
     /// Merges a list of resources from a sync response into the cache.
     ///
     /// For each resource in the response:
@@ -1307,5 +1380,295 @@ mod tests {
         // Should not error, cache unchanged
         assert_eq!(cache.items.len(), 1);
         assert_eq!(cache.items[0].id, "item-1");
+    }
+
+    // ==================== Mutation Response Tests ====================
+
+    #[test]
+    fn test_apply_mutation_response_updates_sync_token() {
+        use test_helpers::*;
+
+        let mut cache = Cache::new();
+        cache.sync_token = "old_token".to_string();
+
+        let response = make_sync_response(false, "new_mutation_token");
+
+        cache.apply_mutation_response(&response);
+
+        assert_eq!(cache.sync_token, "new_mutation_token");
+        assert!(cache.last_sync.is_some());
+    }
+
+    #[test]
+    fn test_apply_mutation_response_does_not_update_full_sync_date() {
+        use test_helpers::*;
+
+        let mut cache = Cache::new();
+        cache.sync_token = "old_token".to_string();
+        let original_date = DateTime::parse_from_rfc3339("2025-01-20T10:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        cache.full_sync_date_utc = Some(original_date);
+
+        // Even if response says full_sync: true, mutation should not update full_sync_date
+        let response = make_sync_response(true, "new_token");
+
+        cache.apply_mutation_response(&response);
+
+        assert_eq!(cache.full_sync_date_utc, Some(original_date));
+    }
+
+    #[test]
+    fn test_apply_mutation_response_adds_new_item() {
+        use test_helpers::*;
+
+        let mut cache = Cache::new();
+        cache.sync_token = "old_token".to_string();
+        cache.items = vec![make_item("item-1", "Existing task", false)];
+
+        let mut response = make_sync_response(false, "new_token");
+        response.items = vec![make_item("item-2", "New task from mutation", false)];
+
+        cache.apply_mutation_response(&response);
+
+        assert_eq!(cache.items.len(), 2);
+        assert!(cache.items.iter().any(|i| i.id == "item-1"));
+        assert!(cache.items.iter().any(|i| i.id == "item-2" && i.content == "New task from mutation"));
+    }
+
+    #[test]
+    fn test_apply_mutation_response_updates_existing_item() {
+        use test_helpers::*;
+
+        let mut cache = Cache::new();
+        cache.sync_token = "old_token".to_string();
+        cache.items = vec![make_item("item-1", "Original content", false)];
+
+        let mut response = make_sync_response(false, "new_token");
+        response.items = vec![make_item("item-1", "Updated content", false)];
+
+        cache.apply_mutation_response(&response);
+
+        assert_eq!(cache.items.len(), 1);
+        assert_eq!(cache.items[0].content, "Updated content");
+    }
+
+    #[test]
+    fn test_apply_mutation_response_removes_deleted_item() {
+        use test_helpers::*;
+
+        let mut cache = Cache::new();
+        cache.sync_token = "old_token".to_string();
+        cache.items = vec![
+            make_item("item-1", "Task 1", false),
+            make_item("item-2", "Task 2", false),
+        ];
+
+        let mut response = make_sync_response(false, "new_token");
+        response.items = vec![make_item("item-1", "Task 1", true)]; // deleted
+
+        cache.apply_mutation_response(&response);
+
+        assert_eq!(cache.items.len(), 1);
+        assert_eq!(cache.items[0].id, "item-2");
+    }
+
+    #[test]
+    fn test_apply_mutation_response_adds_new_project() {
+        use test_helpers::*;
+
+        let mut cache = Cache::new();
+        cache.sync_token = "old_token".to_string();
+
+        let mut response = make_sync_response(false, "new_token");
+        response.projects = vec![make_project("proj-1", "New Project", false)];
+
+        cache.apply_mutation_response(&response);
+
+        assert_eq!(cache.projects.len(), 1);
+        assert_eq!(cache.projects[0].name, "New Project");
+    }
+
+    #[test]
+    fn test_apply_mutation_response_removes_deleted_project() {
+        use test_helpers::*;
+
+        let mut cache = Cache::new();
+        cache.sync_token = "old_token".to_string();
+        cache.projects = vec![make_project("proj-1", "Project", false)];
+
+        let mut response = make_sync_response(false, "new_token");
+        response.projects = vec![make_project("proj-1", "Project", true)];
+
+        cache.apply_mutation_response(&response);
+
+        assert!(cache.projects.is_empty());
+    }
+
+    #[test]
+    fn test_apply_mutation_response_adds_new_label() {
+        use test_helpers::*;
+
+        let mut cache = Cache::new();
+        cache.sync_token = "old_token".to_string();
+
+        let mut response = make_sync_response(false, "new_token");
+        response.labels = vec![make_label("label-1", "Work", false)];
+
+        cache.apply_mutation_response(&response);
+
+        assert_eq!(cache.labels.len(), 1);
+        assert_eq!(cache.labels[0].name, "Work");
+    }
+
+    #[test]
+    fn test_apply_mutation_response_removes_deleted_label() {
+        use test_helpers::*;
+
+        let mut cache = Cache::new();
+        cache.sync_token = "old_token".to_string();
+        cache.labels = vec![make_label("label-1", "Work", false)];
+
+        let mut response = make_sync_response(false, "new_token");
+        response.labels = vec![make_label("label-1", "Work", true)];
+
+        cache.apply_mutation_response(&response);
+
+        assert!(cache.labels.is_empty());
+    }
+
+    #[test]
+    fn test_apply_mutation_response_adds_new_section() {
+        use test_helpers::*;
+
+        let mut cache = Cache::new();
+        cache.sync_token = "old_token".to_string();
+
+        let mut response = make_sync_response(false, "new_token");
+        response.sections = vec![make_section("sec-1", "New Section", false)];
+
+        cache.apply_mutation_response(&response);
+
+        assert_eq!(cache.sections.len(), 1);
+        assert_eq!(cache.sections[0].name, "New Section");
+    }
+
+    #[test]
+    fn test_apply_mutation_response_adds_new_note() {
+        use test_helpers::*;
+
+        let mut cache = Cache::new();
+        cache.sync_token = "old_token".to_string();
+
+        let mut response = make_sync_response(false, "new_token");
+        response.notes = vec![make_note("note-1", "New comment", false)];
+
+        cache.apply_mutation_response(&response);
+
+        assert_eq!(cache.notes.len(), 1);
+        assert_eq!(cache.notes[0].content, "New comment");
+    }
+
+    #[test]
+    fn test_apply_mutation_response_adds_new_reminder() {
+        use test_helpers::*;
+
+        let mut cache = Cache::new();
+        cache.sync_token = "old_token".to_string();
+
+        let mut response = make_sync_response(false, "new_token");
+        response.reminders = vec![make_reminder("rem-1", false)];
+
+        cache.apply_mutation_response(&response);
+
+        assert_eq!(cache.reminders.len(), 1);
+        assert_eq!(cache.reminders[0].id, "rem-1");
+    }
+
+    #[test]
+    fn test_apply_mutation_response_adds_new_filter() {
+        use test_helpers::*;
+
+        let mut cache = Cache::new();
+        cache.sync_token = "old_token".to_string();
+
+        let mut response = make_sync_response(false, "new_token");
+        response.filters = vec![make_filter("filter-1", "Today", false)];
+
+        cache.apply_mutation_response(&response);
+
+        assert_eq!(cache.filters.len(), 1);
+        assert_eq!(cache.filters[0].name, "Today");
+    }
+
+    #[test]
+    fn test_apply_mutation_response_preserves_unaffected_resources() {
+        use test_helpers::*;
+
+        let mut cache = Cache::new();
+        cache.sync_token = "old_token".to_string();
+        cache.items = vec![make_item("item-1", "Task 1", false)];
+        cache.projects = vec![make_project("proj-1", "Project", false)];
+        cache.labels = vec![make_label("label-1", "Work", false)];
+
+        // Mutation only affects items
+        let mut response = make_sync_response(false, "new_token");
+        response.items = vec![make_item("item-2", "New Task", false)];
+
+        cache.apply_mutation_response(&response);
+
+        // Items updated
+        assert_eq!(cache.items.len(), 2);
+        // Projects and labels unchanged
+        assert_eq!(cache.projects.len(), 1);
+        assert_eq!(cache.labels.len(), 1);
+    }
+
+    #[test]
+    fn test_apply_mutation_response_preserves_user_when_not_in_response() {
+        use test_helpers::*;
+
+        let mut cache = Cache::new();
+        cache.sync_token = "old_token".to_string();
+        cache.user = Some(make_user("user-1"));
+
+        let response = make_sync_response(false, "new_token");
+
+        cache.apply_mutation_response(&response);
+
+        assert!(cache.user.is_some());
+        assert_eq!(cache.user.as_ref().unwrap().id, "user-1");
+    }
+
+    #[test]
+    fn test_apply_mutation_response_mixed_operations() {
+        use test_helpers::*;
+
+        let mut cache = Cache::new();
+        cache.sync_token = "old_token".to_string();
+        cache.items = vec![
+            make_item("item-1", "Task 1", false),
+            make_item("item-2", "Task 2", false),
+        ];
+        cache.projects = vec![make_project("proj-1", "Project 1", false)];
+
+        let mut response = make_sync_response(false, "new_token");
+        // Add new item, delete existing item, add new project
+        response.items = vec![
+            make_item("item-1", "Task 1", true),     // delete
+            make_item("item-3", "New Task 3", false), // add
+        ];
+        response.projects = vec![make_project("proj-2", "Project 2", false)]; // add
+
+        cache.apply_mutation_response(&response);
+
+        assert_eq!(cache.items.len(), 2);
+        assert!(!cache.items.iter().any(|i| i.id == "item-1"));
+        assert!(cache.items.iter().any(|i| i.id == "item-2"));
+        assert!(cache.items.iter().any(|i| i.id == "item-3"));
+
+        assert_eq!(cache.projects.len(), 2);
+        assert!(cache.projects.iter().any(|p| p.id == "proj-1"));
+        assert!(cache.projects.iter().any(|p| p.id == "proj-2"));
     }
 }
