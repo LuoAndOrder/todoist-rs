@@ -1,0 +1,666 @@
+//! Test context for E2E tests with rate-limit-aware sync state management.
+//!
+//! This module provides a `TestContext` struct that minimizes API calls by:
+//! - Performing ONE full sync at initialization
+//! - Using partial (incremental) syncs for all subsequent operations
+//! - Caching state locally to avoid re-syncing for verification
+//!
+//! ## Rate Limits
+//!
+//! The Todoist API has strict rate limits:
+//! - Full sync: 100 requests / 15 minutes
+//! - Partial sync: 1000 requests / 15 minutes
+//! - Commands per request: 100 max
+//!
+//! By using `TestContext`, tests use partial syncs instead of full syncs,
+//! allowing ~10x more API calls before hitting rate limits.
+
+#![cfg(feature = "e2e")]
+
+use std::fs;
+use todoist_api::client::TodoistClient;
+use todoist_api::sync::{
+    Filter, Item, Label, Note, Project, ProjectNote, Reminder, Section, SyncCommand, SyncRequest,
+    SyncResponse,
+};
+
+/// Reads the API token from .env.local or environment variable.
+pub fn get_test_token() -> Option<String> {
+    // Try to read from .env.local at workspace root
+    for path in &[".env.local", "../../.env.local", "../../../.env.local"] {
+        if let Ok(contents) = fs::read_to_string(path) {
+            for line in contents.lines() {
+                if let Some(token) = line
+                    .strip_prefix("TODOIST_TEST_API_TOKEN=")
+                    .or_else(|| line.strip_prefix("todoist_test_api_key="))
+                {
+                    return Some(token.trim().to_string());
+                }
+            }
+        }
+    }
+
+    std::env::var("TODOIST_TEST_API_TOKEN")
+        .or_else(|_| std::env::var("TODOIST_TEST_API_KEY"))
+        .ok()
+}
+
+/// Shared context for E2E tests that minimizes API calls.
+///
+/// `TestContext` performs ONE full sync at initialization and uses partial syncs
+/// for all subsequent operations. This dramatically reduces API calls and helps
+/// stay within Todoist's rate limits.
+///
+/// ## Usage
+///
+/// ```rust,ignore
+/// #[tokio::test]
+/// async fn test_example() {
+///     let mut ctx = TestContext::new().await.expect("Failed to create context");
+///
+///     // Create a task (partial sync with command)
+///     let temp_id = uuid::Uuid::new_v4().to_string();
+///     let response = ctx.execute(vec![
+///         SyncCommand::with_temp_id("item_add", &temp_id, json!({
+///             "content": "Test task",
+///             "project_id": ctx.inbox_id()
+///         }))
+///     ]).await.unwrap();
+///
+///     // Get the real ID from temp_id mapping
+///     let task_id = response.real_id(&temp_id).unwrap();
+///
+///     // Verify from cache (no API call)
+///     let task = ctx.find_item(task_id).expect("Task should exist in cache");
+///     assert_eq!(task.content, "Test task");
+///
+///     // Cleanup
+///     ctx.execute(vec![
+///         SyncCommand::new("item_delete", json!({"id": task_id}))
+///     ]).await.unwrap();
+/// }
+/// ```
+#[derive(Debug)]
+pub struct TestContext {
+    client: TodoistClient,
+    sync_token: String,
+    inbox_id: String,
+    // Cached state from syncs
+    items: Vec<Item>,
+    projects: Vec<Project>,
+    sections: Vec<Section>,
+    labels: Vec<Label>,
+    notes: Vec<Note>,
+    project_notes: Vec<ProjectNote>,
+    reminders: Vec<Reminder>,
+    filters: Vec<Filter>,
+}
+
+impl TestContext {
+    /// Creates a new TestContext with ONE full sync.
+    ///
+    /// Returns `None` if the API token is not available.
+    /// Returns `Err` if the full sync fails.
+    pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
+        let token = get_test_token().ok_or("TODOIST_TEST_API_TOKEN not found")?;
+        let client = TodoistClient::new(token);
+
+        // ONE full sync at initialization
+        let response = client.sync(SyncRequest::full_sync()).await?;
+
+        let inbox_id = response
+            .projects
+            .iter()
+            .find(|p| p.inbox_project && !p.is_deleted)
+            .ok_or("Should have inbox project")?
+            .id
+            .clone();
+
+        Ok(Self {
+            client,
+            sync_token: response.sync_token,
+            inbox_id,
+            items: response.items,
+            projects: response.projects,
+            sections: response.sections,
+            labels: response.labels,
+            notes: response.notes,
+            project_notes: response.project_notes,
+            reminders: response.reminders,
+            filters: response.filters,
+        })
+    }
+
+    /// Returns the inbox project ID.
+    pub fn inbox_id(&self) -> &str {
+        &self.inbox_id
+    }
+
+    /// Returns a reference to the API client.
+    pub fn client(&self) -> &TodoistClient {
+        &self.client
+    }
+
+    /// Returns the current sync token.
+    pub fn sync_token(&self) -> &str {
+        &self.sync_token
+    }
+
+    /// Executes commands and updates cached state (partial sync).
+    ///
+    /// This method:
+    /// 1. Sends the commands with the current sync token
+    /// 2. Requests all resource types to get updated state
+    /// 3. Merges the response into the cached state
+    /// 4. Updates the sync token for the next call
+    ///
+    /// Returns the full `SyncResponse` for access to `temp_id_mapping` and `sync_status`.
+    pub async fn execute(
+        &mut self,
+        commands: Vec<SyncCommand>,
+    ) -> Result<SyncResponse, todoist_api::error::Error> {
+        let request = SyncRequest::incremental(&self.sync_token)
+            .with_resource_types(vec!["all".to_string()])
+            .add_commands(commands);
+
+        let response = self.client.sync(request).await?;
+
+        // Update sync token
+        self.sync_token = response.sync_token.clone();
+
+        // Merge response data into cached state
+        self.merge_response(&response);
+
+        Ok(response)
+    }
+
+    /// Performs a partial sync to refresh state without executing commands.
+    ///
+    /// Use this to get the latest state from the server when you need to
+    /// verify changes made outside of the test context.
+    pub async fn refresh(&mut self) -> Result<SyncResponse, todoist_api::error::Error> {
+        let request = SyncRequest::incremental(&self.sync_token)
+            .with_resource_types(vec!["all".to_string()]);
+
+        let response = self.client.sync(request).await?;
+
+        // Update sync token
+        self.sync_token = response.sync_token.clone();
+
+        // Merge response data into cached state
+        self.merge_response(&response);
+
+        Ok(response)
+    }
+
+    /// Finds an item (task) in the cached state by ID.
+    ///
+    /// Returns `None` if the item is not found or is deleted.
+    /// This does NOT make an API call.
+    pub fn find_item(&self, id: &str) -> Option<&Item> {
+        self.items.iter().find(|i| i.id == id && !i.is_deleted)
+    }
+
+    /// Finds a project in the cached state by ID.
+    ///
+    /// Returns `None` if the project is not found or is deleted.
+    /// This does NOT make an API call.
+    pub fn find_project(&self, id: &str) -> Option<&Project> {
+        self.projects.iter().find(|p| p.id == id && !p.is_deleted)
+    }
+
+    /// Finds a project by name in the cached state.
+    ///
+    /// Returns `None` if not found or deleted. Case-insensitive.
+    /// This does NOT make an API call.
+    pub fn find_project_by_name(&self, name: &str) -> Option<&Project> {
+        self.projects
+            .iter()
+            .find(|p| !p.is_deleted && p.name.eq_ignore_ascii_case(name))
+    }
+
+    /// Finds a section in the cached state by ID.
+    ///
+    /// Returns `None` if the section is not found or is deleted.
+    /// This does NOT make an API call.
+    pub fn find_section(&self, id: &str) -> Option<&Section> {
+        self.sections.iter().find(|s| s.id == id && !s.is_deleted)
+    }
+
+    /// Finds a label in the cached state by ID.
+    ///
+    /// Returns `None` if the label is not found or is deleted.
+    /// This does NOT make an API call.
+    pub fn find_label(&self, id: &str) -> Option<&Label> {
+        self.labels.iter().find(|l| l.id == id && !l.is_deleted)
+    }
+
+    /// Finds a label by name in the cached state.
+    ///
+    /// Returns `None` if not found or deleted. Case-insensitive.
+    /// This does NOT make an API call.
+    pub fn find_label_by_name(&self, name: &str) -> Option<&Label> {
+        self.labels
+            .iter()
+            .find(|l| !l.is_deleted && l.name.eq_ignore_ascii_case(name))
+    }
+
+    /// Returns all non-deleted items in the cache.
+    pub fn items(&self) -> impl Iterator<Item = &Item> {
+        self.items.iter().filter(|i| !i.is_deleted)
+    }
+
+    /// Returns all non-deleted projects in the cache.
+    pub fn projects(&self) -> impl Iterator<Item = &Project> {
+        self.projects.iter().filter(|p| !p.is_deleted)
+    }
+
+    /// Returns all non-deleted sections in the cache.
+    pub fn sections(&self) -> impl Iterator<Item = &Section> {
+        self.sections.iter().filter(|s| !s.is_deleted)
+    }
+
+    /// Returns all non-deleted labels in the cache.
+    pub fn labels(&self) -> impl Iterator<Item = &Label> {
+        self.labels.iter().filter(|l| !l.is_deleted)
+    }
+
+    /// Merges a sync response into the cached state.
+    ///
+    /// For each resource type in the response:
+    /// - Updates existing items with matching IDs
+    /// - Adds new items that don't exist in cache
+    fn merge_response(&mut self, response: &SyncResponse) {
+        // Merge items
+        Self::merge_vec(&mut self.items, &response.items, |item| &item.id);
+
+        // Merge projects
+        Self::merge_vec(&mut self.projects, &response.projects, |proj| &proj.id);
+
+        // Merge sections
+        Self::merge_vec(&mut self.sections, &response.sections, |sec| &sec.id);
+
+        // Merge labels
+        Self::merge_vec(&mut self.labels, &response.labels, |label| &label.id);
+
+        // Merge notes
+        Self::merge_vec(&mut self.notes, &response.notes, |note| &note.id);
+
+        // Merge project notes
+        Self::merge_vec(&mut self.project_notes, &response.project_notes, |pn| {
+            &pn.id
+        });
+
+        // Merge reminders
+        Self::merge_vec(&mut self.reminders, &response.reminders, |rem| &rem.id);
+
+        // Merge filters
+        Self::merge_vec(&mut self.filters, &response.filters, |filt| &filt.id);
+    }
+
+    /// Helper to merge a vector of items, updating existing or adding new.
+    fn merge_vec<T: Clone, F>(cache: &mut Vec<T>, incoming: &[T], get_id: F)
+    where
+        F: Fn(&T) -> &String,
+    {
+        for item in incoming {
+            let id = get_id(item);
+            if let Some(existing) = cache.iter_mut().find(|c| get_id(c) == id) {
+                *existing = item.clone();
+            } else {
+                cache.push(item.clone());
+            }
+        }
+    }
+}
+
+/// Helper trait for creating test resources with cleanup.
+impl TestContext {
+    /// Creates a task and returns its real ID.
+    ///
+    /// This is a convenience helper that handles the temp_id mapping.
+    pub async fn create_task(
+        &mut self,
+        content: &str,
+        project_id: &str,
+        extra_args: Option<serde_json::Value>,
+    ) -> Result<String, todoist_api::error::Error> {
+        let temp_id = uuid::Uuid::new_v4().to_string();
+        let mut args = serde_json::json!({
+            "content": content,
+            "project_id": project_id
+        });
+
+        if let Some(extra) = extra_args {
+            if let (Some(obj), Some(extra_obj)) = (args.as_object_mut(), extra.as_object()) {
+                for (k, v) in extra_obj {
+                    obj.insert(k.clone(), v.clone());
+                }
+            }
+        }
+
+        let command = SyncCommand::with_temp_id("item_add", &temp_id, args);
+        let response = self.execute(vec![command]).await?;
+
+        if response.has_errors() {
+            return Err(todoist_api::error::Error::Internal(format!(
+                "item_add failed: {:?}",
+                response.errors()
+            )));
+        }
+
+        response
+            .real_id(&temp_id)
+            .cloned()
+            .ok_or_else(|| {
+                todoist_api::error::Error::Internal("No temp_id mapping returned".to_string())
+            })
+    }
+
+    /// Creates a project and returns its real ID.
+    pub async fn create_project(
+        &mut self,
+        name: &str,
+    ) -> Result<String, todoist_api::error::Error> {
+        let temp_id = uuid::Uuid::new_v4().to_string();
+        let command = SyncCommand::with_temp_id(
+            "project_add",
+            &temp_id,
+            serde_json::json!({ "name": name }),
+        );
+        let response = self.execute(vec![command]).await?;
+
+        if response.has_errors() {
+            return Err(todoist_api::error::Error::Internal(format!(
+                "project_add failed: {:?}",
+                response.errors()
+            )));
+        }
+
+        response.real_id(&temp_id).cloned().ok_or_else(|| {
+            todoist_api::error::Error::Internal("No temp_id mapping returned".to_string())
+        })
+    }
+
+    /// Creates a section and returns its real ID.
+    pub async fn create_section(
+        &mut self,
+        name: &str,
+        project_id: &str,
+    ) -> Result<String, todoist_api::error::Error> {
+        let temp_id = uuid::Uuid::new_v4().to_string();
+        let command = SyncCommand::with_temp_id(
+            "section_add",
+            &temp_id,
+            serde_json::json!({
+                "name": name,
+                "project_id": project_id
+            }),
+        );
+        let response = self.execute(vec![command]).await?;
+
+        if response.has_errors() {
+            return Err(todoist_api::error::Error::Internal(format!(
+                "section_add failed: {:?}",
+                response.errors()
+            )));
+        }
+
+        response.real_id(&temp_id).cloned().ok_or_else(|| {
+            todoist_api::error::Error::Internal("No temp_id mapping returned".to_string())
+        })
+    }
+
+    /// Creates a label and returns its real ID.
+    pub async fn create_label(
+        &mut self,
+        name: &str,
+    ) -> Result<String, todoist_api::error::Error> {
+        let temp_id = uuid::Uuid::new_v4().to_string();
+        let command = SyncCommand::with_temp_id(
+            "label_add",
+            &temp_id,
+            serde_json::json!({ "name": name }),
+        );
+        let response = self.execute(vec![command]).await?;
+
+        if response.has_errors() {
+            return Err(todoist_api::error::Error::Internal(format!(
+                "label_add failed: {:?}",
+                response.errors()
+            )));
+        }
+
+        response.real_id(&temp_id).cloned().ok_or_else(|| {
+            todoist_api::error::Error::Internal("No temp_id mapping returned".to_string())
+        })
+    }
+
+    /// Deletes a task.
+    pub async fn delete_task(&mut self, task_id: &str) -> Result<(), todoist_api::error::Error> {
+        let command = SyncCommand::new("item_delete", serde_json::json!({"id": task_id}));
+        let response = self.execute(vec![command]).await?;
+
+        if response.has_errors() {
+            return Err(todoist_api::error::Error::Internal(format!(
+                "item_delete failed: {:?}",
+                response.errors()
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// Deletes a project.
+    pub async fn delete_project(
+        &mut self,
+        project_id: &str,
+    ) -> Result<(), todoist_api::error::Error> {
+        let command = SyncCommand::new("project_delete", serde_json::json!({"id": project_id}));
+        let response = self.execute(vec![command]).await?;
+
+        if response.has_errors() {
+            return Err(todoist_api::error::Error::Internal(format!(
+                "project_delete failed: {:?}",
+                response.errors()
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// Deletes a section.
+    pub async fn delete_section(
+        &mut self,
+        section_id: &str,
+    ) -> Result<(), todoist_api::error::Error> {
+        let command = SyncCommand::new("section_delete", serde_json::json!({"id": section_id}));
+        let response = self.execute(vec![command]).await?;
+
+        if response.has_errors() {
+            return Err(todoist_api::error::Error::Internal(format!(
+                "section_delete failed: {:?}",
+                response.errors()
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// Deletes a label.
+    pub async fn delete_label(&mut self, label_id: &str) -> Result<(), todoist_api::error::Error> {
+        let command = SyncCommand::new("label_delete", serde_json::json!({"id": label_id}));
+        let response = self.execute(vec![command]).await?;
+
+        if response.has_errors() {
+            return Err(todoist_api::error::Error::Internal(format!(
+                "label_delete failed: {:?}",
+                response.errors()
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// Batch delete multiple resources in one API call.
+    ///
+    /// This is more efficient than deleting one at a time.
+    pub async fn batch_delete(
+        &mut self,
+        task_ids: &[&str],
+        project_ids: &[&str],
+        section_ids: &[&str],
+        label_ids: &[&str],
+    ) -> Result<(), todoist_api::error::Error> {
+        let mut commands = Vec::new();
+
+        for id in task_ids {
+            commands.push(SyncCommand::new(
+                "item_delete",
+                serde_json::json!({"id": id}),
+            ));
+        }
+
+        for id in section_ids {
+            commands.push(SyncCommand::new(
+                "section_delete",
+                serde_json::json!({"id": id}),
+            ));
+        }
+
+        for id in project_ids {
+            commands.push(SyncCommand::new(
+                "project_delete",
+                serde_json::json!({"id": id}),
+            ));
+        }
+
+        for id in label_ids {
+            commands.push(SyncCommand::new(
+                "label_delete",
+                serde_json::json!({"id": id}),
+            ));
+        }
+
+        if commands.is_empty() {
+            return Ok(());
+        }
+
+        let response = self.execute(commands).await?;
+
+        if response.has_errors() {
+            // Log errors but don't fail - cleanup errors are common
+            eprintln!(
+                "Warning: Some cleanup operations failed: {:?}",
+                response.errors()
+            );
+        }
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_context_initialization() {
+        let ctx = TestContext::new().await;
+
+        match ctx {
+            Ok(ctx) => {
+                // Verify basic state
+                assert!(!ctx.inbox_id().is_empty());
+                assert!(!ctx.sync_token().is_empty());
+                // Should have at least the inbox project
+                assert!(ctx.projects().count() >= 1);
+            }
+            Err(e) => {
+                eprintln!("Skipping test: {}", e);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_context_create_and_find_task() {
+        let ctx = TestContext::new().await;
+
+        let Ok(mut ctx) = ctx else {
+            eprintln!("Skipping test: no API token");
+            return;
+        };
+
+        let inbox_id = ctx.inbox_id().to_string();
+
+        // Create a task
+        let task_id = ctx
+            .create_task("TestContext - test task", &inbox_id, None)
+            .await
+            .expect("Should create task");
+
+        // Find it in cache (no API call)
+        let task = ctx.find_item(&task_id).expect("Task should be in cache");
+        assert_eq!(task.content, "TestContext - test task");
+        assert_eq!(task.project_id, inbox_id);
+
+        // Cleanup
+        ctx.delete_task(&task_id).await.expect("Should delete task");
+
+        // Verify deleted from cache
+        assert!(
+            ctx.find_item(&task_id).is_none(),
+            "Deleted task should not be findable"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_context_batch_operations() {
+        let ctx = TestContext::new().await;
+
+        let Ok(mut ctx) = ctx else {
+            eprintln!("Skipping test: no API token");
+            return;
+        };
+
+        let inbox_id = ctx.inbox_id().to_string();
+
+        // Create multiple tasks in one batch
+        let temp_ids: Vec<String> = (0..3).map(|_| uuid::Uuid::new_v4().to_string()).collect();
+        let commands: Vec<SyncCommand> = temp_ids
+            .iter()
+            .enumerate()
+            .map(|(i, temp_id)| {
+                SyncCommand::with_temp_id(
+                    "item_add",
+                    temp_id,
+                    serde_json::json!({
+                        "content": format!("TestContext - batch task {}", i),
+                        "project_id": inbox_id
+                    }),
+                )
+            })
+            .collect();
+
+        let response = ctx.execute(commands).await.expect("Batch create should work");
+        assert!(!response.has_errors());
+
+        // Get real IDs
+        let task_ids: Vec<String> = temp_ids
+            .iter()
+            .map(|tid| response.real_id(tid).unwrap().clone())
+            .collect();
+
+        // Verify all tasks in cache
+        for (i, task_id) in task_ids.iter().enumerate() {
+            let task = ctx.find_item(task_id).expect("Task should be in cache");
+            assert_eq!(task.content, format!("TestContext - batch task {}", i));
+        }
+
+        // Batch delete
+        let task_refs: Vec<&str> = task_ids.iter().map(|s| s.as_str()).collect();
+        ctx.batch_delete(&task_refs, &[], &[], &[])
+            .await
+            .expect("Batch delete should work");
+    }
+}
