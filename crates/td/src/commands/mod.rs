@@ -11,6 +11,7 @@ pub mod labels;
 pub mod list;
 pub mod projects;
 pub mod quick;
+pub mod reminders;
 pub mod reopen;
 pub mod sections;
 pub mod show;

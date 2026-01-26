@@ -5,7 +5,7 @@ mod cli;
 mod commands;
 mod output;
 
-use cli::{Cli, Commands, CommentsCommands, LabelsCommands, ProjectsCommands, SectionsCommands};
+use cli::{Cli, Commands, CommentsCommands, LabelsCommands, ProjectsCommands, RemindersCommands, SectionsCommands};
 use commands::{CommandContext, CommandError};
 
 #[tokio::main]
@@ -392,6 +392,39 @@ async fn run(cli: &Cli) -> commands::Result<()> {
                         );
                     } else if !cli.quiet {
                         println!("Comments subcommand not yet implemented: {:?}", command);
+                    }
+                    Ok(())
+                }
+            }
+        }
+
+        Some(Commands::Reminders { task, command }) => {
+            match command {
+                Some(RemindersCommands::List) => {
+                    let opts = commands::reminders::RemindersListOptions {
+                        task: task.clone(),
+                    };
+                    commands::reminders::execute(&ctx, &opts, &token).await
+                }
+                None => {
+                    // Default to List if no subcommand provided
+                    let opts = commands::reminders::RemindersListOptions {
+                        task: task.clone(),
+                    };
+                    commands::reminders::execute(&ctx, &opts, &token).await
+                }
+                _ => {
+                    // Other subcommands not yet implemented
+                    if cli.json {
+                        println!(
+                            "{}",
+                            serde_json::json!({
+                                "status": "not_implemented",
+                                "command": format!("{:?}", command)
+                            })
+                        );
+                    } else if !cli.quiet {
+                        println!("Reminders subcommand not yet implemented: {:?}", command);
                     }
                     Ok(())
                 }
