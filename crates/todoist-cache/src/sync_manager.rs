@@ -180,6 +180,9 @@ impl SyncManager {
     /// - Full sync if the cache has never been synced (sync_token is "*")
     /// - Incremental sync otherwise
     ///
+    /// If an incremental sync fails due to an invalid sync token, this method
+    /// automatically falls back to a full sync with `sync_token='*'`.
+    ///
     /// The cache is saved to disk after a successful sync.
     ///
     /// # Returns
@@ -190,17 +193,41 @@ impl SyncManager {
     ///
     /// Returns an error if the API request fails or if saving the cache fails.
     pub async fn sync(&mut self) -> Result<&Cache> {
-        let request = if self.cache.needs_full_sync() {
-            SyncRequest::full_sync()
-        } else {
-            SyncRequest::incremental(&self.cache.sync_token)
-        };
+        if self.cache.needs_full_sync() {
+            // Already need a full sync, just do it
+            let request = SyncRequest::full_sync();
+            let response = self.client.sync(request).await?;
+            self.cache.apply_sync_response(&response);
+            self.store.save(&self.cache)?;
+            return Ok(&self.cache);
+        }
 
-        let response = self.client.sync(request).await?;
-        self.cache.apply_sync_response(&response);
-        self.store.save(&self.cache)?;
+        // Try incremental sync
+        let request = SyncRequest::incremental(&self.cache.sync_token);
+        match self.client.sync(request).await {
+            Ok(response) => {
+                self.cache.apply_sync_response(&response);
+                self.store.save(&self.cache)?;
+                Ok(&self.cache)
+            }
+            Err(e) if e.is_invalid_sync_token() => {
+                // Sync token rejected - fall back to full sync
+                eprintln!(
+                    "Warning: Sync token invalid, performing full sync to recover."
+                );
 
-        Ok(&self.cache)
+                // Reset sync token to force full sync
+                self.cache.sync_token = "*".to_string();
+
+                // Perform full sync
+                let request = SyncRequest::full_sync();
+                let response = self.client.sync(request).await?;
+                self.cache.apply_sync_response(&response);
+                self.store.save(&self.cache)?;
+                Ok(&self.cache)
+            }
+            Err(e) => Err(e.into()),
+        }
     }
 
     /// Forces a full sync, ignoring the stored sync token.

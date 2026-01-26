@@ -1630,3 +1630,170 @@ async fn test_resolve_item_by_prefix_with_require_checked_filter() {
     // For this edge case, we need to mock a sync that doesn't help
     // Let's just verify the filter works by checking we get the right items above
 }
+
+// ==================== sync token resilience tests ====================
+
+/// Creates a mock validation error response for invalid sync token.
+fn mock_invalid_sync_token_response() -> ResponseTemplate {
+    ResponseTemplate::new(400).set_body_json(serde_json::json!({
+        "error": "Validation error",
+        "error_code": 34,
+        "error_extra": {},
+        "error_tag": "SYNC_TOKEN_INVALID",
+        "http_code": 400
+    }))
+}
+
+#[tokio::test]
+async fn test_sync_falls_back_to_full_sync_on_invalid_token() {
+    // Test: incremental sync fails with invalid token, automatic full sync fallback
+    // Setup: cache has a sync token, first sync returns invalid token error,
+    // second sync (full) succeeds
+
+    let mock_server = MockServer::start().await;
+    let temp_dir = tempdir().expect("failed to create temp dir");
+    let cache_path = temp_dir.path().join("cache.json");
+
+    // Create cache with existing sync token
+    let store = CacheStore::with_path(cache_path.clone());
+    let mut existing_cache = Cache::new();
+    existing_cache.sync_token = "old_invalid_token".to_string();
+    existing_cache.items = vec![todoist_api::sync::Item {
+        id: "old-item".to_string(),
+        user_id: None,
+        project_id: "proj-1".to_string(),
+        content: "Old task".to_string(),
+        description: String::new(),
+        priority: 1,
+        due: None,
+        deadline: None,
+        parent_id: None,
+        child_order: 0,
+        section_id: None,
+        day_order: 0,
+        is_collapsed: false,
+        labels: vec![],
+        added_by_uid: None,
+        assigned_by_uid: None,
+        responsible_uid: None,
+        checked: false,
+        is_deleted: false,
+        added_at: None,
+        updated_at: None,
+        completed_at: None,
+        duration: None,
+    }];
+    store.save(&existing_cache).expect("failed to save cache");
+
+    // First request: incremental sync with old token -> return invalid token error
+    Mock::given(method("POST"))
+        .and(path("/sync"))
+        .and(body_string_contains("sync_token=old_invalid_token"))
+        .respond_with(mock_invalid_sync_token_response())
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+
+    // Second request: full sync (sync_token=*) -> success with fresh data
+    Mock::given(method("POST"))
+        .and(path("/sync"))
+        .and(body_string_contains("sync_token=%2A")) // URL-encoded "*"
+        .respond_with(ResponseTemplate::new(200).set_body_json(mock_full_sync_response()))
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let store = CacheStore::with_path(cache_path.clone());
+    let mut manager = SyncManager::new(client, store).expect("failed to create manager");
+
+    // Verify initial state
+    assert_eq!(manager.cache().sync_token, "old_invalid_token");
+    assert_eq!(manager.cache().items.len(), 1);
+    assert_eq!(manager.cache().items[0].id, "old-item");
+
+    // Perform sync - should automatically fall back to full sync
+    let cache = manager.sync().await.expect("sync should recover via full sync");
+
+    // Verify cache was replaced with fresh data from full sync
+    assert_eq!(cache.sync_token, "new_sync_token_abc123");
+    assert_eq!(cache.items.len(), 2);
+    assert!(cache.items.iter().any(|i| i.id == "item-1"));
+    assert!(cache.items.iter().any(|i| i.id == "item-2"));
+    // Old item should be gone (replaced by full sync)
+    assert!(!cache.items.iter().any(|i| i.id == "old-item"));
+
+    // Verify cache was persisted
+    let store2 = CacheStore::with_path(cache_path);
+    let loaded = store2.load().expect("failed to load cache");
+    assert_eq!(loaded.sync_token, "new_sync_token_abc123");
+}
+
+#[tokio::test]
+async fn test_sync_full_sync_does_not_trigger_fallback() {
+    // Test: full sync doesn't go through fallback path even if it fails
+    // (full sync failure should propagate, not retry)
+
+    let mock_server = MockServer::start().await;
+    let temp_dir = tempdir().expect("failed to create temp dir");
+    let cache_path = temp_dir.path().join("cache.json");
+
+    // Create cache that needs full sync (sync_token = "*")
+    let store = CacheStore::with_path(cache_path.clone());
+    let empty_cache = Cache::new(); // New cache has sync_token = "*"
+    store.save(&empty_cache).expect("failed to save cache");
+
+    // Full sync fails with some error
+    Mock::given(method("POST"))
+        .and(path("/sync"))
+        .respond_with(ResponseTemplate::new(500).set_body_string("Server Error"))
+        .expect(1) // Only one attempt, no retry
+        .mount(&mock_server)
+        .await;
+
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let store = CacheStore::with_path(cache_path);
+    let mut manager = SyncManager::new(client, store).expect("failed to create manager");
+
+    // Verify we need full sync
+    assert!(manager.cache().needs_full_sync());
+
+    // Sync should fail (no fallback for full sync)
+    let result = manager.sync().await;
+    assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn test_sync_non_token_errors_propagate() {
+    // Test: non-sync-token errors propagate without triggering fallback
+    // (e.g., auth errors, network errors)
+
+    let mock_server = MockServer::start().await;
+    let temp_dir = tempdir().expect("failed to create temp dir");
+    let cache_path = temp_dir.path().join("cache.json");
+
+    // Create cache with valid-looking token
+    let store = CacheStore::with_path(cache_path.clone());
+    let mut existing_cache = Cache::new();
+    existing_cache.sync_token = "some_token".to_string();
+    store.save(&existing_cache).expect("failed to save cache");
+
+    // Return auth error (not a sync token error)
+    Mock::given(method("POST"))
+        .and(path("/sync"))
+        .respond_with(ResponseTemplate::new(401).set_body_string("Unauthorized"))
+        .expect(1) // Only one attempt, no fallback
+        .mount(&mock_server)
+        .await;
+
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let store = CacheStore::with_path(cache_path);
+    let mut manager = SyncManager::new(client, store).expect("failed to create manager");
+
+    // Sync should fail with auth error (no fallback)
+    let result = manager.sync().await;
+    assert!(result.is_err());
+
+    // Cache should remain unchanged
+    assert_eq!(manager.cache().sync_token, "some_token");
+}
