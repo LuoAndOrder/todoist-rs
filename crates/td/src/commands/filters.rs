@@ -1,10 +1,11 @@
 //! Filters command implementation.
 //!
 //! Lists and manages saved filters via the Sync API.
+//! Uses SyncManager::execute_commands() to automatically update the cache.
 
 use chrono::Utc;
 use todoist_api::client::TodoistClient;
-use todoist_api::sync::{Filter, SyncCommand, SyncRequest};
+use todoist_api::sync::{Filter, SyncCommand};
 use todoist_cache::{Cache, CacheStore, SyncManager};
 
 use super::{CommandContext, CommandError, Result};
@@ -143,6 +144,11 @@ pub async fn execute_add(ctx: &CommandContext, opts: &FiltersAddOptions, token: 
         }
     }
 
+    // Initialize sync manager (loads cache from disk)
+    let client = TodoistClient::new(token);
+    let store = CacheStore::new()?;
+    let mut manager = SyncManager::new(client, store)?;
+
     // Build the filter_add command arguments
     let temp_id = uuid::Uuid::new_v4().to_string();
     let mut args = serde_json::json!({
@@ -162,10 +168,9 @@ pub async fn execute_add(ctx: &CommandContext, opts: &FiltersAddOptions, token: 
     // Create the command
     let command = SyncCommand::with_temp_id("filter_add", &temp_id, args);
 
-    // Execute the command
-    let api_client = TodoistClient::new(token);
-    let request = SyncRequest::with_commands(vec![command]);
-    let response = api_client.sync(request).await?;
+    // Execute the command via SyncManager
+    // This sends the command, applies the response to cache, and saves to disk
+    let response = manager.execute_commands(vec![command]).await?;
 
     // Check for errors
     if response.has_errors() {
@@ -335,7 +340,7 @@ pub struct FilterEditResult {
 ///
 /// # Errors
 ///
-/// Returns an error if syncing fails, filter lookup fails, or the API returns an error.
+/// Returns an error if filter lookup fails or the API returns an error.
 pub async fn execute_edit(ctx: &CommandContext, opts: &FiltersEditOptions, token: &str) -> Result<()> {
     // Check if any options were provided
     if opts.name.is_none() && opts.query.is_none() && opts.color.is_none() && opts.favorite.is_none() {
@@ -344,19 +349,17 @@ pub async fn execute_edit(ctx: &CommandContext, opts: &FiltersEditOptions, token
         ));
     }
 
-    // Initialize sync manager to resolve filter ID
+    // Initialize sync manager (loads cache from disk)
     let client = TodoistClient::new(token);
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
-    // Sync to get current state (for filter lookup)
-    manager.sync().await?;
-    let cache = manager.cache();
-
-    // Find the filter by ID or prefix
-    let filter = find_filter_by_id_or_prefix(cache, &opts.filter_id)?;
-    let filter_id = filter.id.clone();
-    let filter_name = filter.name.clone();
+    // Find the filter by ID or prefix and extract owned data before mutation
+    let (filter_id, filter_name) = {
+        let cache = manager.cache();
+        let filter = find_filter_by_id_or_prefix(cache, &opts.filter_id)?;
+        (filter.id.clone(), filter.name.clone())
+    };
 
     // Validate color if provided
     if let Some(ref color) = opts.color {
@@ -397,10 +400,9 @@ pub async fn execute_edit(ctx: &CommandContext, opts: &FiltersEditOptions, token
     // Create the command
     let command = SyncCommand::new("filter_update", args);
 
-    // Execute the command
-    let api_client = TodoistClient::new(token);
-    let request = SyncRequest::with_commands(vec![command]);
-    let response = api_client.sync(request).await?;
+    // Execute the command via SyncManager
+    // This sends the command, applies the response to cache, and saves to disk
+    let response = manager.execute_commands(vec![command]).await?;
 
     // Check for errors
     if response.has_errors() {
@@ -503,21 +505,19 @@ pub struct FilterDeleteResult {
 ///
 /// # Errors
 ///
-/// Returns an error if syncing fails, filter lookup fails, or the API returns an error.
+/// Returns an error if filter lookup fails or the API returns an error.
 pub async fn execute_delete(ctx: &CommandContext, opts: &FiltersDeleteOptions, token: &str) -> Result<()> {
-    // Initialize sync manager to resolve filter ID
+    // Initialize sync manager (loads cache from disk)
     let client = TodoistClient::new(token);
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
-    // Sync to get current state (for filter lookup)
-    manager.sync().await?;
-    let cache = manager.cache();
-
-    // Find the filter by ID or prefix
-    let filter = find_filter_by_id_or_prefix(cache, &opts.filter_id)?;
-    let filter_id = filter.id.clone();
-    let filter_name = filter.name.clone();
+    // Find the filter by ID or prefix and extract owned data before mutation
+    let (filter_id, filter_name) = {
+        let cache = manager.cache();
+        let filter = find_filter_by_id_or_prefix(cache, &opts.filter_id)?;
+        (filter.id.clone(), filter.name.clone())
+    };
 
     // Confirm if not forced
     if !opts.force && !ctx.quiet {
@@ -538,10 +538,9 @@ pub async fn execute_delete(ctx: &CommandContext, opts: &FiltersDeleteOptions, t
     // Create the command
     let command = SyncCommand::new("filter_delete", args);
 
-    // Execute the command
-    let api_client = TodoistClient::new(token);
-    let request = SyncRequest::with_commands(vec![command]);
-    let response = api_client.sync(request).await?;
+    // Execute the command via SyncManager
+    // This sends the command, applies the response to cache, and saves to disk
+    let response = manager.execute_commands(vec![command]).await?;
 
     // Check for errors
     if response.has_errors() {
