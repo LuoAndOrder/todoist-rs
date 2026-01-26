@@ -7,10 +7,14 @@ use serde::{de::DeserializeOwned, Serialize};
 use tokio::time::sleep;
 
 use crate::error::{ApiError, Error, Result};
+use crate::quick_add::{QuickAddRequest, QuickAddResponse};
 use crate::sync::{SyncRequest, SyncResponse};
 
 /// Base URL for the Todoist API v1.
 const BASE_URL: &str = "https://api.todoist.com/api/v1";
+
+/// Base URL for the Todoist Sync API (used for quick_add).
+const SYNC_BASE_URL: &str = "https://api.todoist.com/sync/v9";
 
 /// Default initial backoff duration for retries (1 second).
 const DEFAULT_INITIAL_BACKOFF_SECS: u64 = 1;
@@ -27,6 +31,7 @@ pub struct TodoistClient {
     token: String,
     http_client: reqwest::Client,
     base_url: String,
+    sync_base_url: String,
 }
 
 impl TodoistClient {
@@ -36,15 +41,18 @@ impl TodoistClient {
             token: token.into(),
             http_client: reqwest::Client::new(),
             base_url: BASE_URL.to_string(),
+            sync_base_url: SYNC_BASE_URL.to_string(),
         }
     }
 
     /// Creates a new TodoistClient with a custom base URL (for testing).
     pub fn with_base_url(token: impl Into<String>, base_url: impl Into<String>) -> Self {
+        let base = base_url.into();
         Self {
             token: token.into(),
             http_client: reqwest::Client::new(),
-            base_url: base_url.into(),
+            base_url: base.clone(),
+            sync_base_url: base,
         }
     }
 
@@ -238,6 +246,56 @@ impl TodoistClient {
     /// ```
     pub async fn sync(&self, request: SyncRequest) -> Result<SyncResponse> {
         let url = format!("{}/sync", self.base_url);
+
+        for attempt in 0..=MAX_RETRIES {
+            let response = self
+                .http_client
+                .post(&url)
+                .bearer_auth(&self.token)
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .body(request.to_form_body())
+                .send()
+                .await?;
+
+            match self.handle_response_with_retry(response, attempt).await {
+                Ok(RetryDecision::Success(value)) => return Ok(value),
+                Ok(RetryDecision::Retry { retry_after }) => {
+                    let backoff = self.calculate_backoff(attempt, retry_after);
+                    sleep(backoff).await;
+                }
+                Err(e) => return Err(e),
+            }
+        }
+
+        Err(Error::Api(ApiError::RateLimit { retry_after: None }))
+    }
+
+    /// Creates a task using the Quick Add endpoint with NLP parsing.
+    ///
+    /// The Quick Add endpoint parses natural language input to extract project,
+    /// labels, priority, due date, etc., using the same syntax as Todoist's quick add.
+    ///
+    /// # Arguments
+    /// * `request` - The quick add request containing the text to parse
+    ///
+    /// # Returns
+    /// A `QuickAddResponse` containing the created task and parsed metadata.
+    ///
+    /// # Example
+    /// ```no_run
+    /// use todoist_api::client::TodoistClient;
+    /// use todoist_api::quick_add::QuickAddRequest;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client = TodoistClient::new("your-api-token");
+    ///     let request = QuickAddRequest::new("Buy milk tomorrow #Shopping p2 @errands");
+    ///     let response = client.quick_add(request).await.unwrap();
+    ///     println!("Created task: {} in project {}", response.content, response.project_id);
+    /// }
+    /// ```
+    pub async fn quick_add(&self, request: QuickAddRequest) -> Result<QuickAddResponse> {
+        let url = format!("{}/quick/add", self.sync_base_url);
 
         for attempt in 0..=MAX_RETRIES {
             let response = self

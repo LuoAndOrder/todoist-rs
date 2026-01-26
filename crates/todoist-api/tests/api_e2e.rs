@@ -5,6 +5,7 @@
 
 use std::fs;
 use todoist_api::client::TodoistClient;
+use todoist_api::quick_add::QuickAddRequest;
 use todoist_api::sync::{SyncCommand, SyncRequest};
 
 fn get_test_token() -> Option<String> {
@@ -276,4 +277,148 @@ async fn test_sync_specific_resource_types() {
     // Should have projects
     assert!(!response.projects.is_empty(), "Should have projects");
     println!("Got {} projects", response.projects.len());
+}
+
+// ============================================================================
+// Quick Add E2E Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_quick_add_simple() {
+    let Some(token) = get_test_token() else {
+        eprintln!("Skipping e2e test: no API token found");
+        return;
+    };
+
+    let client = TodoistClient::new(token);
+
+    // Create a task using quick add
+    let request = QuickAddRequest::new("E2E test quick add task");
+    let response = client.quick_add(request).await;
+
+    match response {
+        Ok(task) => {
+            println!(
+                "Quick add created task: id={}, v2_id={:?}, content='{}', project_id={}",
+                task.id, task.v2_id, task.content, task.project_id
+            );
+            assert_eq!(task.content, "E2E test quick add task");
+            assert!(!task.id.is_empty());
+
+            // Clean up: delete the task using sync API with v2_id
+            let delete_command =
+                SyncCommand::new("item_delete", serde_json::json!({"id": task.api_id()}));
+            let delete_response = client
+                .sync(SyncRequest::with_commands(vec![delete_command]))
+                .await
+                .unwrap();
+            assert!(
+                !delete_response.has_errors(),
+                "Failed to delete task: {:?}",
+                delete_response.errors()
+            );
+            println!("Cleaned up quick add task");
+        }
+        Err(e) => {
+            panic!("Quick add failed: {}", e);
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_quick_add_with_nlp() {
+    let Some(token) = get_test_token() else {
+        eprintln!("Skipping e2e test: no API token found");
+        return;
+    };
+
+    let client = TodoistClient::new(token);
+
+    // Create a task with NLP parsing (due date and priority)
+    let request = QuickAddRequest::new("E2E quick add tomorrow p2");
+    let response = client.quick_add(request).await;
+
+    match response {
+        Ok(task) => {
+            println!(
+                "Quick add with NLP: id={}, v2_id={:?}, content='{}', priority={}, has_due={}",
+                task.id,
+                task.v2_id,
+                task.content,
+                task.priority,
+                task.has_due_date()
+            );
+
+            // The content should have "tomorrow" and "p2" parsed out
+            // Priority should be 3 (p2 in UI = priority 3 in API)
+            assert_eq!(
+                task.priority, 3,
+                "Priority p2 should map to API priority 3"
+            );
+            assert!(task.has_due_date(), "Should have due date parsed from 'tomorrow'");
+
+            if let Some(due) = &task.due {
+                println!("Due date: {}", due.date);
+            }
+
+            // Clean up using v2_id
+            let delete_command =
+                SyncCommand::new("item_delete", serde_json::json!({"id": task.api_id()}));
+            let delete_response = client
+                .sync(SyncRequest::with_commands(vec![delete_command]))
+                .await
+                .unwrap();
+            assert!(
+                !delete_response.has_errors(),
+                "Failed to delete task: {:?}",
+                delete_response.errors()
+            );
+            println!("Cleaned up quick add task");
+        }
+        Err(e) => {
+            panic!("Quick add with NLP failed: {}", e);
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_quick_add_with_note() {
+    let Some(token) = get_test_token() else {
+        eprintln!("Skipping e2e test: no API token found");
+        return;
+    };
+
+    let client = TodoistClient::new(token);
+
+    // Create a task with a note
+    let request = QuickAddRequest::new("E2E quick add with note")
+        .with_note("This is a test note from E2E");
+    let response = client.quick_add(request).await;
+
+    match response {
+        Ok(task) => {
+            println!(
+                "Quick add with note: id={}, v2_id={:?}, content='{}'",
+                task.id, task.v2_id, task.content
+            );
+            assert_eq!(task.content, "E2E quick add with note");
+
+            // Clean up using v2_id
+            let delete_command =
+                SyncCommand::new("item_delete", serde_json::json!({"id": task.api_id()}));
+            let delete_response = client
+                .sync(SyncRequest::with_commands(vec![delete_command]))
+                .await
+                .unwrap();
+            assert!(
+                !delete_response.has_errors(),
+                "Failed to delete task: {:?}",
+                delete_response.errors()
+            );
+            println!("Cleaned up quick add task");
+        }
+        Err(e) => {
+            panic!("Quick add with note failed: {}", e);
+        }
+    }
 }
