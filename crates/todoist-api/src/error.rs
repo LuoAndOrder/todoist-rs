@@ -60,7 +60,7 @@ pub enum ApiError {
     },
 
     /// Resource not found (404 Not Found).
-    #[error("{resource} not found: {id}")]
+    #[error("{resource} not found: {id}. It may have been deleted. Run 'td sync' to refresh your cache.")]
     NotFound {
         /// Type of resource (e.g., "task", "project")
         resource: String,
@@ -324,6 +324,25 @@ mod tests {
             display.contains("project")
                 || display.contains("xyz789")
                 || display.to_lowercase().contains("not found")
+        );
+    }
+
+    #[test]
+    fn test_api_error_not_found_includes_sync_suggestion() {
+        let error = ApiError::NotFound {
+            resource: "task".to_string(),
+            id: "abc123".to_string(),
+        };
+        let display = error.to_string();
+        assert!(
+            display.contains("td sync"),
+            "NotFound error should include suggestion to run 'td sync': {}",
+            display
+        );
+        assert!(
+            display.contains("may have been deleted"),
+            "NotFound error should mention item may have been deleted: {}",
+            display
         );
     }
 
