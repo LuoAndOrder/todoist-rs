@@ -7,6 +7,7 @@ pub mod delete;
 pub mod done;
 pub mod edit;
 pub mod list;
+pub mod projects;
 pub mod quick;
 pub mod reopen;
 pub mod show;

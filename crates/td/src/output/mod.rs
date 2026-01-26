@@ -605,6 +605,245 @@ fn format_reminder(reminder: &todoist_api::sync::Reminder) -> String {
     }
 }
 
+// ============================================================================
+// Project Output Formatting
+// ============================================================================
+
+use std::collections::HashMap;
+use todoist_api::sync::Project;
+
+/// JSON output structure for projects list command.
+#[derive(Serialize)]
+pub struct ProjectsListOutput<'a> {
+    pub projects: Vec<ProjectOutput<'a>>,
+}
+
+/// JSON output structure for a single project.
+#[derive(Serialize)]
+pub struct ProjectOutput<'a> {
+    pub id: &'a str,
+    pub name: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub color: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<&'a str>,
+    pub is_favorite: bool,
+    pub is_archived: bool,
+    pub is_inbox: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub view_style: Option<&'a str>,
+    pub task_count: usize,
+}
+
+/// Formats projects as JSON.
+pub fn format_projects_json(
+    projects: &[&Project],
+) -> Result<String, serde_json::Error> {
+    let projects_output: Vec<ProjectOutput> = projects
+        .iter()
+        .map(|p| ProjectOutput {
+            id: &p.id,
+            name: &p.name,
+            color: p.color.as_deref(),
+            parent_id: p.parent_id.as_deref(),
+            is_favorite: p.is_favorite,
+            is_archived: p.is_archived,
+            is_inbox: p.inbox_project,
+            view_style: p.view_style.as_deref(),
+            task_count: 0, // We don't have task count in this context
+        })
+        .collect();
+
+    let output = ProjectsListOutput {
+        projects: projects_output,
+    };
+
+    serde_json::to_string_pretty(&output)
+}
+
+/// Formats projects as a table.
+pub fn format_projects_table(
+    projects: &[&Project],
+    cache: &Cache,
+    use_colors: bool,
+    tree: bool,
+) -> String {
+    if projects.is_empty() {
+        return "No projects found.\n".to_string();
+    }
+
+    let mut output = String::new();
+
+    if tree {
+        // Tree view: show hierarchy with indentation
+        output.push_str(&format_projects_tree(projects, cache, use_colors));
+    } else {
+        // Flat view: simple table
+        output.push_str(&format_projects_flat(projects, cache, use_colors));
+    }
+
+    output
+}
+
+/// Formats projects as a flat table.
+fn format_projects_flat(projects: &[&Project], cache: &Cache, use_colors: bool) -> String {
+    let mut output = String::new();
+
+    // Header
+    let header = format!(
+        "{:<8} {:<4} {:<25} {:<6} {}",
+        "ID", "Fav", "Name", "Tasks", "Color"
+    );
+    if use_colors {
+        output.push_str(&format!("{}\n", header.dimmed()));
+    } else {
+        output.push_str(&header);
+        output.push('\n');
+    }
+
+    // Count tasks per project
+    let task_counts = count_tasks_per_project(cache);
+
+    // Projects
+    for project in projects {
+        let id_prefix = truncate_id(&project.id);
+        let fav = if project.is_favorite {
+            if use_colors {
+                "★".yellow().to_string()
+            } else {
+                "★".to_string()
+            }
+        } else {
+            " ".to_string()
+        };
+        let name = format_project_name(project, use_colors);
+        let task_count = task_counts.get(&project.id).copied().unwrap_or(0);
+        let color = project.color.as_deref().unwrap_or("");
+
+        let line = format!(
+            "{:<8} {:<4} {:<25} {:<6} {}",
+            id_prefix,
+            fav,
+            truncate_str(&name, 25),
+            task_count,
+            color
+        );
+        output.push_str(&line);
+        output.push('\n');
+    }
+
+    output
+}
+
+/// Formats projects as a tree with indentation.
+fn format_projects_tree(projects: &[&Project], cache: &Cache, use_colors: bool) -> String {
+    let mut output = String::new();
+
+    // Build parent-child relationships
+    let mut children_map: HashMap<Option<&str>, Vec<&Project>> = HashMap::new();
+    for project in projects {
+        children_map
+            .entry(project.parent_id.as_deref())
+            .or_default()
+            .push(project);
+    }
+
+    // Sort children by child_order
+    for children in children_map.values_mut() {
+        children.sort_by_key(|p| p.child_order);
+    }
+
+    // Count tasks per project
+    let task_counts = count_tasks_per_project(cache);
+
+    // Recursively print tree starting from root projects
+    fn print_tree(
+        output: &mut String,
+        parent_id: Option<&str>,
+        children_map: &HashMap<Option<&str>, Vec<&Project>>,
+        task_counts: &HashMap<String, usize>,
+        depth: usize,
+        use_colors: bool,
+    ) {
+        if let Some(children) = children_map.get(&parent_id) {
+            for project in children {
+                let indent = "  ".repeat(depth);
+                let prefix = if depth > 0 { "└─ " } else { "" };
+                let fav = if project.is_favorite { "★ " } else { "" };
+                let task_count = task_counts.get(&project.id).copied().unwrap_or(0);
+                let id_prefix = truncate_id(&project.id);
+
+                let name_display = if use_colors {
+                    if project.inbox_project {
+                        project.name.cyan().to_string()
+                    } else if project.is_favorite {
+                        format!("{}{}", fav.yellow(), project.name)
+                    } else {
+                        project.name.clone()
+                    }
+                } else {
+                    format!("{}{}", fav, project.name)
+                };
+
+                let line = format!(
+                    "{}{}{} ({}) [{}]",
+                    indent, prefix, name_display, task_count, id_prefix
+                );
+                output.push_str(&line);
+                output.push('\n');
+
+                // Recursively print children
+                print_tree(
+                    output,
+                    Some(&project.id),
+                    children_map,
+                    task_counts,
+                    depth + 1,
+                    use_colors,
+                );
+            }
+        }
+    }
+
+    print_tree(&mut output, None, &children_map, &task_counts, 0, use_colors);
+
+    output
+}
+
+/// Counts tasks per project.
+fn count_tasks_per_project(cache: &Cache) -> HashMap<String, usize> {
+    let mut counts = HashMap::new();
+    for item in &cache.items {
+        if !item.is_deleted && !item.checked {
+            *counts.entry(item.project_id.clone()).or_insert(0) += 1;
+        }
+    }
+    counts
+}
+
+/// Formats a project name with special indicators.
+fn format_project_name(project: &Project, use_colors: bool) -> String {
+    let mut name = project.name.clone();
+
+    if project.inbox_project {
+        if use_colors {
+            name = name.cyan().to_string();
+        } else {
+            name = format!("{} (Inbox)", name);
+        }
+    }
+
+    if project.is_archived {
+        if use_colors {
+            name = name.strikethrough().dimmed().to_string();
+        } else {
+            name = format!("{} [archived]", name);
+        }
+    }
+
+    name
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

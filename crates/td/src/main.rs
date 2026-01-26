@@ -5,7 +5,7 @@ mod cli;
 mod commands;
 mod output;
 
-use cli::{Cli, Commands};
+use cli::{Cli, Commands, ProjectsCommands};
 use commands::{CommandContext, CommandError};
 
 #[tokio::main]
@@ -188,6 +188,36 @@ async fn run(cli: &Cli) -> commands::Result<()> {
                 note: note.clone(),
             };
             commands::quick::execute(&ctx, &opts, &token).await
+        }
+
+        Some(Commands::Projects { command }) => {
+            // Default to List if no subcommand provided
+            let (tree, archived, limit) = match command {
+                Some(ProjectsCommands::List { tree, archived, limit }) => (*tree, *archived, *limit),
+                None => (false, false, None),
+                _ => {
+                    // Other subcommands not yet implemented
+                    if cli.json {
+                        println!(
+                            "{}",
+                            serde_json::json!({
+                                "status": "not_implemented",
+                                "command": "projects subcommand"
+                            })
+                        );
+                    } else if !cli.quiet {
+                        println!("Projects subcommand not yet implemented");
+                    }
+                    return Ok(());
+                }
+            };
+
+            let opts = commands::projects::ProjectsListOptions {
+                tree,
+                archived,
+                limit,
+            };
+            commands::projects::execute(&ctx, &opts, &token).await
         }
 
         Some(cmd) => {

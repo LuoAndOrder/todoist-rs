@@ -342,7 +342,19 @@ pub enum Shell {
 #[derive(Subcommand, Debug)]
 pub enum ProjectsCommands {
     /// List all projects (default)
-    List,
+    List {
+        /// Show projects as a tree hierarchy
+        #[arg(long)]
+        tree: bool,
+
+        /// Include archived projects
+        #[arg(long)]
+        archived: bool,
+
+        /// Limit results
+        #[arg(long)]
+        limit: Option<u32>,
+    },
 
     /// Create a new project
     Add {
