@@ -9,7 +9,7 @@ use todoist_api::sync::Item;
 use todoist_cache::Cache;
 
 use crate::commands::add::AddResult;
-use crate::commands::projects::{ProjectAddResult, ProjectEditResult, ProjectsShowResult};
+use crate::commands::projects::{ProjectAddResult, ProjectArchiveResult, ProjectEditResult, ProjectsShowResult};
 use crate::commands::quick::QuickResult;
 use crate::commands::show::ShowResult;
 
@@ -655,6 +655,25 @@ pub fn format_edited_project(result: &ProjectEditResult) -> Result<String, serde
         id: &result.id,
         name: &result.name,
         updated_fields: &result.updated_fields,
+    };
+
+    serde_json::to_string_pretty(&output)
+}
+
+/// JSON output structure for an archived project.
+#[derive(Serialize)]
+pub struct ArchivedProjectOutput<'a> {
+    pub id: &'a str,
+    pub name: &'a str,
+    pub status: &'static str,
+}
+
+/// Formats an archived project as JSON.
+pub fn format_archived_project(result: &ProjectArchiveResult) -> Result<String, serde_json::Error> {
+    let output = ArchivedProjectOutput {
+        id: &result.id,
+        name: &result.name,
+        status: "archived",
     };
 
     serde_json::to_string_pretty(&output)

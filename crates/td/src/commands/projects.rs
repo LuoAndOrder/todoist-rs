@@ -581,6 +581,128 @@ pub async fn execute_edit(ctx: &CommandContext, opts: &ProjectsEditOptions, toke
     Ok(())
 }
 
+// ============================================================================
+// Projects Archive Command
+// ============================================================================
+
+/// Options for the projects archive command.
+#[derive(Debug)]
+pub struct ProjectsArchiveOptions {
+    /// Project ID (full ID or prefix).
+    pub project_id: String,
+    /// Skip confirmation.
+    pub force: bool,
+}
+
+/// Result of a successful project archive operation.
+#[derive(Debug)]
+pub struct ProjectArchiveResult {
+    /// The ID of the archived project.
+    pub id: String,
+    /// The name of the archived project.
+    pub name: String,
+}
+
+/// Executes the projects archive command.
+///
+/// # Arguments
+///
+/// * `ctx` - Command context with output settings
+/// * `opts` - Projects archive command options
+/// * `token` - API token
+///
+/// # Errors
+///
+/// Returns an error if syncing fails, project lookup fails, or the API returns an error.
+pub async fn execute_archive(ctx: &CommandContext, opts: &ProjectsArchiveOptions, token: &str) -> Result<()> {
+    // Initialize sync manager to resolve project ID
+    let client = TodoistClient::new(token);
+    let store = CacheStore::new()?;
+    let mut manager = SyncManager::new(client, store)?;
+
+    // Sync to get current state (for project lookup)
+    manager.sync().await?;
+    let cache = manager.cache();
+
+    // Find the project by ID or prefix
+    let project = find_project_by_id_or_prefix(cache, &opts.project_id)?;
+    let project_id = project.id.clone();
+    let project_name = project.name.clone();
+
+    // Check if project is already archived
+    if project.is_archived {
+        return Err(CommandError::Config(format!(
+            "Project '{}' is already archived",
+            project_name
+        )));
+    }
+
+    // Check if this is the inbox project
+    if project.inbox_project {
+        return Err(CommandError::Config(
+            "Cannot archive the Inbox project".to_string()
+        ));
+    }
+
+    // Confirm if not forced
+    if !opts.force && !ctx.quiet {
+        eprintln!(
+            "Archive project '{}' ({})?",
+            project_name,
+            &project_id[..6.min(project_id.len())]
+        );
+        eprintln!("This will archive the project and all its descendants.");
+        eprintln!("Use --force to skip this confirmation.");
+        return Err(CommandError::Config("Operation cancelled. Use --force to confirm.".to_string()));
+    }
+
+    // Build the project_archive command arguments
+    let args = serde_json::json!({
+        "id": project_id,
+    });
+
+    // Create the command
+    let command = SyncCommand::new("project_archive", args);
+
+    // Execute the command
+    let api_client = TodoistClient::new(token);
+    let request = SyncRequest::with_commands(vec![command]);
+    let response = api_client.sync(request).await?;
+
+    // Check for errors
+    if response.has_errors() {
+        let errors = response.errors();
+        if let Some((_, error)) = errors.first() {
+            return Err(CommandError::Api(todoist_api::error::Error::Api(
+                todoist_api::error::ApiError::Validation {
+                    field: None,
+                    message: format!("Error {}: {}", error.error_code, error.error),
+                },
+            )));
+        }
+    }
+
+    let result = ProjectArchiveResult {
+        id: project_id,
+        name: project_name,
+    };
+
+    // Output
+    if ctx.json_output {
+        let output = crate::output::format_archived_project(&result)?;
+        println!("{output}");
+    } else if !ctx.quiet {
+        if ctx.verbose {
+            println!("Archived project: {} ({})", result.name, result.id);
+        } else {
+            let prefix = &result.id[..6.min(result.id.len())];
+            println!("Archived: {} ({})", result.name, prefix);
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -808,5 +930,38 @@ mod tests {
         assert_eq!(result.id, "proj-123");
         assert_eq!(result.name, "Updated Project");
         assert_eq!(result.updated_fields, vec!["name", "color"]);
+    }
+
+    #[test]
+    fn test_projects_archive_options() {
+        let opts = ProjectsArchiveOptions {
+            project_id: "proj-123".to_string(),
+            force: false,
+        };
+
+        assert_eq!(opts.project_id, "proj-123");
+        assert!(!opts.force);
+    }
+
+    #[test]
+    fn test_projects_archive_options_with_force() {
+        let opts = ProjectsArchiveOptions {
+            project_id: "proj-456".to_string(),
+            force: true,
+        };
+
+        assert_eq!(opts.project_id, "proj-456");
+        assert!(opts.force);
+    }
+
+    #[test]
+    fn test_project_archive_result() {
+        let result = ProjectArchiveResult {
+            id: "proj-789".to_string(),
+            name: "Archived Project".to_string(),
+        };
+
+        assert_eq!(result.id, "proj-789");
+        assert_eq!(result.name, "Archived Project");
     }
 }

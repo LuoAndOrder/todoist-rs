@@ -414,6 +414,10 @@ pub enum ProjectsCommands {
     Archive {
         /// Project ID
         project_id: String,
+
+        /// Skip confirmation
+        #[arg(short, long)]
+        force: bool,
     },
 
     /// Unarchive a project

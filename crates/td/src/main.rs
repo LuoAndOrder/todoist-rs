@@ -227,6 +227,13 @@ async fn run(cli: &Cli) -> commands::Result<()> {
                     };
                     commands::projects::execute_edit(&ctx, &opts, &token).await
                 }
+                Some(ProjectsCommands::Archive { project_id, force }) => {
+                    let opts = commands::projects::ProjectsArchiveOptions {
+                        project_id: project_id.clone(),
+                        force: *force,
+                    };
+                    commands::projects::execute_archive(&ctx, &opts, &token).await
+                }
                 None => {
                     // Default to List if no subcommand provided
                     let opts = commands::projects::ProjectsListOptions {
