@@ -5,7 +5,7 @@ mod cli;
 mod commands;
 mod output;
 
-use cli::{Cli, Commands, CommentsCommands, LabelsCommands, ProjectsCommands, RemindersCommands, SectionsCommands};
+use cli::{Cli, Commands, CommentsCommands, ConfigCommands, LabelsCommands, ProjectsCommands, RemindersCommands, SectionsCommands};
 use commands::{CommandContext, CommandError};
 
 #[tokio::main]
@@ -33,6 +33,42 @@ async fn main() -> ExitCode {
 
 async fn run(cli: &Cli) -> commands::Result<()> {
     let ctx = CommandContext::from_cli(cli);
+
+    // Handle commands that don't require a token first
+    match &cli.command {
+        Some(Commands::Config { command }) => {
+            return match command {
+                Some(ConfigCommands::Show) => {
+                    commands::config::execute_show(&ctx)
+                }
+                Some(ConfigCommands::Edit) => {
+                    commands::config::execute_edit(&ctx)
+                }
+                Some(ConfigCommands::Set { key, value }) => {
+                    let opts = commands::config::ConfigSetOptions {
+                        key: key.clone(),
+                        value: value.clone(),
+                    };
+                    commands::config::execute_set(&ctx, &opts)
+                }
+                Some(ConfigCommands::Path) => {
+                    commands::config::execute_path(&ctx)
+                }
+                None => {
+                    // Default to Show if no subcommand provided
+                    commands::config::execute_show(&ctx)
+                }
+            };
+        }
+        None => {
+            if !cli.quiet {
+                println!("td - Todoist CLI");
+                println!("Use --help for usage information");
+            }
+            return Ok(());
+        }
+        _ => {}
+    }
 
     // Get token from CLI or environment
     let token = cli
@@ -453,11 +489,8 @@ async fn run(cli: &Cli) -> commands::Result<()> {
         }
 
         None => {
-            if !cli.quiet {
-                println!("td - Todoist CLI");
-                println!("Use --help for usage information");
-            }
-            Ok(())
+            // Already handled above, but needed for exhaustive match
+            unreachable!()
         }
     }
 }
