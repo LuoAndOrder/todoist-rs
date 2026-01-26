@@ -406,6 +406,14 @@ async fn run(cli: &Cli) -> commands::Result<()> {
                     };
                     commands::reminders::execute(&ctx, &opts, &token).await
                 }
+                Some(RemindersCommands::Add { task: add_task, due, offset }) => {
+                    let opts = commands::reminders::RemindersAddOptions {
+                        task: add_task.clone(),
+                        due: due.clone(),
+                        offset: *offset,
+                    };
+                    commands::reminders::execute_add(&ctx, &opts, &token).await
+                }
                 None => {
                     // Default to List if no subcommand provided
                     let opts = commands::reminders::RemindersListOptions {

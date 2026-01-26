@@ -600,19 +600,23 @@ pub enum RemindersCommands {
         #[arg(long, required = true)]
         task: String,
 
-        /// Reminder time
-        #[arg(long)]
-        time: Option<String>,
+        /// Absolute due date/time for reminder (e.g., "2025-01-26T10:00:00")
+        #[arg(long, conflicts_with = "offset")]
+        due: Option<String>,
 
-        /// Reminder type
-        #[arg(long)]
-        reminder_type: Option<String>,
+        /// Minutes before task due time (for relative reminders)
+        #[arg(long, conflicts_with = "due")]
+        offset: Option<i32>,
     },
 
     /// Delete a reminder
     Delete {
         /// Reminder ID
         reminder_id: String,
+
+        /// Skip confirmation
+        #[arg(short, long)]
+        force: bool,
     },
 }
 

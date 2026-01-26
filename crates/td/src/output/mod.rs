@@ -1753,6 +1753,40 @@ pub fn format_reminders_table(
     output
 }
 
+// ============================================================================
+// Reminder Add Output Formatting
+// ============================================================================
+
+use crate::commands::reminders::ReminderAddResult;
+
+/// JSON output structure for a created reminder.
+#[derive(Serialize)]
+pub struct CreatedReminderOutput<'a> {
+    pub id: &'a str,
+    pub task_id: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task_name: Option<&'a str>,
+    pub reminder_type: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub due: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub minute_offset: Option<i32>,
+}
+
+/// Formats a created reminder as JSON.
+pub fn format_created_reminder(result: &ReminderAddResult) -> Result<String, serde_json::Error> {
+    let output = CreatedReminderOutput {
+        id: &result.id,
+        task_id: &result.task_id,
+        task_name: result.task_name.as_deref(),
+        reminder_type: &result.reminder_type,
+        due: result.due.as_deref(),
+        minute_offset: result.minute_offset,
+    };
+
+    serde_json::to_string_pretty(&output)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
