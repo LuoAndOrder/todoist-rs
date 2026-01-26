@@ -10,7 +10,7 @@ repository = "https://github.com/luoandorder/todoist-rs"
 
 [workspace.dependencies]
 # CLI
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4", features = ["derive", "env"] }
 
 # Async
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
