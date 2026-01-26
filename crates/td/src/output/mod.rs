@@ -9,6 +9,7 @@ use todoist_api::sync::Item;
 use todoist_cache::Cache;
 
 use crate::commands::add::AddResult;
+use crate::commands::quick::QuickResult;
 use crate::commands::show::ShowResult;
 
 /// JSON output structure for list command.
@@ -40,6 +41,21 @@ pub struct CreatedItemOutput<'a> {
     pub content: &'a str,
     pub project_id: &'a str,
     pub project_name: Option<&'a str>,
+}
+
+/// JSON output structure for a quick add result.
+#[derive(Serialize)]
+pub struct QuickAddOutput<'a> {
+    pub id: &'a str,
+    pub content: &'a str,
+    pub project_id: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project_name: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub due: Option<&'a str>,
+    pub priority: u8,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub labels: &'a Vec<String>,
 }
 
 /// JSON output structure for task details (show command).
@@ -145,6 +161,21 @@ pub fn format_created_item(result: &AddResult) -> Result<String, serde_json::Err
         content: &result.content,
         project_id: &result.project_id,
         project_name: result.project_name.as_deref(),
+    };
+
+    serde_json::to_string_pretty(&output)
+}
+
+/// Formats a quick add result as JSON.
+pub fn format_quick_add_result(result: &QuickResult) -> Result<String, serde_json::Error> {
+    let output = QuickAddOutput {
+        id: &result.id,
+        content: &result.content,
+        project_id: &result.project_id,
+        project_name: result.project_name.as_deref(),
+        due: result.due_string.as_deref(),
+        priority: result.priority,
+        labels: &result.labels,
     };
 
     serde_json::to_string_pretty(&output)

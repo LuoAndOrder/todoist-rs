@@ -242,6 +242,14 @@ pub enum Commands {
     Quick {
         /// Natural language task description
         text: String,
+
+        /// Add default reminder when task has due time
+        #[arg(long)]
+        auto_reminder: bool,
+
+        /// Add a note/comment to the created task
+        #[arg(long)]
+        note: Option<String>,
     },
 
     /// Sync local cache with Todoist

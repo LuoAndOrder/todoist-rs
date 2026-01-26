@@ -177,6 +177,19 @@ async fn run(cli: &Cli) -> commands::Result<()> {
             commands::today::execute(&ctx, &opts, &token).await
         }
 
+        Some(Commands::Quick {
+            text,
+            auto_reminder,
+            note,
+        }) => {
+            let opts = commands::quick::QuickOptions {
+                text: text.clone(),
+                auto_reminder: *auto_reminder,
+                note: note.clone(),
+            };
+            commands::quick::execute(&ctx, &opts, &token).await
+        }
+
         Some(cmd) => {
             // Other commands not yet implemented
             if cli.json {
