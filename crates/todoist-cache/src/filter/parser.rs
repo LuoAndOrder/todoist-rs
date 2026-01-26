@@ -2,7 +2,7 @@
 
 use super::ast::Filter;
 use super::error::{FilterError, FilterResult};
-use super::lexer::{FilterToken, Lexer};
+use super::lexer::{FilterToken, Lexer, PositionedToken};
 
 /// Parser for Todoist filter expressions.
 ///
@@ -43,8 +43,10 @@ use super::lexer::{FilterToken, Lexer};
 /// assert!(matches!(filter, Filter::Or(_, _)));
 /// ```
 pub struct FilterParser {
-    tokens: Vec<FilterToken>,
+    tokens: Vec<PositionedToken>,
     position: usize,
+    /// The total length of the input string (for end-of-input errors).
+    input_len: usize,
 }
 
 impl FilterParser {
@@ -90,25 +92,32 @@ impl FilterParser {
             return Err(FilterError::EmptyExpression);
         }
 
-        let mut parser = Self { tokens, position: 0 };
+        let mut parser = Self {
+            tokens,
+            position: 0,
+            input_len: trimmed.len(),
+        };
         let filter = parser.parse_expression()?;
 
         // Check that we consumed all tokens
         if parser.position < parser.tokens.len() {
             let remaining = &parser.tokens[parser.position];
-            return Err(FilterError::unexpected_token(format!("{:?}", remaining)));
+            return Err(FilterError::unexpected_token(
+                format!("{:?}", remaining.token),
+                remaining.position,
+            ));
         }
 
         Ok(filter)
     }
 
-    /// Returns the current token without consuming it.
-    fn peek(&self) -> Option<&FilterToken> {
+    /// Returns the current positioned token without consuming it.
+    fn peek(&self) -> Option<&PositionedToken> {
         self.tokens.get(self.position)
     }
 
-    /// Consumes and returns the current token.
-    fn advance(&mut self) -> Option<&FilterToken> {
+    /// Consumes and returns the current positioned token.
+    fn advance(&mut self) -> Option<&PositionedToken> {
         let token = self.tokens.get(self.position);
         if token.is_some() {
             self.position += 1;
@@ -118,7 +127,7 @@ impl FilterParser {
 
     /// Checks if the current token matches the expected token type.
     fn check(&self, expected: &FilterToken) -> bool {
-        self.peek() == Some(expected)
+        self.peek().map(|pt| &pt.token) == Some(expected)
     }
 
     /// Parses the top-level expression (OR expression).
@@ -165,14 +174,21 @@ impl FilterParser {
 
     /// Parses primary expressions: `"(" expression ")" | keyword | identifier`
     fn parse_primary(&mut self) -> FilterResult<Filter> {
-        let token = self.advance().ok_or(FilterError::UnexpectedEndOfInput)?;
+        let input_len = self.input_len;
+        let positioned_token = self
+            .advance()
+            .ok_or_else(|| FilterError::unexpected_end_of_input(input_len))?;
 
-        match token.clone() {
+        let token = positioned_token.token.clone();
+        let position = positioned_token.position;
+
+        match token {
             // Parenthesized expression
             FilterToken::OpenParen => {
+                let open_paren_pos = position;
                 let inner = self.parse_expression()?;
                 if !self.check(&FilterToken::CloseParen) {
-                    return Err(FilterError::UnclosedParenthesis);
+                    return Err(FilterError::unclosed_parenthesis(open_paren_pos));
                 }
                 self.advance(); // consume ')'
                 Ok(inner)
@@ -190,7 +206,7 @@ impl FilterParser {
                 2 => Ok(Filter::Priority2),
                 3 => Ok(Filter::Priority3),
                 4 => Ok(Filter::Priority4),
-                _ => Err(FilterError::invalid_priority(level.to_string())),
+                _ => Err(FilterError::invalid_priority(level.to_string(), position)),
             },
 
             // Identifiers
@@ -200,10 +216,10 @@ impl FilterParser {
             FilterToken::Section(name) => Ok(Filter::Section(name)),
 
             // Unexpected tokens
-            FilterToken::And => Err(FilterError::unexpected_token("&")),
-            FilterToken::Or => Err(FilterError::unexpected_token("|")),
-            FilterToken::CloseParen => Err(FilterError::unexpected_token(")")),
-            FilterToken::Not => Err(FilterError::unexpected_token("!")),
+            FilterToken::And => Err(FilterError::unexpected_token("&", position)),
+            FilterToken::Or => Err(FilterError::unexpected_token("|", position)),
+            FilterToken::CloseParen => Err(FilterError::unexpected_token(")", position)),
+            FilterToken::Not => Err(FilterError::unexpected_token("!", position)),
         }
     }
 }

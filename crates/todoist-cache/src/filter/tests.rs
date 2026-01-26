@@ -280,34 +280,99 @@ fn test_error_empty_expression() {
 #[test]
 fn test_error_unclosed_parenthesis() {
     let result = FilterParser::parse("(today");
-    assert!(matches!(result, Err(FilterError::UnclosedParenthesis)));
+    assert!(matches!(
+        result,
+        Err(FilterError::UnclosedParenthesis { position: 0 })
+    ));
 
     let result = FilterParser::parse("((today | tomorrow)");
-    assert!(matches!(result, Err(FilterError::UnclosedParenthesis)));
+    // The outer ( at position 0 is unclosed
+    assert!(matches!(
+        result,
+        Err(FilterError::UnclosedParenthesis { position: 0 })
+    ));
 }
 
 #[test]
 fn test_error_unexpected_operator() {
+    // & at position 0
     let result = FilterParser::parse("& today");
-    assert!(matches!(result, Err(FilterError::UnexpectedToken { .. })));
+    match result {
+        Err(FilterError::UnexpectedToken { token, position }) => {
+            assert_eq!(token, "&");
+            assert_eq!(position, 0);
+        }
+        other => panic!("Expected UnexpectedToken error, got {:?}", other),
+    }
 
+    // | at position 0
     let result = FilterParser::parse("| today");
-    assert!(matches!(result, Err(FilterError::UnexpectedToken { .. })));
+    match result {
+        Err(FilterError::UnexpectedToken { token, position }) => {
+            assert_eq!(token, "|");
+            assert_eq!(position, 0);
+        }
+        other => panic!("Expected UnexpectedToken error, got {:?}", other),
+    }
 }
 
 #[test]
 fn test_error_unexpected_close_paren() {
+    // ) at position 0
     let result = FilterParser::parse(")today");
-    assert!(matches!(result, Err(FilterError::UnexpectedToken { .. })));
+    match result {
+        Err(FilterError::UnexpectedToken { token, position }) => {
+            assert_eq!(token, ")");
+            assert_eq!(position, 0);
+        }
+        other => panic!("Expected UnexpectedToken error, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_error_positions_with_unicode() {
+    // "日本語 & " = 9 bytes (3 chars × 3 bytes each) + 1 space + 1 & + 1 space = 12 bytes
+    // But lexer won't recognize 日本語, so let's use a simpler example
+    // "今日 |" where 今日 is 6 bytes
+    let result = FilterParser::parse("p1 & |");
+    // p1 (2 bytes) + space + & + space + | = position 5
+    match result {
+        Err(FilterError::UnexpectedToken { token, position }) => {
+            assert_eq!(token, "|");
+            assert_eq!(position, 5);
+        }
+        other => panic!("Expected UnexpectedToken error, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_error_nested_unclosed_parenthesis() {
+    // "(((today" - the innermost ( at position 2 is the one that's unclosed
+    // Actually, parsing starts from outermost, so position 0 is unclosed first
+    let result = FilterParser::parse("today & (p1");
+    // The ( at position 8 is unclosed
+    match result {
+        Err(FilterError::UnclosedParenthesis { position }) => {
+            assert_eq!(position, 8);
+        }
+        other => panic!("Expected UnclosedParenthesis error, got {:?}", other),
+    }
 }
 
 #[test]
 fn test_error_trailing_operator() {
     let result = FilterParser::parse("today &");
-    assert!(matches!(result, Err(FilterError::UnexpectedEndOfInput)));
+    // Input is 7 bytes: "today &"
+    assert!(matches!(
+        result,
+        Err(FilterError::UnexpectedEndOfInput { position: 7 })
+    ));
 
     let result = FilterParser::parse("today |");
-    assert!(matches!(result, Err(FilterError::UnexpectedEndOfInput)));
+    assert!(matches!(
+        result,
+        Err(FilterError::UnexpectedEndOfInput { position: 7 })
+    ));
 }
 
 // ==================== AST Helper Tests ====================
@@ -368,11 +433,17 @@ fn test_filter_error_display() {
     let err = FilterError::EmptyExpression;
     assert_eq!(format!("{}", err), "filter expression is empty");
 
-    let err = FilterError::unexpected_token("&");
-    assert_eq!(format!("{}", err), "unexpected token: &");
+    let err = FilterError::unexpected_token("&", 5);
+    assert_eq!(format!("{}", err), "unexpected token '&' at position 5");
 
-    let err = FilterError::UnclosedParenthesis;
-    assert_eq!(format!("{}", err), "unclosed parenthesis");
+    let err = FilterError::unclosed_parenthesis(10);
+    assert_eq!(format!("{}", err), "unclosed parenthesis at position 10");
+
+    let err = FilterError::unexpected_end_of_input(15);
+    assert_eq!(
+        format!("{}", err),
+        "unexpected end of expression after position 15"
+    );
 }
 
 // ==================== Unknown Character Error Tests ====================

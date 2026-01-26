@@ -27,10 +27,19 @@ impl std::error::Error for LexerError {}
 /// Result of tokenizing a filter expression.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LexerResult {
-    /// The tokens successfully parsed.
-    pub tokens: Vec<FilterToken>,
+    /// The tokens successfully parsed, with their positions.
+    pub tokens: Vec<PositionedToken>,
     /// Any errors encountered (unknown characters).
     pub errors: Vec<LexerError>,
+}
+
+/// A token with its position in the input.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PositionedToken {
+    /// The token.
+    pub token: FilterToken,
+    /// The byte position where the token starts (0-indexed).
+    pub position: usize,
 }
 
 /// A token in a filter expression.
@@ -187,40 +196,59 @@ impl<'a> Lexer<'a> {
         name
     }
 
-    /// Returns the next token, or None if at end of input.
-    pub fn next_token(&mut self) -> Option<FilterToken> {
+    /// Returns the next token with its position, or None if at end of input.
+    pub fn next_token(&mut self) -> Option<PositionedToken> {
         self.skip_whitespace();
 
-        let c = self.peek()?;
+        let c = *self.peek()?;
+        let token_start = self.current_position();
 
-        match *c {
+        match c {
             // Operators
             '&' => {
                 self.next_char();
-                Some(FilterToken::And)
+                Some(PositionedToken {
+                    token: FilterToken::And,
+                    position: token_start,
+                })
             }
             '|' => {
                 self.next_char();
-                Some(FilterToken::Or)
+                Some(PositionedToken {
+                    token: FilterToken::Or,
+                    position: token_start,
+                })
             }
             '!' => {
                 self.next_char();
-                Some(FilterToken::Not)
+                Some(PositionedToken {
+                    token: FilterToken::Not,
+                    position: token_start,
+                })
             }
             '(' => {
                 self.next_char();
-                Some(FilterToken::OpenParen)
+                Some(PositionedToken {
+                    token: FilterToken::OpenParen,
+                    position: token_start,
+                })
             }
             ')' => {
                 self.next_char();
-                Some(FilterToken::CloseParen)
+                Some(PositionedToken {
+                    token: FilterToken::CloseParen,
+                    position: token_start,
+                })
             }
 
             // Label reference
             '@' => {
                 self.next_char();
                 let name = self.read_name();
-                Some(FilterToken::Label(name))
+                Some(PositionedToken {
+                    token: FilterToken::Label(name),
+                    position: token_start,
+                })
             }
 
             // Project reference (# or ##)
@@ -230,10 +258,16 @@ impl<'a> Lexer<'a> {
                 if self.peek() == Some(&'#') {
                     self.next_char();
                     let name = self.read_name();
-                    Some(FilterToken::ProjectWithSubprojects(name))
+                    Some(PositionedToken {
+                        token: FilterToken::ProjectWithSubprojects(name),
+                        position: token_start,
+                    })
                 } else {
                     let name = self.read_name();
-                    Some(FilterToken::Project(name))
+                    Some(PositionedToken {
+                        token: FilterToken::Project(name),
+                        position: token_start,
+                    })
                 }
             }
 
@@ -241,7 +275,10 @@ impl<'a> Lexer<'a> {
             '/' => {
                 self.next_char();
                 let name = self.read_name();
-                Some(FilterToken::Section(name))
+                Some(PositionedToken {
+                    token: FilterToken::Section(name),
+                    position: token_start,
+                })
             }
 
             // Priority (p1, p2, p3, p4)
@@ -249,11 +286,23 @@ impl<'a> Lexer<'a> {
                 let ident = self.read_identifier();
                 let lower = ident.to_lowercase();
                 match lower.as_str() {
-                    "p1" => Some(FilterToken::Priority(1)),
-                    "p2" => Some(FilterToken::Priority(2)),
-                    "p3" => Some(FilterToken::Priority(3)),
-                    "p4" => Some(FilterToken::Priority(4)),
-                    _ => self.try_keyword(&lower),
+                    "p1" => Some(PositionedToken {
+                        token: FilterToken::Priority(1),
+                        position: token_start,
+                    }),
+                    "p2" => Some(PositionedToken {
+                        token: FilterToken::Priority(2),
+                        position: token_start,
+                    }),
+                    "p3" => Some(PositionedToken {
+                        token: FilterToken::Priority(3),
+                        position: token_start,
+                    }),
+                    "p4" => Some(PositionedToken {
+                        token: FilterToken::Priority(4),
+                        position: token_start,
+                    }),
+                    _ => self.try_keyword(&lower, token_start),
                 }
             }
 
@@ -261,7 +310,7 @@ impl<'a> Lexer<'a> {
             _ if c.is_alphabetic() => {
                 let ident = self.read_identifier();
                 let lower = ident.to_lowercase();
-                self.try_keyword(&lower)
+                self.try_keyword(&lower, token_start)
             }
 
             // Unknown character - record error and continue
@@ -278,11 +327,20 @@ impl<'a> Lexer<'a> {
     }
 
     /// Tries to match a keyword, returns None if not recognized.
-    fn try_keyword(&mut self, lower: &str) -> Option<FilterToken> {
+    fn try_keyword(&mut self, lower: &str, position: usize) -> Option<PositionedToken> {
         match lower {
-            "today" => Some(FilterToken::Today),
-            "tomorrow" => Some(FilterToken::Tomorrow),
-            "overdue" => Some(FilterToken::Overdue),
+            "today" => Some(PositionedToken {
+                token: FilterToken::Today,
+                position,
+            }),
+            "tomorrow" => Some(PositionedToken {
+                token: FilterToken::Tomorrow,
+                position,
+            }),
+            "overdue" => Some(PositionedToken {
+                token: FilterToken::Overdue,
+                position,
+            }),
             "no" => {
                 // Check for "no date"
                 self.skip_whitespace();
@@ -290,7 +348,10 @@ impl<'a> Lexer<'a> {
                     if c.is_alphabetic() {
                         let next_word = self.read_identifier();
                         if next_word.to_lowercase() == "date" {
-                            return Some(FilterToken::NoDate);
+                            return Some(PositionedToken {
+                                token: FilterToken::NoDate,
+                                position,
+                            });
                         }
                     }
                 }
@@ -301,23 +362,27 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    /// Collects all tokens into a vector.
+    /// Collects all tokens into a vector (without positions).
     ///
-    /// This method is provided for backward compatibility. For error reporting,
-    /// use [`tokenize_with_errors`] instead.
+    /// This method is provided for backward compatibility with tests.
+    /// For error reporting, use [`tokenize_with_errors`] instead.
     #[cfg(test)]
     pub fn tokenize(self) -> Vec<FilterToken> {
-        self.tokenize_with_errors().tokens
+        self.tokenize_with_errors()
+            .tokens
+            .into_iter()
+            .map(|pt| pt.token)
+            .collect()
     }
 
     /// Collects all tokens and any errors encountered.
     ///
     /// Returns a [`LexerResult`] containing both the successfully parsed tokens
-    /// and any errors for unknown characters.
+    /// (with positions) and any errors for unknown characters.
     pub fn tokenize_with_errors(mut self) -> LexerResult {
         let mut tokens = Vec::new();
-        while let Some(token) = self.next_token() {
-            tokens.push(token);
+        while let Some(positioned_token) = self.next_token() {
+            tokens.push(positioned_token);
         }
         LexerResult {
             tokens,
