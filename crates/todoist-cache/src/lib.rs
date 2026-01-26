@@ -29,6 +29,7 @@
 //! # Ok::<(), todoist_cache::CacheStoreError>(())
 //! ```
 
+pub mod filter;
 mod store;
 mod sync_manager;
 
