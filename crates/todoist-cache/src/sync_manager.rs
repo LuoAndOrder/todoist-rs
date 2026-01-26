@@ -604,6 +604,155 @@ impl SyncManager {
             .iter()
             .find(|i| !i.is_deleted && i.id == id)
     }
+
+    /// Resolves an item (task) by ID or unique prefix, with auto-sync fallback.
+    ///
+    /// This method first attempts to find the item in the cache by exact ID match
+    /// or unique prefix. If not found, it performs a sync and retries the lookup.
+    ///
+    /// # Arguments
+    ///
+    /// * `id_or_prefix` - The item ID or unique prefix to search for
+    /// * `require_checked` - If `Some(true)`, only match completed items.
+    ///   If `Some(false)`, only match uncompleted items.
+    ///   If `None`, match any item regardless of completion status.
+    ///
+    /// # Returns
+    ///
+    /// A reference to the matching `Item` from the cache.
+    ///
+    /// # Errors
+    ///
+    /// Returns `SyncError::NotFound` if the item cannot be found even after syncing.
+    /// Returns `SyncError::Api` if the sync operation fails.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use todoist_api::client::TodoistClient;
+    /// use todoist_cache::{CacheStore, SyncManager};
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let client = TodoistClient::new("your-api-token");
+    ///     let store = CacheStore::new()?;
+    ///     let mut manager = SyncManager::new(client, store)?;
+    ///
+    ///     // Find uncompleted task by ID prefix
+    ///     let item = manager.resolve_item_by_prefix("abc123", Some(false)).await?;
+    ///     println!("Found item: {} ({})", item.content, item.id);
+    ///
+    ///     // Find any task by prefix (completed or not)
+    ///     let item = manager.resolve_item_by_prefix("def456", None).await?;
+    ///     println!("Found item: {}", item.content);
+    ///
+    ///     Ok(())
+    /// }
+    /// ```
+    pub async fn resolve_item_by_prefix(
+        &mut self,
+        id_or_prefix: &str,
+        require_checked: Option<bool>,
+    ) -> Result<&todoist_api::sync::Item> {
+        // Try cache first
+        match self.find_item_by_prefix_in_cache(id_or_prefix, require_checked) {
+            ItemLookupResult::Found(_) => {
+                // Re-lookup to return reference (borrow checker limitation)
+                if let ItemLookupResult::Found(item) =
+                    self.find_item_by_prefix_in_cache(id_or_prefix, require_checked)
+                {
+                    return Ok(item);
+                }
+                unreachable!()
+            }
+            ItemLookupResult::Ambiguous(msg) => {
+                return Err(SyncError::NotFound {
+                    resource_type: "item",
+                    identifier: msg,
+                });
+            }
+            ItemLookupResult::NotFound => {
+                // Continue to sync
+            }
+        }
+
+        // Not found - sync and retry
+        self.sync().await?;
+
+        // Try again after sync
+        match self.find_item_by_prefix_in_cache(id_or_prefix, require_checked) {
+            ItemLookupResult::Found(item) => Ok(item),
+            ItemLookupResult::Ambiguous(msg) => Err(SyncError::NotFound {
+                resource_type: "item",
+                identifier: msg,
+            }),
+            ItemLookupResult::NotFound => Err(SyncError::NotFound {
+                resource_type: "item",
+                identifier: id_or_prefix.to_string(),
+            }),
+        }
+    }
+
+    /// Helper to find an item in the cache by ID or unique prefix.
+    ///
+    /// Returns the found item, an ambiguity error message, or not found.
+    fn find_item_by_prefix_in_cache(
+        &self,
+        id_or_prefix: &str,
+        require_checked: Option<bool>,
+    ) -> ItemLookupResult<'_> {
+        // First try exact match
+        if let Some(item) = self.cache.items.iter().find(|i| {
+            !i.is_deleted
+                && i.id == id_or_prefix
+                && require_checked.is_none_or(|checked| i.checked == checked)
+        }) {
+            return ItemLookupResult::Found(item);
+        }
+
+        // Try prefix match
+        let matches: Vec<&todoist_api::sync::Item> = self
+            .cache
+            .items
+            .iter()
+            .filter(|i| {
+                !i.is_deleted
+                    && i.id.starts_with(id_or_prefix)
+                    && require_checked.is_none_or(|checked| i.checked == checked)
+            })
+            .collect();
+
+        match matches.len() {
+            0 => ItemLookupResult::NotFound,
+            1 => ItemLookupResult::Found(matches[0]),
+            _ => {
+                // Ambiguous prefix - provide helpful error message
+                let mut msg = format!(
+                    "Ambiguous task ID \"{}\"\n\nMultiple tasks match this prefix:",
+                    id_or_prefix
+                );
+                for item in matches.iter().take(5) {
+                    let prefix = &item.id[..6.min(item.id.len())];
+                    msg.push_str(&format!("\n  {}  {}", prefix, item.content));
+                }
+                if matches.len() > 5 {
+                    msg.push_str(&format!("\n  ... and {} more", matches.len() - 5));
+                }
+                msg.push_str("\n\nPlease use a longer prefix.");
+                ItemLookupResult::Ambiguous(msg)
+            }
+        }
+    }
+}
+
+/// Result of an item lookup by prefix.
+enum ItemLookupResult<'a> {
+    /// Found exactly one matching item.
+    Found(&'a todoist_api::sync::Item),
+    /// Multiple items match the prefix (contains error message).
+    Ambiguous(String),
+    /// No matching item found.
+    NotFound,
 }
 
 #[cfg(test)]

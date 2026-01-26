@@ -2,10 +2,12 @@
 //!
 //! Updates a task via the Sync API's `item_update` and/or `item_move` commands.
 //! Uses SyncManager::execute_commands() to automatically update the cache.
+//! Uses resolve_item_by_prefix(), resolve_project(), and resolve_section()
+//! for smart lookups with auto-sync fallback.
 
 use todoist_api::client::TodoistClient;
 use todoist_api::sync::SyncCommand;
-use todoist_cache::{Cache, CacheStore, SyncManager};
+use todoist_cache::{CacheStore, SyncManager};
 
 use super::{CommandContext, CommandError, Result};
 
@@ -64,174 +66,145 @@ pub async fn execute(ctx: &CommandContext, opts: &EditOptions, token: &str) -> R
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
-    // All cache lookups happen in this block to avoid holding borrow across execute_commands
-    let (task_id, current_content, commands, updated_fields) = {
-        let cache = manager.cache();
+    // Resolve task using smart lookup (cache-first with auto-sync fallback)
+    // require_checked=None to match any task (edit works on completed and uncompleted)
+    let item = manager
+        .resolve_item_by_prefix(&opts.task_id, None)
+        .await
+        .map_err(|e| CommandError::Config(e.to_string()))?;
+    let task_id = item.id.clone();
+    let current_content = item.content.clone();
+    let current_labels = item.labels.clone();
+    let current_project_id = item.project_id.clone();
+    let current_section_id = item.section_id.clone();
 
-        // Find the task by ID or prefix
-        let item = find_item_by_id_or_prefix(cache, &opts.task_id)?;
-        let task_id = item.id.clone();
-        let current_content = item.content.clone();
-        let current_labels = item.labels.clone();
-        let current_project_id = item.project_id.clone();
-        let current_section_id = item.section_id.clone();
+    // Track what we're updating
+    let mut updated_fields = Vec::new();
+    let mut commands = Vec::new();
 
-        // Track what we're updating
-        let mut updated_fields = Vec::new();
-        let mut commands = Vec::new();
+    // Build item_update command if any update fields are specified
+    let has_updates = opts.content.is_some()
+        || opts.priority.is_some()
+        || opts.due.is_some()
+        || opts.no_due
+        || !opts.labels.is_empty()
+        || opts.add_label.is_some()
+        || opts.remove_label.is_some()
+        || opts.description.is_some();
 
-        // Build item_update command if any update fields are specified
-        let has_updates = opts.content.is_some()
-            || opts.priority.is_some()
-            || opts.due.is_some()
-            || opts.no_due
-            || !opts.labels.is_empty()
-            || opts.add_label.is_some()
-            || opts.remove_label.is_some()
-            || opts.description.is_some();
+    if has_updates {
+        let mut args = serde_json::json!({
+            "id": task_id,
+        });
 
-        if has_updates {
-            let mut args = serde_json::json!({
-                "id": task_id,
-            });
-
-            if let Some(ref content) = opts.content {
-                args["content"] = serde_json::json!(content);
-                updated_fields.push("content".to_string());
-            }
-
-            if let Some(priority) = opts.priority {
-                // Convert user priority (1=highest) to API priority (4=highest)
-                let api_priority = 5 - priority as i32;
-                args["priority"] = serde_json::json!(api_priority);
-                updated_fields.push("priority".to_string());
-            }
-
-            if opts.no_due {
-                // Remove due date by setting to null
-                args["due"] = serde_json::Value::Null;
-                updated_fields.push("due (removed)".to_string());
-            } else if let Some(ref due) = opts.due {
-                // Use the "string" field to let Todoist parse natural language dates
-                args["due"] = serde_json::json!({"string": due});
-                updated_fields.push("due".to_string());
-            }
-
-            // Handle labels
-            if !opts.labels.is_empty() {
-                // Replace all labels
-                args["labels"] = serde_json::json!(opts.labels);
-                updated_fields.push("labels".to_string());
-            } else if opts.add_label.is_some() || opts.remove_label.is_some() {
-                // Modify existing labels
-                let mut new_labels = current_labels.clone();
-
-                if let Some(ref add_label) = opts.add_label {
-                    if !new_labels.contains(add_label) {
-                        new_labels.push(add_label.clone());
-                        updated_fields.push(format!("label +{}", add_label));
-                    }
-                }
-
-                if let Some(ref remove_label) = opts.remove_label {
-                    if let Some(pos) = new_labels.iter().position(|l| l == remove_label) {
-                        new_labels.remove(pos);
-                        updated_fields.push(format!("label -{}", remove_label));
-                    }
-                }
-
-                args["labels"] = serde_json::json!(new_labels);
-            }
-
-            if let Some(ref description) = opts.description {
-                args["description"] = serde_json::json!(description);
-                updated_fields.push("description".to_string());
-            }
-
-            let update_command = SyncCommand::new("item_update", args);
-            commands.push(update_command);
+        if let Some(ref content) = opts.content {
+            args["content"] = serde_json::json!(content);
+            updated_fields.push("content".to_string());
         }
 
-        // Build item_move command if moving to different project or section
-        // Note: item_move only allows one of project_id, section_id, or parent_id
-        if opts.project.is_some() || opts.section.is_some() {
-            let mut move_args = serde_json::json!({
-                "id": task_id,
-            });
+        if let Some(priority) = opts.priority {
+            // Convert user priority (1=highest) to API priority (4=highest)
+            let api_priority = 5 - priority as i32;
+            args["priority"] = serde_json::json!(api_priority);
+            updated_fields.push("priority".to_string());
+        }
 
-            // Resolve project name to ID
-            if let Some(ref project_name) = opts.project {
-                let project_name_lower = project_name.to_lowercase();
-                let project_id = cache
-                    .projects
-                    .iter()
-                    .find(|p| !p.is_deleted && (p.name.to_lowercase() == project_name_lower || p.id == *project_name))
-                    .map(|p| p.id.clone())
-                    .ok_or_else(|| CommandError::Config(format!("Project not found: {project_name}")))?;
+        if opts.no_due {
+            // Remove due date by setting to null
+            args["due"] = serde_json::Value::Null;
+            updated_fields.push("due (removed)".to_string());
+        } else if let Some(ref due) = opts.due {
+            // Use the "string" field to let Todoist parse natural language dates
+            args["due"] = serde_json::json!({"string": due});
+            updated_fields.push("due".to_string());
+        }
 
-                // Only move if project is different
-                if project_id != current_project_id {
-                    move_args["project_id"] = serde_json::json!(project_id);
-                    updated_fields.push("project".to_string());
+        // Handle labels
+        if !opts.labels.is_empty() {
+            // Replace all labels
+            args["labels"] = serde_json::json!(opts.labels);
+            updated_fields.push("labels".to_string());
+        } else if opts.add_label.is_some() || opts.remove_label.is_some() {
+            // Modify existing labels
+            let mut new_labels = current_labels.clone();
+
+            if let Some(ref add_label) = opts.add_label {
+                if !new_labels.contains(add_label) {
+                    new_labels.push(add_label.clone());
+                    updated_fields.push(format!("label +{}", add_label));
                 }
             }
 
-            // Resolve section name to ID
-            if let Some(ref section_name) = opts.section {
-                let section_name_lower = section_name.to_lowercase();
+            if let Some(ref remove_label) = opts.remove_label {
+                if let Some(pos) = new_labels.iter().position(|l| l == remove_label) {
+                    new_labels.remove(pos);
+                    updated_fields.push(format!("label -{}", remove_label));
+                }
+            }
 
-                // Determine which project to look for sections in
-                let target_project_id = if let Some(ref project_name) = opts.project {
-                    let project_name_lower = project_name.to_lowercase();
-                    cache
-                        .projects
-                        .iter()
-                        .find(|p| !p.is_deleted && (p.name.to_lowercase() == project_name_lower || p.id == *project_name))
-                        .map(|p| p.id.clone())
-                        .ok_or_else(|| {
-                            CommandError::Config(format!("Project not found: {project_name}"))
-                        })?
+            args["labels"] = serde_json::json!(new_labels);
+        }
+
+        if let Some(ref description) = opts.description {
+            args["description"] = serde_json::json!(description);
+            updated_fields.push("description".to_string());
+        }
+
+        let update_command = SyncCommand::new("item_update", args);
+        commands.push(update_command);
+    }
+
+    // Build item_move command if moving to different project or section
+    // Note: item_move only allows one of project_id, section_id, or parent_id
+    if opts.project.is_some() || opts.section.is_some() {
+        let mut move_args = serde_json::json!({
+            "id": task_id,
+        });
+
+        // Resolve project name to ID using smart lookup (cache-first with auto-sync fallback)
+        let resolved_project_id = if let Some(ref project_name) = opts.project {
+            let project = manager
+                .resolve_project(project_name)
+                .await
+                .map_err(|e| CommandError::Config(e.to_string()))?;
+
+            // Only move if project is different
+            if project.id != current_project_id {
+                move_args["project_id"] = serde_json::json!(project.id);
+                updated_fields.push("project".to_string());
+            }
+            project.id.clone()
+        } else {
+            current_project_id.clone()
+        };
+
+        // Resolve section name to ID using smart lookup (cache-first with auto-sync fallback)
+        if let Some(ref section_name) = opts.section {
+            let section = manager
+                .resolve_section(section_name, Some(&resolved_project_id))
+                .await
+                .map_err(|e| CommandError::Config(e.to_string()))?;
+
+            // Only move if section is different
+            if current_section_id.as_ref() != Some(&section.id) {
+                // Note: When moving to a section, we only set section_id
+                // The project will be implicitly set to the section's project
+                move_args["section_id"] = serde_json::json!(section.id);
+                if !updated_fields.contains(&"project".to_string()) {
+                    updated_fields.push("section".to_string());
                 } else {
-                    current_project_id.clone()
-                };
-
-                let section = cache
-                    .sections
-                    .iter()
-                    .find(|s| {
-                        !s.is_deleted
-                            && (s.name.to_lowercase() == section_name_lower || s.id == *section_name)
-                            && s.project_id == target_project_id
-                    })
-                    .ok_or_else(|| {
-                        CommandError::Config(format!(
-                            "Section not found: {section_name} (in project)"
-                        ))
-                    })?;
-
-                // Only move if section is different
-                if current_section_id.as_ref() != Some(&section.id) {
-                    // Note: When moving to a section, we only set section_id
-                    // The project will be implicitly set to the section's project
-                    move_args["section_id"] = serde_json::json!(section.id);
-                    if !updated_fields.contains(&"project".to_string()) {
-                        updated_fields.push("section".to_string());
-                    } else {
-                        // Project already being updated, section is in that project
-                        updated_fields.push("section".to_string());
-                    }
+                    // Project already being updated, section is in that project
+                    updated_fields.push("section".to_string());
                 }
-            }
-
-            // Only add move command if we're actually moving somewhere
-            if move_args.get("project_id").is_some() || move_args.get("section_id").is_some() {
-                let move_command = SyncCommand::new("item_move", move_args);
-                commands.push(move_command);
             }
         }
 
-        (task_id, current_content, commands, updated_fields)
-    };
+        // Only add move command if we're actually moving somewhere
+        if move_args.get("project_id").is_some() || move_args.get("section_id").is_some() {
+            let move_command = SyncCommand::new("item_move", move_args);
+            commands.push(move_command);
+        }
+    }
 
     // Check if we have any changes to make
     if commands.is_empty() {
@@ -303,39 +276,6 @@ pub async fn execute(ctx: &CommandContext, opts: &EditOptions, token: &str) -> R
     Ok(())
 }
 
-/// Finds an item by full ID or unique prefix.
-fn find_item_by_id_or_prefix<'a>(cache: &'a Cache, id: &str) -> Result<&'a todoist_api::sync::Item> {
-    // First try exact match
-    if let Some(item) = cache.items.iter().find(|i| i.id == id && !i.is_deleted) {
-        return Ok(item);
-    }
-
-    // Try prefix match
-    let matches: Vec<&todoist_api::sync::Item> = cache
-        .items
-        .iter()
-        .filter(|i| i.id.starts_with(id) && !i.is_deleted)
-        .collect();
-
-    match matches.len() {
-        0 => Err(CommandError::Config(format!("Task not found: {id}"))),
-        1 => Ok(matches[0]),
-        _ => {
-            // Ambiguous prefix - provide helpful error message
-            let mut msg =
-                format!("Ambiguous task ID \"{id}\"\n\nMultiple tasks match this prefix:");
-            for item in matches.iter().take(5) {
-                let prefix = &item.id[..6.min(item.id.len())];
-                msg.push_str(&format!("\n  {}  {}", prefix, item.content));
-            }
-            if matches.len() > 5 {
-                msg.push_str(&format!("\n  ... and {} more", matches.len() - 5));
-            }
-            msg.push_str("\n\nPlease use a longer prefix.");
-            Err(CommandError::Config(msg))
-        }
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -439,114 +379,7 @@ mod tests {
         assert_eq!(5 - 4, 1);
     }
 
-    #[test]
-    fn test_find_item_by_id_or_prefix_exact_match() {
-        let cache = make_test_cache();
-        let result = find_item_by_id_or_prefix(&cache, "item-123-abc");
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap().id, "item-123-abc");
-    }
-
-    #[test]
-    fn test_find_item_by_id_or_prefix_unique_prefix() {
-        let cache = make_test_cache();
-        let result = find_item_by_id_or_prefix(&cache, "item-123");
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap().id, "item-123-abc");
-    }
-
-    #[test]
-    fn test_find_item_by_id_or_prefix_not_found() {
-        let cache = make_test_cache();
-        let result = find_item_by_id_or_prefix(&cache, "nonexistent");
-        assert!(result.is_err());
-        let err = result.unwrap_err().to_string();
-        assert!(err.contains("Task not found"));
-    }
-
-    #[test]
-    fn test_find_item_by_id_or_prefix_ambiguous() {
-        let cache = make_cache_with_ambiguous_ids();
-        let result = find_item_by_id_or_prefix(&cache, "item-");
-        assert!(result.is_err());
-        let err = result.unwrap_err().to_string();
-        assert!(err.contains("Ambiguous"));
-    }
-
-    #[test]
-    fn test_find_item_by_id_or_prefix_ignores_deleted() {
-        let mut cache = make_test_cache();
-        // Mark the item as deleted
-        cache.items[0].is_deleted = true;
-
-        let result = find_item_by_id_or_prefix(&cache, "item-123");
-        assert!(result.is_err());
-    }
-
-    // Helper functions to create test caches
-    fn make_test_cache() -> Cache {
-        Cache {
-            sync_token: "test".to_string(),
-            full_sync_date_utc: None,
-            last_sync: None,
-            items: vec![make_test_item("item-123-abc", "Test task")],
-            projects: vec![],
-            labels: vec![],
-            sections: vec![],
-            notes: vec![],
-            project_notes: vec![],
-            reminders: vec![],
-            filters: vec![],
-            user: None,
-        }
-    }
-
-    fn make_cache_with_ambiguous_ids() -> Cache {
-        Cache {
-            sync_token: "test".to_string(),
-            full_sync_date_utc: None,
-            last_sync: None,
-            items: vec![
-                make_test_item("item-aaa-111", "Task 1"),
-                make_test_item("item-aaa-222", "Task 2"),
-                make_test_item("item-bbb-333", "Task 3"),
-            ],
-            projects: vec![],
-            labels: vec![],
-            sections: vec![],
-            notes: vec![],
-            project_notes: vec![],
-            reminders: vec![],
-            filters: vec![],
-            user: None,
-        }
-    }
-
-    fn make_test_item(id: &str, content: &str) -> todoist_api::sync::Item {
-        todoist_api::sync::Item {
-            id: id.to_string(),
-            user_id: None,
-            project_id: "proj-1".to_string(),
-            content: content.to_string(),
-            description: String::new(),
-            priority: 1,
-            due: None,
-            deadline: None,
-            parent_id: None,
-            child_order: 0,
-            section_id: None,
-            day_order: 0,
-            is_collapsed: false,
-            labels: vec![],
-            added_by_uid: None,
-            assigned_by_uid: None,
-            responsible_uid: None,
-            checked: false,
-            is_deleted: false,
-            added_at: None,
-            updated_at: None,
-            completed_at: None,
-            duration: None,
-        }
-    }
+    // Note: Tests for item lookup by prefix are now in SyncManager tests
+    // (resolve_item_by_prefix covers exact match, prefix match, not found,
+    // ambiguous, deleted items, and completion status filtering)
 }
