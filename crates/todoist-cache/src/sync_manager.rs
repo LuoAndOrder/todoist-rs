@@ -46,7 +46,7 @@ pub enum SyncError {
     Api(#[from] todoist_api::error::Error),
 
     /// Resource not found in cache (even after sync).
-    #[error("{resource_type} not found: {identifier}")]
+    #[error("{resource_type} '{identifier}' not found. Try running 'td sync' to refresh your cache.")]
     NotFound {
         /// The type of resource that was not found (e.g., "project", "label").
         resource_type: &'static str,
