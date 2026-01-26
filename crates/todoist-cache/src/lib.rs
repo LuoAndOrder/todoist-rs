@@ -2,6 +2,36 @@
 //!
 //! This crate provides a local cache that mirrors the Sync API response structure,
 //! enabling efficient incremental updates and offline read access.
+//!
+//! # Storage
+//!
+//! The cache is stored on disk using XDG-compliant paths via [`CacheStore`]:
+//! - Unix: `~/.cache/td/cache.json`
+//! - macOS: `~/Library/Caches/td/cache.json`
+//! - Windows: `C:\Users\<User>\AppData\Local\td\cache\cache.json`
+//!
+//! # Example
+//!
+//! ```no_run
+//! use todoist_cache::{Cache, CacheStore};
+//!
+//! // Create a store with the default XDG path
+//! let store = CacheStore::new()?;
+//!
+//! // Load existing cache or create a new one
+//! let mut cache = store.load_or_default()?;
+//!
+//! // Modify the cache...
+//! cache.sync_token = "new_token".to_string();
+//!
+//! // Save changes to disk
+//! store.save(&cache)?;
+//! # Ok::<(), todoist_cache::CacheStoreError>(())
+//! ```
+
+mod store;
+
+pub use store::{CacheStore, CacheStoreError, Result as CacheStoreResult};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};

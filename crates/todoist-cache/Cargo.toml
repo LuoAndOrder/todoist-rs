@@ -17,3 +17,6 @@ serde_json.workspace = true
 chrono.workspace = true
 thiserror.workspace = true
 directories.workspace = true
+
+[dev-dependencies]
+tempfile = "3"
