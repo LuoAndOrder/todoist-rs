@@ -1797,3 +1797,366 @@ async fn test_sync_non_token_errors_propagate() {
     // Cache should remain unchanged
     assert_eq!(manager.cache().sync_token, "some_token");
 }
+
+// ==================== Cache behavior integration tests ====================
+// These tests verify the core cache behavior: mutations update cache immediately
+// without requiring a separate sync call. This is the key UX improvement from
+// the cache refactor.
+
+/// Creates a mock response for item_add that includes the added item.
+fn mock_item_add_response(item_id: &str, content: &str, project_id: &str) -> serde_json::Value {
+    serde_json::json!({
+        "sync_token": "token_after_add",
+        "full_sync": false,
+        "items": [
+            {
+                "id": item_id,
+                "project_id": project_id,
+                "content": content,
+                "description": "",
+                "priority": 1,
+                "child_order": 0,
+                "day_order": 0,
+                "is_collapsed": false,
+                "labels": [],
+                "checked": false,
+                "is_deleted": false
+            }
+        ],
+        "projects": [],
+        "labels": [],
+        "sections": [],
+        "notes": [],
+        "project_notes": [],
+        "reminders": [],
+        "filters": [],
+        "collaborators": [],
+        "collaborator_states": [],
+        "live_notifications": [],
+        "sync_status": { "add-uuid": "ok" },
+        "temp_id_mapping": { "temp-add-id": item_id },
+        "completed_info": [],
+        "locations": []
+    })
+}
+
+#[tokio::test]
+async fn test_add_item_is_visible_immediately_without_sync() {
+    //! Verifies that after adding an item via execute_commands, the item is
+    //! immediately visible in the cache without calling sync().
+    //!
+    //! This test demonstrates the key cache behavior: mutations update the
+    //! cache in place, making reads instant (no network round-trip needed).
+
+    use todoist_api::sync::SyncCommand;
+
+    let mock_server = MockServer::start().await;
+    let temp_dir = tempdir().expect("failed to create temp dir");
+    let cache_path = temp_dir.path().join("cache.json");
+
+    // Setup: empty cache with sync token
+    let store = CacheStore::with_path(cache_path.clone());
+    let mut existing_cache = Cache::new();
+    existing_cache.sync_token = "initial_token".to_string();
+    store.save(&existing_cache).expect("failed to save cache");
+
+    // Mock the add command response
+    Mock::given(method("POST"))
+        .and(path("/sync"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(mock_item_add_response("item-abc123", "Buy groceries", "proj-1")),
+        )
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let store = CacheStore::with_path(cache_path.clone());
+    let mut manager = SyncManager::new(client, store).expect("failed to create manager");
+
+    // Before: cache has no items
+    assert!(
+        manager.cache().items.is_empty(),
+        "cache should be empty before add"
+    );
+
+    // Add an item (simulates: td add "Buy groceries")
+    let cmd = SyncCommand::with_temp_id(
+        "item_add",
+        "temp-add-id",
+        serde_json::json!({"content": "Buy groceries", "project_id": "proj-1"}),
+    );
+    manager
+        .execute_commands(vec![cmd])
+        .await
+        .expect("add failed");
+
+    // After: item is IMMEDIATELY visible without sync()
+    // This is the key assertion - no sync() call needed!
+    assert_eq!(manager.cache().items.len(), 1, "item should be in cache");
+    assert_eq!(
+        manager.cache().items[0].content, "Buy groceries",
+        "item content should match"
+    );
+    assert_eq!(
+        manager.cache().items[0].id, "item-abc123",
+        "item should have real ID from response"
+    );
+
+    // Verify the item persists after "restart" (loading from disk)
+    let store2 = CacheStore::with_path(cache_path);
+    let loaded = store2.load().expect("failed to load");
+    assert_eq!(loaded.items.len(), 1, "item should persist on disk");
+    assert_eq!(loaded.items[0].content, "Buy groceries");
+}
+
+#[tokio::test]
+async fn test_deleted_item_not_visible_without_sync() {
+    //! Verifies that after deleting an item via execute_commands, the item is
+    //! immediately removed from the cache without calling sync().
+    //!
+    //! This ensures that `td delete <id>` followed by `td list` won't show
+    //! the deleted item, even without running `td sync`.
+
+    use todoist_api::sync::SyncCommand;
+
+    let mock_server = MockServer::start().await;
+    let temp_dir = tempdir().expect("failed to create temp dir");
+    let cache_path = temp_dir.path().join("cache.json");
+
+    // Setup: cache with one item that will be deleted
+    let store = CacheStore::with_path(cache_path.clone());
+    let mut existing_cache = Cache::new();
+    existing_cache.sync_token = "initial_token".to_string();
+    existing_cache.items = vec![todoist_api::sync::Item {
+        id: "item-to-delete".to_string(),
+        user_id: None,
+        project_id: "proj-1".to_string(),
+        content: "Task to delete".to_string(),
+        description: String::new(),
+        priority: 1,
+        due: None,
+        deadline: None,
+        parent_id: None,
+        child_order: 0,
+        section_id: None,
+        day_order: 0,
+        is_collapsed: false,
+        labels: vec![],
+        added_by_uid: None,
+        assigned_by_uid: None,
+        responsible_uid: None,
+        checked: false,
+        is_deleted: false,
+        added_at: None,
+        updated_at: None,
+        completed_at: None,
+        duration: None,
+    }];
+    store.save(&existing_cache).expect("failed to save cache");
+
+    // Mock the delete command response
+    Mock::given(method("POST"))
+        .and(path("/sync"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "sync_token": "token_after_delete",
+            "full_sync": false,
+            "items": [{
+                "id": "item-to-delete",
+                "project_id": "proj-1",
+                "content": "Task to delete",
+                "description": "",
+                "priority": 1,
+                "child_order": 0,
+                "day_order": 0,
+                "is_collapsed": false,
+                "labels": [],
+                "checked": false,
+                "is_deleted": true  // Marked as deleted
+            }],
+            "projects": [],
+            "labels": [],
+            "sections": [],
+            "notes": [],
+            "project_notes": [],
+            "reminders": [],
+            "filters": [],
+            "collaborators": [],
+            "collaborator_states": [],
+            "live_notifications": [],
+            "sync_status": { "delete-uuid": "ok" },
+            "temp_id_mapping": {},
+            "completed_info": [],
+            "locations": []
+        })))
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let store = CacheStore::with_path(cache_path.clone());
+    let mut manager = SyncManager::new(client, store).expect("failed to create manager");
+
+    // Before: cache has one item
+    assert_eq!(manager.cache().items.len(), 1, "should have one item before");
+
+    // Delete the item (simulates: td delete item-to-delete)
+    let cmd = SyncCommand::new(
+        "item_delete",
+        serde_json::json!({"id": "item-to-delete"}),
+    );
+    manager
+        .execute_commands(vec![cmd])
+        .await
+        .expect("delete failed");
+
+    // After: item is IMMEDIATELY gone without sync()
+    // This is the key assertion - list would show 0 items without sync!
+    assert!(
+        manager.cache().items.is_empty(),
+        "deleted item should not be in cache"
+    );
+    assert!(
+        !manager
+            .cache()
+            .items
+            .iter()
+            .any(|i| i.id == "item-to-delete"),
+        "deleted item should not be findable"
+    );
+
+    // Verify the deletion persists after "restart"
+    let store2 = CacheStore::with_path(cache_path);
+    let loaded = store2.load().expect("failed to load");
+    assert!(loaded.items.is_empty(), "deletion should persist on disk");
+}
+
+#[tokio::test]
+async fn test_edited_item_shows_updated_content_without_sync() {
+    //! Verifies that after editing an item via execute_commands, the updated
+    //! content is immediately visible in the cache without calling sync().
+    //!
+    //! This ensures that `td edit <id> --content "new"` followed by `td show <id>`
+    //! displays the updated content, even without running `td sync`.
+
+    use todoist_api::sync::SyncCommand;
+
+    let mock_server = MockServer::start().await;
+    let temp_dir = tempdir().expect("failed to create temp dir");
+    let cache_path = temp_dir.path().join("cache.json");
+
+    // Setup: cache with one item that will be edited
+    let store = CacheStore::with_path(cache_path.clone());
+    let mut existing_cache = Cache::new();
+    existing_cache.sync_token = "initial_token".to_string();
+    existing_cache.items = vec![todoist_api::sync::Item {
+        id: "item-to-edit".to_string(),
+        user_id: None,
+        project_id: "proj-1".to_string(),
+        content: "Original content".to_string(),
+        description: "".to_string(),
+        priority: 1,
+        due: None,
+        deadline: None,
+        parent_id: None,
+        child_order: 0,
+        section_id: None,
+        day_order: 0,
+        is_collapsed: false,
+        labels: vec![],
+        added_by_uid: None,
+        assigned_by_uid: None,
+        responsible_uid: None,
+        checked: false,
+        is_deleted: false,
+        added_at: None,
+        updated_at: None,
+        completed_at: None,
+        duration: None,
+    }];
+    store.save(&existing_cache).expect("failed to save cache");
+
+    // Mock the update command response
+    Mock::given(method("POST"))
+        .and(path("/sync"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "sync_token": "token_after_edit",
+            "full_sync": false,
+            "items": [{
+                "id": "item-to-edit",
+                "project_id": "proj-1",
+                "content": "Updated content",  // Changed!
+                "description": "New description",  // Changed!
+                "priority": 4,  // Changed!
+                "child_order": 0,
+                "day_order": 0,
+                "is_collapsed": false,
+                "labels": ["work"],  // Changed!
+                "checked": false,
+                "is_deleted": false
+            }],
+            "projects": [],
+            "labels": [],
+            "sections": [],
+            "notes": [],
+            "project_notes": [],
+            "reminders": [],
+            "filters": [],
+            "collaborators": [],
+            "collaborator_states": [],
+            "live_notifications": [],
+            "sync_status": { "edit-uuid": "ok" },
+            "temp_id_mapping": {},
+            "completed_info": [],
+            "locations": []
+        })))
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let store = CacheStore::with_path(cache_path.clone());
+    let mut manager = SyncManager::new(client, store).expect("failed to create manager");
+
+    // Before: item has original content
+    assert_eq!(manager.cache().items.len(), 1);
+    assert_eq!(manager.cache().items[0].content, "Original content");
+    assert_eq!(manager.cache().items[0].priority, 1);
+
+    // Edit the item (simulates: td edit item-to-edit --content "Updated content" --priority 4)
+    let cmd = SyncCommand::new(
+        "item_update",
+        serde_json::json!({
+            "id": "item-to-edit",
+            "content": "Updated content",
+            "description": "New description",
+            "priority": 4,
+            "labels": ["work"]
+        }),
+    );
+    manager
+        .execute_commands(vec![cmd])
+        .await
+        .expect("edit failed");
+
+    // After: item shows UPDATED content without sync()
+    // This is the key assertion - show would display new content without sync!
+    assert_eq!(manager.cache().items.len(), 1);
+    let item = &manager.cache().items[0];
+    assert_eq!(item.id, "item-to-edit");
+    assert_eq!(item.content, "Updated content", "content should be updated");
+    assert_eq!(
+        item.description, "New description",
+        "description should be updated"
+    );
+    assert_eq!(item.priority, 4, "priority should be updated");
+    assert_eq!(item.labels, vec!["work"], "labels should be updated");
+
+    // Verify the edit persists after "restart"
+    let store2 = CacheStore::with_path(cache_path);
+    let loaded = store2.load().expect("failed to load");
+    assert_eq!(loaded.items.len(), 1);
+    assert_eq!(loaded.items[0].content, "Updated content");
+    assert_eq!(loaded.items[0].priority, 4);
+}
