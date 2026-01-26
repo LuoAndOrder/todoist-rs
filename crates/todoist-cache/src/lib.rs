@@ -30,8 +30,10 @@
 //! ```
 
 mod store;
+mod sync_manager;
 
 pub use store::{CacheStore, CacheStoreError, Result as CacheStoreResult};
+pub use sync_manager::{Result as SyncResult, SyncError, SyncManager};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
