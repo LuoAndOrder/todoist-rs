@@ -1,9 +1,10 @@
 //! Done command implementation.
 //!
 //! Completes task(s) via the Sync API's `item_close` command.
+//! Uses SyncManager::execute_commands() to automatically update the cache.
 
 use todoist_api::client::TodoistClient;
-use todoist_api::sync::{Item, SyncCommand, SyncRequest};
+use todoist_api::sync::{Item, SyncCommand};
 use todoist_cache::{Cache, CacheStore, SyncManager};
 
 use super::{confirm_bulk_operation, CommandContext, CommandError, ConfirmResult, Result};
@@ -46,33 +47,29 @@ pub struct DoneResult {
 ///
 /// Returns an error if syncing fails, task lookup fails, or the API returns an error.
 pub async fn execute(ctx: &CommandContext, opts: &DoneOptions, token: &str) -> Result<()> {
-    // Initialize sync manager
+    // Initialize sync manager (loads cache from disk)
     let client = TodoistClient::new(token);
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
-    // Always sync to ensure we have the latest data
-    // This is important because tasks may have been added/modified recently
-    if ctx.verbose {
-        eprintln!("Syncing with Todoist...");
-    }
-    manager.sync().await?;
-
-    let cache = manager.cache();
-
-    // Resolve all task IDs (supporting prefix matching)
-    let mut resolved_items: Vec<(&Item, String)> = Vec::new();
-    for task_id in &opts.task_ids {
-        let item = find_item_by_id_or_prefix(cache, task_id)?;
-        resolved_items.push((item, task_id.clone()));
-    }
+    // Resolve all task IDs and collect owned data (supporting prefix matching)
+    // We clone the data we need so we don't hold references to the cache
+    let resolved_items: Vec<(String, String)> = {
+        let cache = manager.cache();
+        let mut items = Vec::new();
+        for task_id in &opts.task_ids {
+            let item = find_item_by_id_or_prefix(cache, task_id)?;
+            items.push((item.id.clone(), item.content.clone()));
+        }
+        items
+    };
 
     // Prompt for confirmation if multiple tasks
     let items_for_confirm: Vec<(&str, &str)> = resolved_items
         .iter()
-        .map(|(item, _)| {
-            let id_prefix = &item.id[..6.min(item.id.len())];
-            (id_prefix, item.content.as_str())
+        .map(|(id, content)| {
+            let id_prefix = &id[..6.min(id.len())];
+            (id_prefix, content.as_str())
         })
         .collect();
 
@@ -97,50 +94,49 @@ pub async fn execute(ctx: &CommandContext, opts: &DoneOptions, token: &str) -> R
 
     let commands: Vec<SyncCommand> = resolved_items
         .iter()
-        .map(|(item, _)| {
+        .map(|(id, _)| {
             SyncCommand::new(
                 command_type,
-                serde_json::json!({ "id": item.id }),
+                serde_json::json!({ "id": id }),
             )
         })
         .collect();
 
-    // Execute the commands
-    let api_client = TodoistClient::new(token);
-    let request = SyncRequest::with_commands(commands);
-    let response = api_client.sync(request).await?;
+    // Execute the commands via SyncManager
+    // This sends the commands, applies the response to cache, and saves to disk
+    let response = manager.execute_commands(commands).await?;
 
     // Process results
     let mut results: Vec<DoneResult> = Vec::new();
     let mut success_count = 0;
     let mut error_count = 0;
 
-    for (item, _original_id) in &resolved_items {
+    for (id, content) in &resolved_items {
         // Check sync_status for this command
         // Note: We need to match by item ID in the response errors if any
         let has_error = response.errors().iter().any(|(_, err)| {
             // Check if error message contains this item's ID
-            err.error.contains(&item.id)
+            err.error.contains(id)
         });
 
         if has_error {
             let error_msg = response
                 .errors()
                 .iter()
-                .find(|(_, err)| err.error.contains(&item.id))
+                .find(|(_, err)| err.error.contains(id))
                 .map(|(_, err)| format!("{}: {}", err.error_code, err.error));
 
             results.push(DoneResult {
-                id: item.id.clone(),
-                content: item.content.clone(),
+                id: id.clone(),
+                content: content.clone(),
                 success: false,
                 error: error_msg,
             });
             error_count += 1;
         } else {
             results.push(DoneResult {
-                id: item.id.clone(),
-                content: item.content.clone(),
+                id: id.clone(),
+                content: content.clone(),
                 success: true,
                 error: None,
             });
