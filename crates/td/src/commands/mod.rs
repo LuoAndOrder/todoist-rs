@@ -9,6 +9,7 @@ pub mod edit;
 pub mod list;
 pub mod reopen;
 pub mod show;
+pub mod today;
 
 use crate::cli::Cli;
 

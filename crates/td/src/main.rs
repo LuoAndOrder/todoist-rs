@@ -166,6 +166,17 @@ async fn run(cli: &Cli) -> commands::Result<()> {
             commands::delete::execute(&ctx, &opts, &token).await
         }
 
+        Some(Commands::Today {
+            no_overdue,
+            include_upcoming,
+        }) => {
+            let opts = commands::today::TodayOptions {
+                include_overdue: !no_overdue,
+                include_upcoming: *include_upcoming,
+            };
+            commands::today::execute(&ctx, &opts, &token).await
+        }
+
         Some(cmd) => {
             // Other commands not yet implemented
             if cli.json {

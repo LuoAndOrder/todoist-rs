@@ -228,9 +228,9 @@ pub enum Commands {
     /// Show today's agenda
     #[command(alias = "t")]
     Today {
-        /// Include overdue tasks (default: true)
-        #[arg(long, default_value = "true")]
-        include_overdue: bool,
+        /// Exclude overdue tasks (default: include overdue)
+        #[arg(long)]
+        no_overdue: bool,
 
         /// Include tasks due within N days
         #[arg(long)]
