@@ -375,6 +375,235 @@ impl SyncManager {
             !p.is_deleted && (p.name.to_lowercase() == name_lower || p.id == name_or_id)
         })
     }
+
+    /// Resolves a section by name or ID, with auto-sync fallback.
+    ///
+    /// This method first attempts to find the section in the cache. If not found,
+    /// it performs a sync and retries the lookup.
+    ///
+    /// # Arguments
+    ///
+    /// * `name_or_id` - The section name (case-insensitive) or ID to search for
+    /// * `project_id` - Optional project ID to scope the search. If provided, only
+    ///   sections in that project are considered for name matching.
+    ///
+    /// # Returns
+    ///
+    /// A reference to the matching `Section` from the cache.
+    ///
+    /// # Errors
+    ///
+    /// Returns `SyncError::NotFound` if the section cannot be found even after syncing.
+    /// Returns `SyncError::Api` if the sync operation fails.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use todoist_api::client::TodoistClient;
+    /// use todoist_cache::{CacheStore, SyncManager};
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let client = TodoistClient::new("your-api-token");
+    ///     let store = CacheStore::new()?;
+    ///     let mut manager = SyncManager::new(client, store)?;
+    ///
+    ///     // Find by name within a specific project
+    ///     let section = manager.resolve_section("To Do", Some("12345678")).await?;
+    ///     println!("Found section: {} ({})", section.name, section.id);
+    ///
+    ///     // Find by ID (project_id is ignored for ID lookups)
+    ///     let section = manager.resolve_section("87654321", None).await?;
+    ///     println!("Found section: {}", section.name);
+    ///
+    ///     Ok(())
+    /// }
+    /// ```
+    pub async fn resolve_section(
+        &mut self,
+        name_or_id: &str,
+        project_id: Option<&str>,
+    ) -> Result<&todoist_api::sync::Section> {
+        // Try cache first
+        if self.find_section_in_cache(name_or_id, project_id).is_some() {
+            return Ok(self.find_section_in_cache(name_or_id, project_id).unwrap());
+        }
+
+        // Not found - sync and retry
+        self.sync().await?;
+
+        // Try again after sync
+        self.find_section_in_cache(name_or_id, project_id)
+            .ok_or_else(|| SyncError::NotFound {
+                resource_type: "section",
+                identifier: name_or_id.to_string(),
+            })
+    }
+
+    /// Helper to find a section in the cache by name or ID.
+    ///
+    /// Searches for non-deleted sections where either:
+    /// - The ID matches exactly (ignores project_id filter)
+    /// - The name matches (case-insensitive) and optionally within the specified project
+    fn find_section_in_cache(
+        &self,
+        name_or_id: &str,
+        project_id: Option<&str>,
+    ) -> Option<&todoist_api::sync::Section> {
+        let name_lower = name_or_id.to_lowercase();
+        self.cache.sections.iter().find(|s| {
+            if s.is_deleted {
+                return false;
+            }
+            // ID match takes precedence (ignores project filter)
+            if s.id == name_or_id {
+                return true;
+            }
+            // Name match with optional project filter
+            if s.name.to_lowercase() == name_lower {
+                return project_id.is_none_or(|pid| s.project_id == pid);
+            }
+            false
+        })
+    }
+
+    /// Resolves a label by name or ID, with auto-sync fallback.
+    ///
+    /// This method first attempts to find the label in the cache. If not found,
+    /// it performs a sync and retries the lookup.
+    ///
+    /// # Arguments
+    ///
+    /// * `name_or_id` - The label name (case-insensitive) or ID to search for
+    ///
+    /// # Returns
+    ///
+    /// A reference to the matching `Label` from the cache.
+    ///
+    /// # Errors
+    ///
+    /// Returns `SyncError::NotFound` if the label cannot be found even after syncing.
+    /// Returns `SyncError::Api` if the sync operation fails.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use todoist_api::client::TodoistClient;
+    /// use todoist_cache::{CacheStore, SyncManager};
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let client = TodoistClient::new("your-api-token");
+    ///     let store = CacheStore::new()?;
+    ///     let mut manager = SyncManager::new(client, store)?;
+    ///
+    ///     // Find by name (case-insensitive)
+    ///     let label = manager.resolve_label("urgent").await?;
+    ///     println!("Found label: {} ({})", label.name, label.id);
+    ///
+    ///     // Find by ID
+    ///     let label = manager.resolve_label("12345678").await?;
+    ///     println!("Found label: {}", label.name);
+    ///
+    ///     Ok(())
+    /// }
+    /// ```
+    pub async fn resolve_label(
+        &mut self,
+        name_or_id: &str,
+    ) -> Result<&todoist_api::sync::Label> {
+        // Try cache first
+        if self.find_label_in_cache(name_or_id).is_some() {
+            return Ok(self.find_label_in_cache(name_or_id).unwrap());
+        }
+
+        // Not found - sync and retry
+        self.sync().await?;
+
+        // Try again after sync
+        self.find_label_in_cache(name_or_id).ok_or_else(|| SyncError::NotFound {
+            resource_type: "label",
+            identifier: name_or_id.to_string(),
+        })
+    }
+
+    /// Helper to find a label in the cache by name or ID.
+    ///
+    /// Searches for non-deleted labels where either:
+    /// - The name matches (case-insensitive)
+    /// - The ID matches exactly
+    fn find_label_in_cache(&self, name_or_id: &str) -> Option<&todoist_api::sync::Label> {
+        let name_lower = name_or_id.to_lowercase();
+        self.cache.labels.iter().find(|l| {
+            !l.is_deleted && (l.name.to_lowercase() == name_lower || l.id == name_or_id)
+        })
+    }
+
+    /// Resolves an item (task) by ID, with auto-sync fallback.
+    ///
+    /// This method first attempts to find the item in the cache. If not found,
+    /// it performs a sync and retries the lookup.
+    ///
+    /// Note: Unlike projects, sections, and labels, items can only be looked up
+    /// by ID since task content is not guaranteed to be unique.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The item ID to search for
+    ///
+    /// # Returns
+    ///
+    /// A reference to the matching `Item` from the cache.
+    ///
+    /// # Errors
+    ///
+    /// Returns `SyncError::NotFound` if the item cannot be found even after syncing.
+    /// Returns `SyncError::Api` if the sync operation fails.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use todoist_api::client::TodoistClient;
+    /// use todoist_cache::{CacheStore, SyncManager};
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let client = TodoistClient::new("your-api-token");
+    ///     let store = CacheStore::new()?;
+    ///     let mut manager = SyncManager::new(client, store)?;
+    ///
+    ///     // Find by ID
+    ///     let item = manager.resolve_item("12345678").await?;
+    ///     println!("Found item: {} ({})", item.content, item.id);
+    ///
+    ///     Ok(())
+    /// }
+    /// ```
+    pub async fn resolve_item(&mut self, id: &str) -> Result<&todoist_api::sync::Item> {
+        // Try cache first
+        if self.find_item_in_cache(id).is_some() {
+            return Ok(self.find_item_in_cache(id).unwrap());
+        }
+
+        // Not found - sync and retry
+        self.sync().await?;
+
+        // Try again after sync
+        self.find_item_in_cache(id).ok_or_else(|| SyncError::NotFound {
+            resource_type: "item",
+            identifier: id.to_string(),
+        })
+    }
+
+    /// Helper to find an item in the cache by ID.
+    ///
+    /// Searches for non-deleted items where the ID matches exactly.
+    fn find_item_in_cache(&self, id: &str) -> Option<&todoist_api::sync::Item> {
+        self.cache
+            .items
+            .iter()
+            .find(|i| !i.is_deleted && i.id == id)
+    }
 }
 
 #[cfg(test)]
