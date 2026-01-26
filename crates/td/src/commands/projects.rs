@@ -3,7 +3,6 @@
 //! Lists and manages projects via the Sync API.
 //! Uses SyncManager::execute_commands() to automatically update the cache.
 
-use chrono::Utc;
 use todoist_api::client::TodoistClient;
 use todoist_api::sync::{Project, SyncCommand};
 use todoist_cache::{Cache, CacheStore, SyncManager};
@@ -39,9 +38,8 @@ pub async fn execute(ctx: &CommandContext, opts: &ProjectsListOptions, token: &s
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
-    // Sync if needed
-    let now = Utc::now();
-    if manager.needs_sync(now) {
+    // Only sync if explicitly requested with --sync flag
+    if ctx.sync_first {
         if ctx.verbose {
             eprintln!("Syncing with Todoist...");
         }
@@ -316,9 +314,8 @@ pub async fn execute_show(ctx: &CommandContext, opts: &ProjectsShowOptions, toke
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
-    // Sync if needed
-    let now = Utc::now();
-    if manager.needs_sync(now) {
+    // Only sync if explicitly requested with --sync flag
+    if ctx.sync_first {
         if ctx.verbose {
             eprintln!("Syncing with Todoist...");
         }
