@@ -10,6 +10,10 @@ description = "Todoist API client library"
 name = "todoist_api"
 path = "src/lib.rs"
 
+[features]
+default = []
+e2e = []
+
 [dependencies]
 reqwest.workspace = true
 tokio = { workspace = true, features = ["time"] }

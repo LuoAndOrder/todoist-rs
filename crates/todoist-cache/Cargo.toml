@@ -10,6 +10,10 @@ description = "Local cache for Todoist data"
 name = "todoist_cache"
 path = "src/lib.rs"
 
+[features]
+default = []
+e2e = []
+
 [dependencies]
 todoist-api.workspace = true
 serde.workspace = true

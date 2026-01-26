@@ -4,7 +4,9 @@
 //! They require a valid Todoist API token set in .env.local as:
 //! TODOIST_TEST_API_TOKEN=<token>
 //!
-//! Run with: cargo test --package todoist-cache --test cache_e2e
+//! Run with: cargo test --package todoist-cache --features e2e --test cache_e2e
+
+#![cfg(feature = "e2e")]
 
 use std::fs;
 use tempfile::tempdir;

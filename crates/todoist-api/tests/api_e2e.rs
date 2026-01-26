@@ -2,6 +2,10 @@
 //!
 //! These tests require a valid Todoist API token set in .env.local as:
 //! TODOIST_TEST_API_TOKEN=<token>
+//!
+//! Run with: cargo test --package todoist-api --features e2e --test api_e2e
+
+#![cfg(feature = "e2e")]
 
 use std::fs;
 use todoist_api::client::TodoistClient;
