@@ -1,7 +1,7 @@
-//! Filter expression parser for Todoist filter syntax.
+//! Filter expression parser and evaluator for Todoist filter syntax.
 //!
-//! This module provides a parser for Todoist's filter syntax, allowing
-//! local filtering of cached items without server round-trips.
+//! This module provides a parser and evaluator for Todoist's filter syntax,
+//! allowing local filtering of cached items without server round-trips.
 //!
 //! # Supported Syntax
 //!
@@ -11,17 +11,20 @@
 //! - `overdue` - Items past their due date
 //! - `no date` - Items without a due date
 //!
-//! ## Priority (coming soon)
+//! ## Priority
 //! - `p1`, `p2`, `p3`, `p4` - Filter by priority level
 //!
-//! ## Labels (coming soon)
+//! ## Labels
 //! - `@label` - Items with a specific label
 //!
-//! ## Projects (coming soon)
+//! ## Projects
 //! - `#project` - Items in a specific project
 //! - `##project` - Items in a project or its subprojects
 //!
-//! ## Boolean Operators (coming soon)
+//! ## Sections
+//! - `/section` - Items in a specific section
+//!
+//! ## Boolean Operators
 //! - `&` - AND
 //! - `|` - OR
 //! - `!` - NOT
@@ -30,22 +33,32 @@
 //! # Example
 //!
 //! ```
-//! use todoist_cache::filter::{FilterParser, Filter};
+//! use todoist_cache::filter::{FilterParser, Filter, FilterEvaluator, FilterContext};
 //!
+//! // Parse a filter expression
 //! let filter = FilterParser::parse("today").unwrap();
 //! assert!(matches!(filter, Filter::Today));
 //!
-//! let filter = FilterParser::parse("no date").unwrap();
-//! assert!(matches!(filter, Filter::NoDate));
+//! // Create evaluation context
+//! let context = FilterContext::new(&[], &[], &[]);
+//!
+//! // Create an evaluator
+//! let evaluator = FilterEvaluator::new(&filter, &context);
+//!
+//! // Filter items (empty example)
+//! let items: Vec<todoist_api::sync::Item> = vec![];
+//! let results = evaluator.filter_items(&items);
 //! ```
 
 mod ast;
 mod error;
+mod evaluator;
 mod lexer;
 mod parser;
 
 pub use ast::Filter;
 pub use error::{FilterError, FilterResult};
+pub use evaluator::{FilterContext, FilterEvaluator};
 pub use parser::FilterParser;
 
 #[cfg(test)]
