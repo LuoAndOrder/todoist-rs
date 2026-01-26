@@ -1,10 +1,11 @@
 //! Comments command implementation.
 //!
 //! Lists and manages comments (notes) via the Sync API.
+//! Uses SyncManager::execute_commands() to automatically update the cache.
 
 use chrono::Utc;
 use todoist_api::client::TodoistClient;
-use todoist_api::sync::{Note, ProjectNote, SyncCommand, SyncRequest};
+use todoist_api::sync::{Note, ProjectNote, SyncCommand};
 use todoist_cache::{Cache, CacheStore, SyncManager};
 
 use super::{CommandContext, CommandError, Result};
@@ -287,34 +288,33 @@ pub async fn execute_add(
         ));
     }
 
-    // Initialize sync manager to resolve IDs
+    // Initialize sync manager (loads cache from disk)
     let client = TodoistClient::new(token);
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
-    // Sync to get current state (for task/project lookup)
-    manager.sync().await?;
-    let cache = manager.cache();
-
-    // Determine if this is a task comment or project comment
-    let (is_task_comment, parent_id, parent_name) = if let Some(ref task) = opts.task {
-        let task_id = resolve_task_id(cache, task)?;
-        let task_name = cache
-            .items
-            .iter()
-            .find(|i| i.id == task_id)
-            .map(|i| i.content.clone());
-        (true, task_id, task_name)
-    } else if let Some(ref project) = opts.project {
-        let project_id = resolve_project_id(cache, project)?;
-        let project_name = cache
-            .projects
-            .iter()
-            .find(|p| p.id == project_id)
-            .map(|p| p.name.clone());
-        (false, project_id, project_name)
-    } else {
-        unreachable!("Already validated that one of task or project is provided");
+    // Resolve task/project ID and get parent name before mutation
+    let (is_task_comment, parent_id, parent_name) = {
+        let cache = manager.cache();
+        if let Some(ref task) = opts.task {
+            let task_id = resolve_task_id(cache, task)?;
+            let task_name = cache
+                .items
+                .iter()
+                .find(|i| i.id == task_id)
+                .map(|i| i.content.clone());
+            (true, task_id, task_name)
+        } else if let Some(ref project) = opts.project {
+            let project_id = resolve_project_id(cache, project)?;
+            let project_name = cache
+                .projects
+                .iter()
+                .find(|p| p.id == project_id)
+                .map(|p| p.name.clone());
+            (false, project_id, project_name)
+        } else {
+            unreachable!("Already validated that one of task or project is provided");
+        }
     };
 
     // Build the note_add command arguments
@@ -335,10 +335,9 @@ pub async fn execute_add(
     // Create the command
     let command = SyncCommand::with_temp_id("note_add", &temp_id, args);
 
-    // Execute the command
-    let api_client = TodoistClient::new(token);
-    let request = SyncRequest::with_commands(vec![command]);
-    let response = api_client.sync(request).await?;
+    // Execute the command via SyncManager
+    // This sends the command, applies the response to cache, and saves to disk
+    let response = manager.execute_commands(vec![command]).await?;
 
     // Check for errors
     if response.has_errors() {
@@ -445,18 +444,16 @@ pub async fn execute_edit(
     opts: &CommentsEditOptions,
     token: &str,
 ) -> Result<()> {
-    // Initialize sync manager to resolve comment ID
+    // Initialize sync manager (loads cache from disk)
     let client = TodoistClient::new(token);
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
-    // Sync to get current state (for comment lookup)
-    manager.sync().await?;
-    let cache = manager.cache();
-
-    // Find the comment by ID (check both task notes and project notes)
-    let (comment_id, is_task_comment, parent_id, parent_name) =
-        resolve_comment(cache, &opts.comment_id)?;
+    // Find the comment by ID and extract owned data before mutation
+    let (comment_id, is_task_comment, parent_id, parent_name) = {
+        let cache = manager.cache();
+        resolve_comment(cache, &opts.comment_id)?
+    };
 
     // Build the note_update command
     let args = serde_json::json!({
@@ -466,10 +463,9 @@ pub async fn execute_edit(
 
     let command = SyncCommand::new("note_update", args);
 
-    // Execute the command
-    let api_client = TodoistClient::new(token);
-    let request = SyncRequest::with_commands(vec![command]);
-    let response = api_client.sync(request).await?;
+    // Execute the command via SyncManager
+    // This sends the command, applies the response to cache, and saves to disk
+    let response = manager.execute_commands(vec![command]).await?;
 
     // Check for errors
     if response.has_errors() {
@@ -566,25 +562,22 @@ pub async fn execute_delete(
     opts: &CommentsDeleteOptions,
     token: &str,
 ) -> Result<()> {
-    // Initialize sync manager to resolve comment ID
+    // Initialize sync manager (loads cache from disk)
     let client = TodoistClient::new(token);
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
-    // Sync to get current state (for comment lookup)
-    manager.sync().await?;
-    let cache = manager.cache();
-
-    // Find the comment by ID (check both task notes and project notes)
-    let (comment_id, is_task_comment, parent_id, parent_name) =
-        resolve_comment(cache, &opts.comment_id)?;
-
-    // Get comment content for confirmation message
-    let comment_content = get_comment_content(cache, &comment_id);
-    let content_preview = if comment_content.len() > 40 {
-        format!("{}...", &comment_content[..37])
-    } else {
-        comment_content.clone()
+    // Find the comment by ID and extract owned data before mutation
+    let (comment_id, is_task_comment, parent_id, parent_name, content_preview) = {
+        let cache = manager.cache();
+        let (c_id, is_task, p_id, p_name) = resolve_comment(cache, &opts.comment_id)?;
+        let comment_content = get_comment_content(cache, &c_id);
+        let preview = if comment_content.len() > 40 {
+            format!("{}...", &comment_content[..37])
+        } else {
+            comment_content
+        };
+        (c_id, is_task, p_id, p_name, preview)
     };
 
     // Confirm if not forced
@@ -611,10 +604,9 @@ pub async fn execute_delete(
 
     let command = SyncCommand::new("note_delete", args);
 
-    // Execute the command
-    let api_client = TodoistClient::new(token);
-    let request = SyncRequest::with_commands(vec![command]);
-    let response = api_client.sync(request).await?;
+    // Execute the command via SyncManager
+    // This sends the command, applies the response to cache, and saves to disk
+    let response = manager.execute_commands(vec![command]).await?;
 
     // Check for errors
     if response.has_errors() {
