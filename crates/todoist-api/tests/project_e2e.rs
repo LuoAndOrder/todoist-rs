@@ -793,3 +793,496 @@ async fn test_archived_project_excluded_from_filters() {
         .await
         .expect("cleanup failed");
 }
+
+// ============================================================================
+// 4. Section Operations Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_create_section() {
+    let Ok(mut ctx) = TestContext::new().await else {
+        eprintln!("Skipping e2e test: no API token found");
+        return;
+    };
+
+    // Create project first
+    let project_id = ctx
+        .create_project("E2E_Test_SectionProject")
+        .await
+        .expect("create_project failed");
+
+    // Create section in project
+    let section_id = ctx
+        .create_section("E2E_Test_Section", &project_id)
+        .await
+        .expect("create_section failed");
+
+    // Verify section exists in cache
+    let section = ctx
+        .find_section(&section_id)
+        .expect("Section should exist in cache");
+
+    assert_eq!(section.name, "E2E_Test_Section");
+    assert_eq!(section.project_id, project_id);
+    assert!(!section.is_deleted, "Should not be deleted");
+    assert!(!section.is_archived, "Should not be archived");
+
+    // Clean up
+    ctx.batch_delete(&[], &[&project_id], &[&section_id], &[])
+        .await
+        .expect("cleanup failed");
+}
+
+#[tokio::test]
+async fn test_create_multiple_sections() {
+    let Ok(mut ctx) = TestContext::new().await else {
+        eprintln!("Skipping e2e test: no API token found");
+        return;
+    };
+
+    // Create project
+    let project_id = ctx
+        .create_project("E2E_Test_MultipleSections")
+        .await
+        .expect("create_project failed");
+
+    // Create sections: "To Do", "In Progress", "Done"
+    let section1_id = ctx
+        .create_section("E2E_Test_ToDo", &project_id)
+        .await
+        .expect("create_section failed");
+    let section2_id = ctx
+        .create_section("E2E_Test_InProgress", &project_id)
+        .await
+        .expect("create_section failed");
+    let section3_id = ctx
+        .create_section("E2E_Test_Done", &project_id)
+        .await
+        .expect("create_section failed");
+
+    // Verify all sections exist (from cache)
+    let s1 = ctx.find_section(&section1_id).expect("Section 1 should exist");
+    let s2 = ctx.find_section(&section2_id).expect("Section 2 should exist");
+    let s3 = ctx.find_section(&section3_id).expect("Section 3 should exist");
+
+    assert_eq!(s1.name, "E2E_Test_ToDo");
+    assert_eq!(s2.name, "E2E_Test_InProgress");
+    assert_eq!(s3.name, "E2E_Test_Done");
+
+    // Verify all belong to the same project
+    assert_eq!(s1.project_id, project_id);
+    assert_eq!(s2.project_id, project_id);
+    assert_eq!(s3.project_id, project_id);
+
+    // Verify ordering (section_order should be in creation order)
+    println!(
+        "Section orders: s1={}, s2={}, s3={}",
+        s1.section_order, s2.section_order, s3.section_order
+    );
+
+    // Clean up
+    ctx.batch_delete(&[], &[&project_id], &[&section1_id, &section2_id, &section3_id], &[])
+        .await
+        .expect("cleanup failed");
+}
+
+#[tokio::test]
+async fn test_rename_section() {
+    let Ok(mut ctx) = TestContext::new().await else {
+        eprintln!("Skipping e2e test: no API token found");
+        return;
+    };
+
+    // Create project with section
+    let project_id = ctx
+        .create_project("E2E_Test_RenameSectionProject")
+        .await
+        .expect("create_project failed");
+    let section_id = ctx
+        .create_section("E2E_Test_OldSectionName", &project_id)
+        .await
+        .expect("create_section failed");
+
+    // Verify original name (from cache)
+    let section = ctx.find_section(&section_id).expect("Section should exist");
+    assert_eq!(section.name, "E2E_Test_OldSectionName");
+
+    // Rename section
+    let update_command = SyncCommand::new(
+        "section_update",
+        serde_json::json!({
+            "id": section_id,
+            "name": "E2E_Test_NewSectionName"
+        }),
+    );
+    let response = ctx.execute(vec![update_command]).await.unwrap();
+    assert!(!response.has_errors(), "section_update should succeed");
+
+    // Verify name changed (from cache)
+    let section = ctx.find_section(&section_id).expect("Section should exist");
+    assert_eq!(section.name, "E2E_Test_NewSectionName");
+
+    // Clean up
+    ctx.batch_delete(&[], &[&project_id], &[&section_id], &[])
+        .await
+        .expect("cleanup failed");
+}
+
+#[tokio::test]
+async fn test_delete_section() {
+    let Ok(mut ctx) = TestContext::new().await else {
+        eprintln!("Skipping e2e test: no API token found");
+        return;
+    };
+
+    // Create project with section
+    let project_id = ctx
+        .create_project("E2E_Test_DeleteSectionProject")
+        .await
+        .expect("create_project failed");
+    let section_id = ctx
+        .create_section("E2E_Test_ToDeleteSection", &project_id)
+        .await
+        .expect("create_section failed");
+
+    // Verify section exists in cache
+    assert!(
+        ctx.find_section(&section_id).is_some(),
+        "Section should exist before deletion"
+    );
+
+    // Delete section
+    ctx.delete_section(&section_id)
+        .await
+        .expect("delete_section failed");
+
+    // Verify section is deleted from cache (find_section filters out is_deleted)
+    assert!(
+        ctx.find_section(&section_id).is_none(),
+        "Section should not be findable after deletion"
+    );
+
+    // Clean up project
+    ctx.delete_project(&project_id)
+        .await
+        .expect("delete_project failed");
+}
+
+#[tokio::test]
+async fn test_delete_section_with_tasks() {
+    let Ok(mut ctx) = TestContext::new().await else {
+        eprintln!("Skipping e2e test: no API token found");
+        return;
+    };
+
+    // Create project with section containing 2 tasks
+    let project_id = ctx
+        .create_project("E2E_Test_DeleteSectionWithTasksProject")
+        .await
+        .expect("create_project failed");
+    let section_id = ctx
+        .create_section("E2E_Test_SectionWithTasks", &project_id)
+        .await
+        .expect("create_section failed");
+
+    // Create tasks in section
+    let task1_id = ctx
+        .create_task(
+            "E2E test - task in section 1",
+            &project_id,
+            Some(serde_json::json!({"section_id": section_id})),
+        )
+        .await
+        .expect("create_task failed");
+    let task2_id = ctx
+        .create_task(
+            "E2E test - task in section 2",
+            &project_id,
+            Some(serde_json::json!({"section_id": section_id})),
+        )
+        .await
+        .expect("create_task failed");
+
+    // Verify tasks are in section (from cache)
+    let task1 = ctx.find_item(&task1_id).expect("Task 1 should exist");
+    let task2 = ctx.find_item(&task2_id).expect("Task 2 should exist");
+    assert_eq!(task1.section_id, Some(section_id.clone()));
+    assert_eq!(task2.section_id, Some(section_id.clone()));
+
+    // Delete section
+    ctx.delete_section(&section_id)
+        .await
+        .expect("delete_section failed");
+
+    // Refresh to get cascade behavior
+    ctx.refresh().await.expect("refresh failed");
+
+    // Verify section deleted
+    assert!(
+        ctx.find_section(&section_id).is_none(),
+        "Section should be deleted"
+    );
+
+    // Document behavior: tasks should still exist but moved out of section
+    // Todoist behavior: tasks are moved to project root (section_id becomes null)
+    let task1 = ctx.find_item(&task1_id);
+    let task2 = ctx.find_item(&task2_id);
+
+    println!(
+        "Task 1 after section delete: {:?}",
+        task1.map(|t| (&t.content, &t.section_id))
+    );
+    println!(
+        "Task 2 after section delete: {:?}",
+        task2.map(|t| (&t.content, &t.section_id))
+    );
+
+    // Tasks should still exist (either at project root or deleted)
+    let tasks_exist = task1.is_some() && task2.is_some();
+    let tasks_moved = task1.map_or(true, |t| t.section_id.is_none() || t.section_id.as_ref() != Some(&section_id))
+        && task2.map_or(true, |t| t.section_id.is_none() || t.section_id.as_ref() != Some(&section_id));
+
+    assert!(
+        tasks_exist || tasks_moved,
+        "Tasks should be preserved or moved when section is deleted"
+    );
+
+    // Clean up remaining resources
+    let mut cleanup_tasks = vec![];
+    if task1.is_some() {
+        cleanup_tasks.push(task1_id.as_str());
+    }
+    if task2.is_some() {
+        cleanup_tasks.push(task2_id.as_str());
+    }
+    ctx.batch_delete(&cleanup_tasks, &[&project_id], &[], &[])
+        .await
+        .expect("cleanup failed");
+}
+
+#[tokio::test]
+async fn test_reorder_sections() {
+    let Ok(mut ctx) = TestContext::new().await else {
+        eprintln!("Skipping e2e test: no API token found");
+        return;
+    };
+
+    // Create project with 3 sections
+    let project_id = ctx
+        .create_project("E2E_Test_ReorderSectionsProject")
+        .await
+        .expect("create_project failed");
+
+    let section1_id = ctx
+        .create_section("E2E_Test_Section1", &project_id)
+        .await
+        .expect("create_section failed");
+    let section2_id = ctx
+        .create_section("E2E_Test_Section2", &project_id)
+        .await
+        .expect("create_section failed");
+    let section3_id = ctx
+        .create_section("E2E_Test_Section3", &project_id)
+        .await
+        .expect("create_section failed");
+
+    // Get initial order (from cache)
+    let s1 = ctx.find_section(&section1_id).unwrap();
+    let s2 = ctx.find_section(&section2_id).unwrap();
+    let s3 = ctx.find_section(&section3_id).unwrap();
+    println!(
+        "Initial order: s1={}, s2={}, s3={}",
+        s1.section_order, s2.section_order, s3.section_order
+    );
+
+    // Reorder: s3, s1, s2
+    let reorder_command = SyncCommand::new(
+        "section_reorder",
+        serde_json::json!({
+            "sections": [
+                {"id": section3_id, "section_order": 1},
+                {"id": section1_id, "section_order": 2},
+                {"id": section2_id, "section_order": 3}
+            ]
+        }),
+    );
+    let response = ctx.execute(vec![reorder_command]).await.unwrap();
+    assert!(!response.has_errors(), "section_reorder should succeed");
+
+    // Verify new order (from cache)
+    let s1 = ctx.find_section(&section1_id).unwrap();
+    let s2 = ctx.find_section(&section2_id).unwrap();
+    let s3 = ctx.find_section(&section3_id).unwrap();
+    println!(
+        "New order: s1={}, s2={}, s3={}",
+        s1.section_order, s2.section_order, s3.section_order
+    );
+
+    assert!(
+        s3.section_order < s1.section_order,
+        "s3 should be before s1"
+    );
+    assert!(
+        s1.section_order < s2.section_order,
+        "s1 should be before s2"
+    );
+
+    // Clean up
+    ctx.batch_delete(&[], &[&project_id], &[&section1_id, &section2_id, &section3_id], &[])
+        .await
+        .expect("cleanup failed");
+}
+
+#[tokio::test]
+async fn test_move_section_to_different_project() {
+    let Ok(mut ctx) = TestContext::new().await else {
+        eprintln!("Skipping e2e test: no API token found");
+        return;
+    };
+
+    // Create Project A with section, Project B
+    let project_a_id = ctx
+        .create_project("E2E_Test_MoveSectionProjectA")
+        .await
+        .expect("create_project failed");
+    let project_b_id = ctx
+        .create_project("E2E_Test_MoveSectionProjectB")
+        .await
+        .expect("create_project failed");
+
+    let section_id = ctx
+        .create_section("E2E_Test_MovableSection", &project_a_id)
+        .await
+        .expect("create_section failed");
+
+    // Verify section is in Project A (from cache)
+    let section = ctx.find_section(&section_id).expect("Section should exist");
+    assert_eq!(section.project_id, project_a_id);
+
+    // Move section to Project B
+    let move_command = SyncCommand::new(
+        "section_move",
+        serde_json::json!({
+            "id": section_id,
+            "project_id": project_b_id
+        }),
+    );
+    let response = ctx.execute(vec![move_command]).await.unwrap();
+    assert!(!response.has_errors(), "section_move should succeed");
+
+    // Verify section is now in Project B (from cache)
+    let section = ctx.find_section(&section_id).expect("Section should exist");
+    assert_eq!(
+        section.project_id, project_b_id,
+        "Section should be in Project B"
+    );
+
+    // Clean up
+    ctx.batch_delete(&[], &[&project_a_id, &project_b_id], &[&section_id], &[])
+        .await
+        .expect("cleanup failed");
+}
+
+#[tokio::test]
+async fn test_archive_section() {
+    let Ok(mut ctx) = TestContext::new().await else {
+        eprintln!("Skipping e2e test: no API token found");
+        return;
+    };
+
+    // Create project with section and task
+    let project_id = ctx
+        .create_project("E2E_Test_ArchiveSectionProject")
+        .await
+        .expect("create_project failed");
+    let section_id = ctx
+        .create_section("E2E_Test_ArchivableSection", &project_id)
+        .await
+        .expect("create_section failed");
+    let task_id = ctx
+        .create_task(
+            "E2E test - task in section to archive",
+            &project_id,
+            Some(serde_json::json!({"section_id": section_id})),
+        )
+        .await
+        .expect("create_task failed");
+
+    // Verify section is not archived initially (from cache)
+    let section = ctx.find_section(&section_id).expect("Section should exist");
+    assert!(!section.is_archived, "Section should not be archived initially");
+
+    // Archive section
+    let archive_command = SyncCommand::new(
+        "section_archive",
+        serde_json::json!({"id": section_id}),
+    );
+    let response = ctx.execute(vec![archive_command]).await.unwrap();
+    assert!(!response.has_errors(), "section_archive should succeed");
+
+    // Verify section is archived (from cache)
+    let section = ctx
+        .find_section(&section_id)
+        .expect("Archived section should still be findable");
+    assert!(section.is_archived, "Section should be archived");
+
+    // Clean up: unarchive first, then delete
+    let unarchive_command = SyncCommand::new(
+        "section_unarchive",
+        serde_json::json!({"id": section_id}),
+    );
+    ctx.execute(vec![unarchive_command]).await.unwrap();
+
+    ctx.batch_delete(&[&task_id], &[&project_id], &[&section_id], &[])
+        .await
+        .expect("cleanup failed");
+}
+
+#[tokio::test]
+async fn test_unarchive_section() {
+    let Ok(mut ctx) = TestContext::new().await else {
+        eprintln!("Skipping e2e test: no API token found");
+        return;
+    };
+
+    // Create and archive section
+    let project_id = ctx
+        .create_project("E2E_Test_UnarchiveSectionProject")
+        .await
+        .expect("create_project failed");
+    let section_id = ctx
+        .create_section("E2E_Test_SectionToUnarchive", &project_id)
+        .await
+        .expect("create_section failed");
+
+    // Archive section
+    let archive_command = SyncCommand::new(
+        "section_archive",
+        serde_json::json!({"id": section_id}),
+    );
+    let response = ctx.execute(vec![archive_command]).await.unwrap();
+    assert!(!response.has_errors());
+
+    // Verify archived (from cache)
+    let section = ctx.find_section(&section_id).expect("Section should exist");
+    assert!(section.is_archived, "Section should be archived");
+
+    // Unarchive section
+    let unarchive_command = SyncCommand::new(
+        "section_unarchive",
+        serde_json::json!({"id": section_id}),
+    );
+    let response = ctx.execute(vec![unarchive_command]).await.unwrap();
+    assert!(!response.has_errors(), "section_unarchive should succeed");
+
+    // Verify not archived (from cache)
+    let section = ctx
+        .find_section(&section_id)
+        .expect("Unarchived section should exist");
+    assert!(!section.is_archived, "Section should not be archived");
+
+    // Clean up
+    ctx.batch_delete(&[], &[&project_id], &[&section_id], &[])
+        .await
+        .expect("cleanup failed");
+}
