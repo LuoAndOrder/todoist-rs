@@ -68,6 +68,83 @@ fn test_parse_no_date_with_extra_whitespace() {
     assert_eq!(FilterParser::parse("no\tdate").unwrap(), Filter::NoDate);
 }
 
+// ==================== Specific Date Tests ====================
+
+#[test]
+fn test_parse_specific_date_short_month() {
+    let filter = FilterParser::parse("Jan 15").unwrap();
+    assert_eq!(filter, Filter::SpecificDate { month: 1, day: 15 });
+
+    let filter = FilterParser::parse("Dec 25").unwrap();
+    assert_eq!(filter, Filter::SpecificDate { month: 12, day: 25 });
+}
+
+#[test]
+fn test_parse_specific_date_full_month() {
+    let filter = FilterParser::parse("January 15").unwrap();
+    assert_eq!(filter, Filter::SpecificDate { month: 1, day: 15 });
+
+    let filter = FilterParser::parse("December 25").unwrap();
+    assert_eq!(filter, Filter::SpecificDate { month: 12, day: 25 });
+}
+
+#[test]
+fn test_parse_specific_date_case_insensitive() {
+    assert_eq!(
+        FilterParser::parse("JAN 15").unwrap(),
+        Filter::SpecificDate { month: 1, day: 15 }
+    );
+    assert_eq!(
+        FilterParser::parse("JANUARY 15").unwrap(),
+        Filter::SpecificDate { month: 1, day: 15 }
+    );
+    assert_eq!(
+        FilterParser::parse("jan 15").unwrap(),
+        Filter::SpecificDate { month: 1, day: 15 }
+    );
+}
+
+#[test]
+fn test_parse_specific_date_all_months() {
+    assert_eq!(FilterParser::parse("Jan 1").unwrap(), Filter::SpecificDate { month: 1, day: 1 });
+    assert_eq!(FilterParser::parse("Feb 1").unwrap(), Filter::SpecificDate { month: 2, day: 1 });
+    assert_eq!(FilterParser::parse("Mar 1").unwrap(), Filter::SpecificDate { month: 3, day: 1 });
+    assert_eq!(FilterParser::parse("Apr 1").unwrap(), Filter::SpecificDate { month: 4, day: 1 });
+    assert_eq!(FilterParser::parse("May 1").unwrap(), Filter::SpecificDate { month: 5, day: 1 });
+    assert_eq!(FilterParser::parse("Jun 1").unwrap(), Filter::SpecificDate { month: 6, day: 1 });
+    assert_eq!(FilterParser::parse("Jul 1").unwrap(), Filter::SpecificDate { month: 7, day: 1 });
+    assert_eq!(FilterParser::parse("Aug 1").unwrap(), Filter::SpecificDate { month: 8, day: 1 });
+    assert_eq!(FilterParser::parse("Sep 1").unwrap(), Filter::SpecificDate { month: 9, day: 1 });
+    assert_eq!(FilterParser::parse("Sept 1").unwrap(), Filter::SpecificDate { month: 9, day: 1 });
+    assert_eq!(FilterParser::parse("Oct 1").unwrap(), Filter::SpecificDate { month: 10, day: 1 });
+    assert_eq!(FilterParser::parse("Nov 1").unwrap(), Filter::SpecificDate { month: 11, day: 1 });
+    assert_eq!(FilterParser::parse("Dec 1").unwrap(), Filter::SpecificDate { month: 12, day: 1 });
+}
+
+#[test]
+fn test_parse_specific_date_with_operators() {
+    let filter = FilterParser::parse("Jan 15 & p1").unwrap();
+    assert_eq!(
+        filter,
+        Filter::and(Filter::SpecificDate { month: 1, day: 15 }, Filter::Priority1)
+    );
+}
+
+#[test]
+fn test_parse_specific_date_in_complex_expression() {
+    let filter = FilterParser::parse("(Jan 15 | Dec 25) & @holiday").unwrap();
+    assert_eq!(
+        filter,
+        Filter::and(
+            Filter::or(
+                Filter::SpecificDate { month: 1, day: 15 },
+                Filter::SpecificDate { month: 12, day: 25 }
+            ),
+            Filter::Label("holiday".to_string())
+        )
+    );
+}
+
 // ==================== Priority Tests ====================
 
 #[test]

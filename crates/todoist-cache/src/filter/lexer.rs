@@ -61,6 +61,10 @@ pub enum FilterToken {
     /// The `7 days` keyword - tasks due within the next 7 days.
     Next7Days,
 
+    /// A specific date (e.g., "Jan 15", "January 15", "Dec 25").
+    /// Stores month (1-12) and day (1-31).
+    SpecificDate { month: u32, day: u32 },
+
     // ==================== Priority ====================
     /// Priority level (1-4).
     Priority(u8),
@@ -352,6 +356,25 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    /// Tries to parse a month name (short or full form) and returns the month number (1-12).
+    fn parse_month_name(name: &str) -> Option<u32> {
+        match name {
+            "jan" | "january" => Some(1),
+            "feb" | "february" => Some(2),
+            "mar" | "march" => Some(3),
+            "apr" | "april" => Some(4),
+            "may" => Some(5),
+            "jun" | "june" => Some(6),
+            "jul" | "july" => Some(7),
+            "aug" | "august" => Some(8),
+            "sep" | "sept" | "september" => Some(9),
+            "oct" | "october" => Some(10),
+            "nov" | "november" => Some(11),
+            "dec" | "december" => Some(12),
+            _ => None,
+        }
+    }
+
     /// Tries to match a keyword, returns None if not recognized.
     fn try_keyword(&mut self, lower: &str, position: usize) -> Option<PositionedToken> {
         match lower {
@@ -384,7 +407,26 @@ impl<'a> Lexer<'a> {
                 // Just "no" by itself is not valid, return None
                 None
             }
-            _ => None,
+            _ => {
+                // Check if it's a month name followed by a day number
+                if let Some(month) = Self::parse_month_name(lower) {
+                    self.skip_whitespace();
+                    if let Some(&c) = self.peek() {
+                        if c.is_ascii_digit() {
+                            let day_str = self.read_identifier();
+                            if let Ok(day) = day_str.parse::<u32>() {
+                                if (1..=31).contains(&day) {
+                                    return Some(PositionedToken {
+                                        token: FilterToken::SpecificDate { month, day },
+                                        position,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+                None
+            }
         }
     }
 
@@ -567,6 +609,67 @@ mod tests {
                 FilterToken::Label("urgent".to_string()),
                 FilterToken::And,
                 FilterToken::Project("Work".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_tokenize_specific_date_short_month() {
+        let tokens = Lexer::new("Jan 15").tokenize();
+        assert_eq!(tokens, vec![FilterToken::SpecificDate { month: 1, day: 15 }]);
+
+        let tokens = Lexer::new("Dec 25").tokenize();
+        assert_eq!(tokens, vec![FilterToken::SpecificDate { month: 12, day: 25 }]);
+    }
+
+    #[test]
+    fn test_tokenize_specific_date_full_month() {
+        let tokens = Lexer::new("January 15").tokenize();
+        assert_eq!(tokens, vec![FilterToken::SpecificDate { month: 1, day: 15 }]);
+
+        let tokens = Lexer::new("December 25").tokenize();
+        assert_eq!(tokens, vec![FilterToken::SpecificDate { month: 12, day: 25 }]);
+    }
+
+    #[test]
+    fn test_tokenize_specific_date_case_insensitive() {
+        let tokens = Lexer::new("JAN 15").tokenize();
+        assert_eq!(tokens, vec![FilterToken::SpecificDate { month: 1, day: 15 }]);
+
+        let tokens = Lexer::new("JANUARY 15").tokenize();
+        assert_eq!(tokens, vec![FilterToken::SpecificDate { month: 1, day: 15 }]);
+
+        let tokens = Lexer::new("jan 15").tokenize();
+        assert_eq!(tokens, vec![FilterToken::SpecificDate { month: 1, day: 15 }]);
+    }
+
+    #[test]
+    fn test_tokenize_specific_date_all_months() {
+        // Test all months with short form
+        assert_eq!(Lexer::new("Jan 1").tokenize(), vec![FilterToken::SpecificDate { month: 1, day: 1 }]);
+        assert_eq!(Lexer::new("Feb 1").tokenize(), vec![FilterToken::SpecificDate { month: 2, day: 1 }]);
+        assert_eq!(Lexer::new("Mar 1").tokenize(), vec![FilterToken::SpecificDate { month: 3, day: 1 }]);
+        assert_eq!(Lexer::new("Apr 1").tokenize(), vec![FilterToken::SpecificDate { month: 4, day: 1 }]);
+        assert_eq!(Lexer::new("May 1").tokenize(), vec![FilterToken::SpecificDate { month: 5, day: 1 }]);
+        assert_eq!(Lexer::new("Jun 1").tokenize(), vec![FilterToken::SpecificDate { month: 6, day: 1 }]);
+        assert_eq!(Lexer::new("Jul 1").tokenize(), vec![FilterToken::SpecificDate { month: 7, day: 1 }]);
+        assert_eq!(Lexer::new("Aug 1").tokenize(), vec![FilterToken::SpecificDate { month: 8, day: 1 }]);
+        assert_eq!(Lexer::new("Sep 1").tokenize(), vec![FilterToken::SpecificDate { month: 9, day: 1 }]);
+        assert_eq!(Lexer::new("Sept 1").tokenize(), vec![FilterToken::SpecificDate { month: 9, day: 1 }]);
+        assert_eq!(Lexer::new("Oct 1").tokenize(), vec![FilterToken::SpecificDate { month: 10, day: 1 }]);
+        assert_eq!(Lexer::new("Nov 1").tokenize(), vec![FilterToken::SpecificDate { month: 11, day: 1 }]);
+        assert_eq!(Lexer::new("Dec 1").tokenize(), vec![FilterToken::SpecificDate { month: 12, day: 1 }]);
+    }
+
+    #[test]
+    fn test_tokenize_specific_date_with_operators() {
+        let tokens = Lexer::new("Jan 15 & p1").tokenize();
+        assert_eq!(
+            tokens,
+            vec![
+                FilterToken::SpecificDate { month: 1, day: 15 },
+                FilterToken::And,
+                FilterToken::Priority(1),
             ]
         );
     }

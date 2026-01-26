@@ -52,7 +52,7 @@
 //! let matches = evaluator.matches(&item);
 //! ```
 
-use chrono::{Local, NaiveDate};
+use chrono::{Datelike, Local, NaiveDate};
 use todoist_api::sync::{Item, Label, Project, Section};
 
 use super::ast::Filter;
@@ -177,6 +177,7 @@ impl<'a> FilterEvaluator<'a> {
             Filter::Overdue => self.is_overdue(item),
             Filter::NoDate => self.has_no_date(item),
             Filter::Next7Days => self.is_due_within_7_days(item),
+            Filter::SpecificDate { month, day } => self.is_due_on_specific_date(item, *month, *day),
 
             // Priority filters
             // Note: Todoist API uses inverted priority (4 = highest, 1 = lowest)
@@ -261,6 +262,18 @@ impl<'a> FilterEvaluator<'a> {
 
         self.parse_due_date(&due.date)
             .is_some_and(|due_date| due_date >= today && due_date < end_date)
+    }
+
+    /// Checks if the item is due on a specific month and day.
+    /// The year is inferred: if the date has passed this year, it matches next year.
+    fn is_due_on_specific_date(&self, item: &Item, month: u32, day: u32) -> bool {
+        let Some(due) = &item.due else {
+            return false;
+        };
+
+        self.parse_due_date(&due.date).is_some_and(|due_date| {
+            due_date.month() == month && due_date.day() == day
+        })
     }
 
     /// Parses a date string in YYYY-MM-DD format.
@@ -623,6 +636,72 @@ mod tests {
     fn test_filter_7_days_no_match_no_due() {
         let context = FilterContext::new(&[], &[], &[]);
         let filter = Filter::Next7Days;
+        let evaluator = FilterEvaluator::new(&filter, &context);
+
+        let item = make_item("1", "Task");
+        assert!(!evaluator.matches(&item));
+    }
+
+    #[test]
+    fn test_filter_specific_date_matches() {
+        let context = FilterContext::new(&[], &[], &[]);
+        let filter = Filter::SpecificDate { month: 1, day: 15 };
+        let evaluator = FilterEvaluator::new(&filter, &context);
+
+        let mut item = make_item("1", "Task");
+        item.due = Some(make_due("2025-01-15"));
+
+        assert!(evaluator.matches(&item));
+    }
+
+    #[test]
+    fn test_filter_specific_date_matches_any_year() {
+        let context = FilterContext::new(&[], &[], &[]);
+        let filter = Filter::SpecificDate { month: 12, day: 25 };
+        let evaluator = FilterEvaluator::new(&filter, &context);
+
+        // Matches regardless of year
+        let mut item1 = make_item("1", "Task");
+        item1.due = Some(make_due("2024-12-25"));
+        assert!(evaluator.matches(&item1));
+
+        let mut item2 = make_item("2", "Task");
+        item2.due = Some(make_due("2025-12-25"));
+        assert!(evaluator.matches(&item2));
+
+        let mut item3 = make_item("3", "Task");
+        item3.due = Some(make_due("2026-12-25"));
+        assert!(evaluator.matches(&item3));
+    }
+
+    #[test]
+    fn test_filter_specific_date_no_match_different_date() {
+        let context = FilterContext::new(&[], &[], &[]);
+        let filter = Filter::SpecificDate { month: 1, day: 15 };
+        let evaluator = FilterEvaluator::new(&filter, &context);
+
+        let mut item = make_item("1", "Task");
+        item.due = Some(make_due("2025-01-16")); // Different day
+
+        assert!(!evaluator.matches(&item));
+    }
+
+    #[test]
+    fn test_filter_specific_date_no_match_different_month() {
+        let context = FilterContext::new(&[], &[], &[]);
+        let filter = Filter::SpecificDate { month: 1, day: 15 };
+        let evaluator = FilterEvaluator::new(&filter, &context);
+
+        let mut item = make_item("1", "Task");
+        item.due = Some(make_due("2025-02-15")); // Different month
+
+        assert!(!evaluator.matches(&item));
+    }
+
+    #[test]
+    fn test_filter_specific_date_no_match_no_due() {
+        let context = FilterContext::new(&[], &[], &[]);
+        let filter = Filter::SpecificDate { month: 1, day: 15 };
         let evaluator = FilterEvaluator::new(&filter, &context);
 
         let item = make_item("1", "Task");

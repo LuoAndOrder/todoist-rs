@@ -22,6 +22,15 @@ pub enum Filter {
     /// Matches items due within the next 7 days (including today).
     Next7Days,
 
+    /// Matches items due on a specific date (month and day).
+    /// The year is inferred: if the date is in the past this year, it's next year.
+    SpecificDate {
+        /// Month (1-12)
+        month: u32,
+        /// Day (1-31)
+        day: u32,
+    },
+
     // ==================== Priority Filters ====================
     /// Matches items with priority level 1 (highest/red).
     Priority1,
