@@ -144,10 +144,13 @@ impl CacheStore {
         }
     }
 
-    /// Saves the cache to disk.
+    /// Saves the cache to disk atomically.
     ///
     /// Creates the parent directory if it doesn't exist. The cache is written
     /// as pretty-printed JSON for easier debugging.
+    ///
+    /// Uses atomic write (tempfile + rename) to prevent corruption if the process
+    /// crashes mid-write.
     ///
     /// # Errors
     ///
@@ -160,7 +163,13 @@ impl CacheStore {
         }
 
         let json = serde_json::to_string_pretty(cache)?;
-        fs::write(&self.path, json)?;
+
+        // Atomic write: write to temp file, then rename
+        // This prevents corruption if the process crashes mid-write
+        let temp_path = self.path.with_extension("tmp");
+        fs::write(&temp_path, &json)?;
+        fs::rename(&temp_path, &self.path)?;
+
         Ok(())
     }
 
