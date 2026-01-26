@@ -8,15 +8,16 @@
 
 1. **Complete API Coverage** - Expose all Todoist v1 API capabilities via CLI commands
 2. **AI Agent Friendly** - Auto-detect TTY for JSON output, strict exit codes, machine-parseable errors
-3. **Fast & Reliable** - <100ms warm start target, local caching with sync, auto-retry on rate limits
+3. **Fast & Reliable** - Instant reads from cache, mutations update cache immediately, auto-retry on rate limits
 4. **Sync-First Architecture** - Use Sync API for efficient incremental updates and batched operations
-5. **Excellent UX** - Color-coded output, intuitive commands, shell completions, helpful error messages
+5. **Smart Caching** - Reads use cache directly (no network wait), writes apply responses to cache, user controls sync timing
+6. **Excellent UX** - Color-coded output, intuitive commands, shell completions, helpful error messages
 
 ## Non-Goals
 
 - Interactive TUI (text user interface)
 - Team/workspace collaboration features (personal use focus)
-- Offline-first operation (cache is read-only fallback, not offline editing)
+- Offline write queuing (writes require network; reads work offline from cache)
 - GUI wrapper or web interface
 
 ---
@@ -120,9 +121,35 @@ Some operations still use REST endpoints when Sync API doesn't provide equivalen
 
 | Operation | Endpoint | Reason |
 |-----------|----------|--------|
-| Quick Add | `POST /api/v1/tasks/quick_add` | NLP parsing server-side |
+| Quick Add | `POST /api/v1/tasks/quick` | NLP parsing server-side |
 | File Upload | `POST /api/v1/attachments` | Binary upload |
 | Get Completed Tasks | `GET /api/v1/tasks/completed` | Historical data not in sync |
+
+#### Quick Add API Details
+
+The Quick Add endpoint uses JSON (not form-urlencoded like the Sync API):
+
+```
+POST https://api.todoist.com/api/v1/tasks/quick
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{
+  "text": "Buy milk tomorrow #Shopping p1 @errands",
+  "note": "optional note to attach as comment",
+  "reminder": "optional reminder in natural language",
+  "auto_reminder": true,
+  "meta": false
+}
+```
+
+The `text` field supports Todoist quick add notation:
+- `#Project` - assign to project
+- `@label` - add label
+- `p1`/`p2`/`p3`/`p4` - set priority
+- Natural language dates: "tomorrow", "next monday", "at 3pm"
+- `{deadline}` - set deadline (e.g., `{in 3 days}`)
+- `//description` - add description (everything after `//`)
 
 ### Command Batching
 
@@ -211,6 +238,7 @@ When no token is found:
 --json               Force JSON output
 --no-color           Disable colors
 --token <TOKEN>      Override API token
+--sync               Force sync before operation (for read commands)
 ```
 
 ### Commands Overview
@@ -244,6 +272,8 @@ When no token is found:
 
 #### `td list` - List Tasks
 
+Lists tasks from the local cache. Use `--sync` or run `td sync` first if you need fresh data.
+
 ```
 td list [OPTIONS]
 
@@ -260,6 +290,7 @@ Options:
   --cursor <TOKEN>         Pagination cursor for programmatic use
   --sort <FIELD>           Sort by: due, priority, created, project
   --reverse                Reverse sort order
+  --sync                   Sync before listing (ensures fresh data)
 ```
 
 **Output (table mode):**
@@ -529,12 +560,21 @@ Subcommands:
 
 #### `td sync`
 
+Explicitly refresh the local cache from Todoist servers. Use this when you want to ensure you have the latest data (e.g., after making changes via web app or mobile).
+
 ```
 td sync [OPTIONS]
 
 Options:
-  --full                   Force full sync (ignore cache)
+  --full                   Force full sync (reset cache completely)
 ```
+
+**When to use:**
+- After making changes in Todoist web/mobile apps
+- When you suspect cache is stale
+- Before important read operations where freshness matters
+
+**Note:** Read commands (`list`, `show`, etc.) use cached data by default for instant response. Use `td sync` or the `--sync` flag to refresh first.
 
 #### `td config`
 
@@ -675,6 +715,16 @@ td list --filter "(today | overdue) & p1"
 
 ## Caching
 
+### Design Principles
+
+The cache system is designed around these principles:
+
+1. **Reads are instant** — Read commands use cache directly, no network wait
+2. **Writes update cache** — Mutation responses are applied immediately
+3. **Lookups use cache with fallback** — Name→ID resolution uses cache, auto-syncs on failure
+4. **Sync token always updated** — Every API response updates the sync token
+5. **User has control** — `td sync` and `--sync` flag for explicit refresh
+
 ### Cache Structure
 
 The cache stores the complete sync state, mirroring the Sync API response:
@@ -704,52 +754,91 @@ Note: The Sync API calls tasks "items" and comments "notes". The cache uses thes
 
 1. **Initial sync** (`sync_token='*'`) - Fetch all data, populate cache
 2. **Incremental sync** - Use stored `sync_token` to fetch only changes
-3. **Read operations** - Read from cache, optionally refresh if stale (>5 min)
-4. **Write operations** - Send commands via Sync API, update cache with response
-5. **`td sync`** - Force incremental sync (or `--full` for complete refresh)
+3. **Read operations** - Read directly from cache (use `--sync` flag to refresh first)
+4. **Write operations** - Use cache for lookups, send commands, apply response to cache
+5. **`td sync`** - Explicit sync (incremental, or `--full` for complete refresh)
 
 ### Sync Strategy
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │                      Read Operations                            │
+│                  (list, show, projects, labels, etc.)           │
+├────────────────────────────────────────────────────────────────┤
+│  1. Load cache from disk                                        │
+│  2. If --sync flag: sync first (incremental)                    │
+│  3. If no cache exists: initial sync (sync_token='*')           │
+│  4. Query cache                                                  │
+│  5. Return results                                               │
 │                                                                  │
-│  Cache exists?  ─────No────→  Initial sync (sync_token='*')     │
-│       │                                                          │
-│      Yes                                                         │
-│       │                                                          │
-│  Cache stale?  ─────Yes───→  Incremental sync (stored token)    │
-│  (>5 min old)                                                    │
-│       │                                                          │
-│      No                                                          │
-│       ↓                                                          │
-│  Return cached data                                              │
+│  Note: No automatic sync on every read. Cache is trusted.       │
+│  Users can run `td sync` or use `--sync` for fresh data.        │
 └────────────────────────────────────────────────────────────────┘
 
 ┌────────────────────────────────────────────────────────────────┐
 │                      Write Operations                           │
-│                                                                  │
-│  1. Build command(s) with UUID + optional temp_id               │
-│  2. Send to Sync API                                             │
-│  3. Check sync_status for success/failure per command            │
-│  4. Resolve temp_id_mapping for new resources                    │
-│  5. Update cache with new sync_token                             │
-│  6. Apply changes to cached data                                 │
+│                 (add, done, delete, edit, etc.)                 │
+├────────────────────────────────────────────────────────────────┤
+│  1. Load cache from disk                                        │
+│  2. Resolve names → IDs from cache                              │
+│     - If lookup fails: sync once, retry lookup                  │
+│     - If still fails: error with suggestion to sync             │
+│  3. Build command(s) with UUID + optional temp_id               │
+│  4. Send to Sync API                                             │
+│  5. Check sync_status for success/failure per command           │
+│  6. Apply response to cache:                                     │
+│     - Update sync_token                                          │
+│     - Merge affected resources (items, projects, etc.)          │
+│     - Resolve temp_id_mapping for new resources                 │
+│  7. Save cache to disk                                           │
+└────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────┐
+│                      Explicit Sync                              │
+│                        (td sync)                                │
+├────────────────────────────────────────────────────────────────┤
+│  1. Load cache from disk                                        │
+│  2. Send sync request:                                           │
+│     - Incremental: use stored sync_token                        │
+│     - Full (--full): use sync_token='*'                         │
+│  3. Apply full response to cache                                 │
+│  4. Save cache to disk                                           │
+│  5. Display sync summary                                         │
 └────────────────────────────────────────────────────────────────┘
 ```
+
+### Conflict and Error Handling
+
+| Scenario | Behavior |
+|----------|----------|
+| Stale reads | Expected with caching. User can `td sync` or use `--sync` flag |
+| Mutation on deleted item | API returns error; CLI shows "not found, try `td sync`" |
+| Lookup failure (project/label not in cache) | Auto-sync once, retry, then error if still not found |
+| Concurrent edits from multiple clients | Last-write-wins (Todoist API behavior) |
+| Invalid/expired sync token | Detect API rejection, fall back to full sync automatically |
 
 ### Cache Invalidation
 
 The Sync API handles invalidation naturally:
-- Each sync response includes a new `sync_token`
+- Each sync response (including mutation responses) includes a new `sync_token`
 - Incremental sync returns only changed/deleted resources
 - Deleted resources are indicated by `is_deleted: true`
+- Mutation responses include the affected resources with their current server state
+
+### Sync Token Resilience
+
+If the stored sync token becomes invalid (API rejects it):
+1. Detect the rejection error from API response
+2. Automatically fall back to full sync (`sync_token='*'`)
+3. Log/warn user that full sync was required
+4. Continue with fresh cache state
 
 ### Offline Handling
 
 If API is unreachable:
-- **Read operations** - Fall back to cache with warning (data may be stale)
+- **Read operations** - Use cache (works fully offline)
 - **Write operations** - Fail with network error (no offline queue)
+- **Lookups** - Use cache; if lookup fails, cannot auto-sync, so error immediately
 
 ---
 
@@ -1083,36 +1172,38 @@ UTILITY
 
 Most operations use the Sync API endpoint: `POST /api/v1/sync`
 
-| CLI Command | Sync Command(s) |
-|-------------|-----------------|
-| `td list` | Read from cache (sync if stale) |
-| `td add` | `item_add` |
-| `td show` | Read from cache |
-| `td edit` | `item_update` (and/or `item_move`) |
-| `td done` | `item_close` |
-| `td reopen` | `item_uncomplete` |
-| `td delete` | `item_delete` |
-| `td projects list` | Read from cache |
-| `td projects add` | `project_add` |
-| `td projects edit` | `project_update` |
-| `td projects archive` | `project_archive` |
-| `td projects delete` | `project_delete` |
-| `td labels list` | Read from cache |
-| `td labels add` | `label_add` |
-| `td labels delete` | `label_delete` |
-| `td sections add` | `section_add` |
-| `td sections delete` | `section_delete` |
-| `td comments add` | `note_add` |
-| `td comments delete` | `note_delete` |
-| `td reminders add` | `reminder_add` |
-| `td reminders delete` | `reminder_delete` |
-| `td sync` | Incremental sync (or full with `--full`) |
+| CLI Command | Sync Command(s) | Cache Behavior |
+|-------------|-----------------|----------------|
+| `td list` | — | Read from cache (no API call) |
+| `td list --sync` | Incremental sync | Sync first, then read cache |
+| `td add` | `item_add` | Apply response to cache |
+| `td show` | — | Read from cache (no API call) |
+| `td edit` | `item_update` (and/or `item_move`) | Apply response to cache |
+| `td done` | `item_close` | Apply response to cache |
+| `td reopen` | `item_uncomplete` | Apply response to cache |
+| `td delete` | `item_delete` | Apply response to cache |
+| `td projects list` | — | Read from cache (no API call) |
+| `td projects add` | `project_add` | Apply response to cache |
+| `td projects edit` | `project_update` | Apply response to cache |
+| `td projects archive` | `project_archive` | Apply response to cache |
+| `td projects delete` | `project_delete` | Apply response to cache |
+| `td labels list` | — | Read from cache (no API call) |
+| `td labels add` | `label_add` | Apply response to cache |
+| `td labels delete` | `label_delete` | Apply response to cache |
+| `td sections add` | `section_add` | Apply response to cache |
+| `td sections delete` | `section_delete` | Apply response to cache |
+| `td comments add` | `note_add` | Apply response to cache |
+| `td comments delete` | `note_delete` | Apply response to cache |
+| `td reminders add` | `reminder_add` | Apply response to cache |
+| `td reminders delete` | `reminder_delete` | Apply response to cache |
+| `td sync` | Incremental sync | Full cache update |
+| `td sync --full` | Full sync (`sync_token='*'`) | Complete cache reset |
 
 ### REST API Operations (Exceptions)
 
 | CLI Command | REST Endpoint | Reason |
 |-------------|---------------|--------|
-| `td quick` | `POST /api/v1/tasks/quick_add` | NLP parsing server-side |
+| `td quick` | `POST /api/v1/tasks/quick` | NLP parsing server-side (JSON body) |
 | File attachments | `POST /api/v1/attachments` | Binary upload |
 | Completed tasks | `GET /api/v1/tasks/completed` | Historical data |
 

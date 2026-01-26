@@ -1,10 +1,11 @@
 //! Reminders command implementation.
 //!
 //! Lists and manages reminders via the Sync API.
+//! Uses SyncManager::execute_commands() to automatically update the cache.
 
 use chrono::Utc;
 use todoist_api::client::TodoistClient;
-use todoist_api::sync::{Reminder, SyncCommand, SyncRequest};
+use todoist_api::sync::{Reminder, SyncCommand};
 use todoist_cache::{Cache, CacheStore, SyncManager};
 
 use super::{CommandContext, CommandError, Result};
@@ -184,22 +185,22 @@ pub async fn execute_add(
         ));
     }
 
-    // Initialize sync manager to resolve task ID
+    // Initialize sync manager (loads cache from disk)
     let client = TodoistClient::new(token);
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
-    // Sync to get current state (for task lookup)
-    manager.sync().await?;
-    let cache = manager.cache();
-
-    // Resolve task ID
-    let task_id = resolve_task_id(cache, &opts.task)?;
-    let task_name = cache
-        .items
-        .iter()
-        .find(|i| i.id == task_id)
-        .map(|i| i.content.clone());
+    // Resolve task ID and get task name before mutation
+    let (task_id, task_name) = {
+        let cache = manager.cache();
+        let resolved_id = resolve_task_id(cache, &opts.task)?;
+        let name = cache
+            .items
+            .iter()
+            .find(|i| i.id == resolved_id)
+            .map(|i| i.content.clone());
+        (resolved_id, name)
+    };
 
     // Determine reminder type based on provided options
     let (reminder_type, args) = if let Some(ref due) = opts.due {
@@ -229,10 +230,9 @@ pub async fn execute_add(
     let temp_id = uuid::Uuid::new_v4().to_string();
     let command = SyncCommand::with_temp_id("reminder_add", &temp_id, args);
 
-    // Execute the command
-    let api_client = TodoistClient::new(token);
-    let request = SyncRequest::with_commands(vec![command]);
-    let response = api_client.sync(request).await?;
+    // Execute the command via SyncManager
+    // This sends the command, applies the response to cache, and saves to disk
+    let response = manager.execute_commands(vec![command]).await?;
 
     // Check for errors
     if response.has_errors() {
@@ -369,34 +369,34 @@ pub async fn execute_delete(
     opts: &RemindersDeleteOptions,
     token: &str,
 ) -> Result<()> {
-    // Initialize sync manager to resolve reminder ID
+    // Initialize sync manager (loads cache from disk)
     let client = TodoistClient::new(token);
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
-    // Sync to get current state (for reminder lookup)
-    manager.sync().await?;
-    let cache = manager.cache();
-
-    // Find the reminder by ID or prefix
-    let reminder = find_reminder_by_id_or_prefix(cache, &opts.reminder_id)?;
-    let reminder_id = reminder.id.clone();
-    let task_id = reminder.item_id.clone();
-    let reminder_type = reminder.reminder_type.clone();
-
-    // Get task name for display
-    let task_name = cache
-        .items
-        .iter()
-        .find(|i| i.id == task_id)
-        .map(|i| i.content.clone());
+    // Find the reminder by ID or prefix and extract owned data before mutation
+    let (reminder_id, task_id, reminder_type, reminder_offset, reminder_due, task_name) = {
+        let cache = manager.cache();
+        let reminder = find_reminder_by_id_or_prefix(cache, &opts.reminder_id)?;
+        let r_id = reminder.id.clone();
+        let t_id = reminder.item_id.clone();
+        let r_type = reminder.reminder_type.clone();
+        let r_offset = reminder.minute_offset;
+        let r_due = reminder.due.clone();
+        let t_name = cache
+            .items
+            .iter()
+            .find(|i| i.id == t_id)
+            .map(|i| i.content.clone());
+        (r_id, t_id, r_type, r_offset, r_due, t_name)
+    };
 
     // Confirm if not forced
     if !opts.force && !ctx.quiet {
         let task_display = task_name
             .as_deref()
             .unwrap_or(&task_id);
-        let reminder_desc = format_reminder_description(&reminder_type, reminder.minute_offset, reminder.due.as_ref());
+        let reminder_desc = format_reminder_description(&reminder_type, reminder_offset, reminder_due.as_ref());
         eprintln!(
             "Delete reminder '{}' for task '{}'?",
             reminder_desc,
@@ -414,10 +414,9 @@ pub async fn execute_delete(
     // Create the command
     let command = SyncCommand::new("reminder_delete", args);
 
-    // Execute the command
-    let api_client = TodoistClient::new(token);
-    let request = SyncRequest::with_commands(vec![command]);
-    let response = api_client.sync(request).await?;
+    // Execute the command via SyncManager
+    // This sends the command, applies the response to cache, and saves to disk
+    let response = manager.execute_commands(vec![command]).await?;
 
     // Check for errors
     if response.has_errors() {
