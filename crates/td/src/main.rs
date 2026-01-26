@@ -74,8 +74,8 @@ async fn run(cli: &Cli) -> commands::Result<()> {
         _ => {}
     }
 
-    // Get token with resolution chain: flag > env > config
-    let token = resolve_token(cli)?;
+    // Get token with resolution chain: flag > env > config > setup
+    let token = resolve_token(cli).await?;
 
     match &cli.command {
         Some(Commands::List {
@@ -529,29 +529,46 @@ fn error_exit_code(e: &CommandError) -> ExitCode {
 /// 1. `--token` command line flag (highest priority)
 /// 2. `TODOIST_TOKEN` environment variable
 /// 3. Token from config file (`~/.config/td/config.toml`)
-fn resolve_token(cli: &Cli) -> commands::Result<String> {
+///
+/// Returns `None` if no token is found (allowing caller to trigger setup).
+fn resolve_token_optional(cli: &Cli) -> commands::Result<Option<String>> {
     // 1. Flag takes highest priority (clap already handles env via `env = "TODOIST_TOKEN"`)
     //    When cli.token is Some, it's either from --token flag OR from TODOIST_TOKEN env
     if let Some(token) = &cli.token {
-        return Ok(token.clone());
+        return Ok(Some(token.clone()));
     }
 
     // 2. Try config file
     match load_config() {
         Ok(config) => {
             if let Some(token) = config.token {
-                return Ok(token);
+                return Ok(Some(token));
             }
         }
         Err(_) => {
-            // Config loading failed, continue to error message
+            // Config loading failed, continue
         }
     }
 
-    // No token found anywhere
-    Err(CommandError::Config(
-        "No API token provided. Use --token flag, set TODOIST_TOKEN environment variable, or add token to config file.".to_string()
-    ))
+    // No token found
+    Ok(None)
+}
+
+/// Resolves the API token, running first-run setup if needed.
+///
+/// If no token is found and we're in an interactive terminal,
+/// runs the setup wizard to configure the token.
+async fn resolve_token(cli: &Cli) -> commands::Result<String> {
+    // First, try the normal resolution chain
+    if let Some(token) = resolve_token_optional(cli)? {
+        return Ok(token);
+    }
+
+    // No token found - check if we should run setup
+    let ctx = CommandContext::from_cli(cli);
+
+    // Run interactive setup
+    commands::setup::run_setup(&ctx).await
 }
 
 #[cfg(test)]
@@ -585,16 +602,16 @@ mod tests {
     }
 
     #[test]
-    fn test_resolve_token_from_flag() {
+    fn test_resolve_token_optional_from_flag() {
         // Token from flag takes highest priority
         let cli = cli_with_token(Some("flag-token".to_string()));
-        let result = resolve_token(&cli);
+        let result = resolve_token_optional(&cli);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "flag-token");
+        assert_eq!(result.unwrap(), Some("flag-token".to_string()));
     }
 
     #[test]
-    fn test_resolve_token_no_token_error() {
+    fn test_resolve_token_optional_no_token() {
         // Clear env var to ensure clean test
         let original = env::var("TODOIST_TOKEN").ok();
         env::remove_var("TODOIST_TOKEN");
@@ -604,10 +621,7 @@ mod tests {
         env::set_var("TD_CONFIG", "/tmp/td-test-nonexistent/config.toml");
 
         let cli = cli_with_token(None);
-        let result = resolve_token(&cli);
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert!(matches!(err, CommandError::Config(_)));
+        let result = resolve_token_optional(&cli);
 
         // Restore env vars
         if let Some(val) = original {
@@ -618,10 +632,14 @@ mod tests {
         } else {
             env::remove_var("TD_CONFIG");
         }
+
+        // Should return Ok(None) when no token found (setup will handle it)
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
     }
 
     #[test]
-    fn test_resolve_token_from_config() {
+    fn test_resolve_token_optional_from_config() {
         use std::fs;
         use std::io::Write;
         use tempfile::TempDir;
@@ -642,7 +660,7 @@ mod tests {
         env::remove_var("TODOIST_TOKEN");
 
         let cli = cli_with_token(None);
-        let result = resolve_token(&cli);
+        let result = resolve_token_optional(&cli);
 
         // Restore env vars first (before assertions that might panic)
         if let Some(val) = original_config {
@@ -655,11 +673,11 @@ mod tests {
         }
 
         assert!(result.is_ok(), "Expected Ok but got: {:?}", result);
-        assert_eq!(result.unwrap(), "config-token");
+        assert_eq!(result.unwrap(), Some("config-token".to_string()));
     }
 
     #[test]
-    fn test_resolve_token_flag_overrides_config() {
+    fn test_resolve_token_optional_flag_overrides_config() {
         use std::fs;
         use std::io::Write;
         use tempfile::TempDir;
@@ -681,7 +699,7 @@ mod tests {
 
         // CLI has a token from flag, should override config
         let cli = cli_with_token(Some("flag-token".to_string()));
-        let result = resolve_token(&cli);
+        let result = resolve_token_optional(&cli);
 
         // Restore env vars
         if let Some(val) = original_config {
@@ -694,6 +712,6 @@ mod tests {
         }
 
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "flag-token");
+        assert_eq!(result.unwrap(), Some("flag-token".to_string()));
     }
 }

@@ -24,6 +24,7 @@ thiserror.workspace = true
 directories.workspace = true
 owo-colors.workspace = true
 uuid.workspace = true
+dialoguer.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

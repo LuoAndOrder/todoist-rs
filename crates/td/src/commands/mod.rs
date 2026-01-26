@@ -16,6 +16,7 @@ pub mod quick;
 pub mod reminders;
 pub mod reopen;
 pub mod sections;
+pub mod setup;
 pub mod show;
 pub mod sync;
 pub mod today;
