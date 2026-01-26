@@ -2,7 +2,6 @@
 //!
 //! Displays detailed information about a task from the local cache.
 
-use chrono::Utc;
 use todoist_api::sync::{Item, Note, Reminder};
 use todoist_cache::{Cache, CacheStore, SyncManager};
 
@@ -55,9 +54,8 @@ pub async fn execute(ctx: &CommandContext, opts: &ShowOptions, token: &str) -> R
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
-    // Sync if needed
-    let now = Utc::now();
-    if manager.needs_sync(now) {
+    // Only sync if explicitly requested with --sync flag
+    if ctx.sync_first {
         if ctx.verbose {
             eprintln!("Syncing with Todoist...");
         }
