@@ -6,7 +6,8 @@
 use std::env;
 use std::fs;
 use std::path::PathBuf;
-use std::process::Command;
+
+use tokio::process::Command;
 
 use directories::BaseDirs;
 use serde::{Deserialize, Serialize};
@@ -203,7 +204,7 @@ pub fn execute_show(ctx: &CommandContext) -> Result<()> {
 }
 
 /// Executes the config edit command.
-pub fn execute_edit(ctx: &CommandContext) -> Result<()> {
+pub async fn execute_edit(ctx: &CommandContext) -> Result<()> {
     let path = get_config_path()?;
 
     // Ensure directory exists
@@ -231,10 +232,11 @@ pub fn execute_edit(ctx: &CommandContext) -> Result<()> {
         eprintln!("Opening {} with {}", path.display(), editor);
     }
 
-    // Open editor
+    // Open editor (async to avoid blocking the tokio runtime)
     let status = Command::new(&editor)
         .arg(&path)
         .status()
+        .await
         .map_err(|e| CommandError::Config(format!("Failed to open editor '{}': {}", editor, e)))?;
 
     if ctx.json_output {

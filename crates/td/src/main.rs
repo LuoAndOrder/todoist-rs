@@ -43,7 +43,7 @@ async fn run(cli: &Cli) -> commands::Result<()> {
                     commands::config::execute_show(&ctx)
                 }
                 Some(ConfigCommands::Edit) => {
-                    commands::config::execute_edit(&ctx)
+                    commands::config::execute_edit(&ctx).await
                 }
                 Some(ConfigCommands::Set { key, value }) => {
                     let opts = commands::config::ConfigSetOptions {
