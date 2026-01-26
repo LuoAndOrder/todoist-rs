@@ -1,10 +1,11 @@
 //! Sections command implementation.
 //!
 //! Lists and manages sections via the Sync API.
+//! Uses SyncManager::execute_commands() to automatically update the cache.
 
 use chrono::Utc;
 use todoist_api::client::TodoistClient;
-use todoist_api::sync::{Section, SyncCommand, SyncRequest};
+use todoist_api::sync::{Section, SyncCommand};
 use todoist_cache::{Cache, CacheStore, SyncManager};
 
 use super::{CommandContext, CommandError, Result};
@@ -178,22 +179,22 @@ pub struct SectionAddResult {
 ///
 /// Returns an error if the API returns an error.
 pub async fn execute_add(ctx: &CommandContext, opts: &SectionsAddOptions, token: &str) -> Result<()> {
-    // Initialize sync manager to resolve project ID
+    // Initialize sync manager (loads cache from disk)
     let client = TodoistClient::new(token);
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
-    // Sync to get current state (for project lookup)
-    manager.sync().await?;
-    let cache = manager.cache();
-
-    // Resolve project
-    let project_id = resolve_project_id(cache, &opts.project)?;
-    let project_name = cache
-        .projects
-        .iter()
-        .find(|p| p.id == project_id)
-        .map(|p| p.name.clone());
+    // Resolve project name to ID and extract owned data before mutation
+    let (project_id, project_name) = {
+        let cache = manager.cache();
+        let pid = resolve_project_id(cache, &opts.project)?;
+        let pname = cache
+            .projects
+            .iter()
+            .find(|p| p.id == pid)
+            .map(|p| p.name.clone());
+        (pid, pname)
+    };
 
     // Build the section_add command arguments
     let temp_id = uuid::Uuid::new_v4().to_string();
@@ -205,10 +206,9 @@ pub async fn execute_add(ctx: &CommandContext, opts: &SectionsAddOptions, token:
     // Create the command
     let command = SyncCommand::with_temp_id("section_add", &temp_id, args);
 
-    // Execute the command
-    let api_client = TodoistClient::new(token);
-    let request = SyncRequest::with_commands(vec![command]);
-    let response = api_client.sync(request).await?;
+    // Execute the command via SyncManager
+    // This sends the command, applies the response to cache, and saves to disk
+    let response = manager.execute_commands(vec![command]).await?;
 
     // Check for errors
     if response.has_errors() {
@@ -295,7 +295,7 @@ pub struct SectionEditResult {
 ///
 /// # Errors
 ///
-/// Returns an error if syncing fails, section lookup fails, or the API returns an error.
+/// Returns an error if section lookup fails or the API returns an error.
 pub async fn execute_edit(ctx: &CommandContext, opts: &SectionsEditOptions, token: &str) -> Result<()> {
     // Check if any options were provided
     if opts.name.is_none() {
@@ -304,19 +304,17 @@ pub async fn execute_edit(ctx: &CommandContext, opts: &SectionsEditOptions, toke
         ));
     }
 
-    // Initialize sync manager to resolve section ID
+    // Initialize sync manager (loads cache from disk)
     let client = TodoistClient::new(token);
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
-    // Sync to get current state (for section lookup)
-    manager.sync().await?;
-    let cache = manager.cache();
-
-    // Find the section by ID or prefix
-    let section = find_section_by_id_or_prefix(cache, &opts.section_id)?;
-    let section_id = section.id.clone();
-    let section_name = section.name.clone();
+    // Find the section by ID or prefix and extract owned data before mutation
+    let (section_id, section_name) = {
+        let cache = manager.cache();
+        let section = find_section_by_id_or_prefix(cache, &opts.section_id)?;
+        (section.id.clone(), section.name.clone())
+    };
 
     // Build the section_update command arguments
     let mut args = serde_json::json!({
@@ -333,10 +331,9 @@ pub async fn execute_edit(ctx: &CommandContext, opts: &SectionsEditOptions, toke
     // Create the command
     let command = SyncCommand::new("section_update", args);
 
-    // Execute the command
-    let api_client = TodoistClient::new(token);
-    let request = SyncRequest::with_commands(vec![command]);
-    let response = api_client.sync(request).await?;
+    // Execute the command via SyncManager
+    // This sends the command, applies the response to cache, and saves to disk
+    let response = manager.execute_commands(vec![command]).await?;
 
     // Check for errors
     if response.has_errors() {
@@ -439,21 +436,19 @@ pub struct SectionDeleteResult {
 ///
 /// # Errors
 ///
-/// Returns an error if syncing fails, section lookup fails, or the API returns an error.
+/// Returns an error if section lookup fails or the API returns an error.
 pub async fn execute_delete(ctx: &CommandContext, opts: &SectionsDeleteOptions, token: &str) -> Result<()> {
-    // Initialize sync manager to resolve section ID
+    // Initialize sync manager (loads cache from disk)
     let client = TodoistClient::new(token);
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
-    // Sync to get current state (for section lookup)
-    manager.sync().await?;
-    let cache = manager.cache();
-
-    // Find the section by ID or prefix
-    let section = find_section_by_id_or_prefix(cache, &opts.section_id)?;
-    let section_id = section.id.clone();
-    let section_name = section.name.clone();
+    // Find the section by ID or prefix and extract owned data before mutation
+    let (section_id, section_name) = {
+        let cache = manager.cache();
+        let section = find_section_by_id_or_prefix(cache, &opts.section_id)?;
+        (section.id.clone(), section.name.clone())
+    };
 
     // Confirm if not forced
     if !opts.force && !ctx.quiet {
@@ -475,10 +470,9 @@ pub async fn execute_delete(ctx: &CommandContext, opts: &SectionsDeleteOptions, 
     // Create the command
     let command = SyncCommand::new("section_delete", args);
 
-    // Execute the command
-    let api_client = TodoistClient::new(token);
-    let request = SyncRequest::with_commands(vec![command]);
-    let response = api_client.sync(request).await?;
+    // Execute the command via SyncManager
+    // This sends the command, applies the response to cache, and saves to disk
+    let response = manager.execute_commands(vec![command]).await?;
 
     // Check for errors
     if response.has_errors() {
