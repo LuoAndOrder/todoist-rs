@@ -1,10 +1,11 @@
 //! Labels command implementation.
 //!
 //! Lists and manages labels via the Sync API.
+//! Uses SyncManager::execute_commands() to automatically update the cache.
 
 use chrono::Utc;
 use todoist_api::client::TodoistClient;
-use todoist_api::sync::{Label, SyncCommand, SyncRequest};
+use todoist_api::sync::{Label, SyncCommand};
 use todoist_cache::{Cache, CacheStore, SyncManager};
 
 use super::{CommandContext, CommandError, Result};
@@ -126,6 +127,11 @@ pub struct LabelAddResult {
 ///
 /// Returns an error if the API returns an error.
 pub async fn execute_add(ctx: &CommandContext, opts: &LabelsAddOptions, token: &str) -> Result<()> {
+    // Initialize sync manager (loads cache from disk)
+    let client = TodoistClient::new(token);
+    let store = CacheStore::new()?;
+    let mut manager = SyncManager::new(client, store)?;
+
     // Validate color if provided
     if let Some(ref color) = opts.color {
         if !is_valid_color(color) {
@@ -153,10 +159,9 @@ pub async fn execute_add(ctx: &CommandContext, opts: &LabelsAddOptions, token: &
     // Create the command
     let command = SyncCommand::with_temp_id("label_add", &temp_id, args);
 
-    // Execute the command
-    let api_client = TodoistClient::new(token);
-    let request = SyncRequest::with_commands(vec![command]);
-    let response = api_client.sync(request).await?;
+    // Execute the command via SyncManager
+    // This sends the command, applies the response to cache, and saves to disk
+    let response = manager.execute_commands(vec![command]).await?;
 
     // Check for errors
     if response.has_errors() {
@@ -258,7 +263,7 @@ pub struct LabelEditResult {
 ///
 /// # Errors
 ///
-/// Returns an error if syncing fails, label lookup fails, or the API returns an error.
+/// Returns an error if label lookup fails or the API returns an error.
 pub async fn execute_edit(ctx: &CommandContext, opts: &LabelsEditOptions, token: &str) -> Result<()> {
     // Check if any options were provided
     if opts.name.is_none() && opts.color.is_none() && opts.favorite.is_none() {
@@ -267,19 +272,17 @@ pub async fn execute_edit(ctx: &CommandContext, opts: &LabelsEditOptions, token:
         ));
     }
 
-    // Initialize sync manager to resolve label ID
+    // Initialize sync manager (loads cache from disk)
     let client = TodoistClient::new(token);
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
-    // Sync to get current state (for label lookup)
-    manager.sync().await?;
-    let cache = manager.cache();
-
-    // Find the label by ID or prefix
-    let label = find_label_by_id_or_prefix(cache, &opts.label_id)?;
-    let label_id = label.id.clone();
-    let label_name = label.name.clone();
+    // Find the label by ID or prefix and extract owned data before mutation
+    let (label_id, label_name) = {
+        let cache = manager.cache();
+        let label = find_label_by_id_or_prefix(cache, &opts.label_id)?;
+        (label.id.clone(), label.name.clone())
+    };
 
     // Validate color if provided
     if let Some(ref color) = opts.color {
@@ -315,10 +318,9 @@ pub async fn execute_edit(ctx: &CommandContext, opts: &LabelsEditOptions, token:
     // Create the command
     let command = SyncCommand::new("label_update", args);
 
-    // Execute the command
-    let api_client = TodoistClient::new(token);
-    let request = SyncRequest::with_commands(vec![command]);
-    let response = api_client.sync(request).await?;
+    // Execute the command via SyncManager
+    // This sends the command, applies the response to cache, and saves to disk
+    let response = manager.execute_commands(vec![command]).await?;
 
     // Check for errors
     if response.has_errors() {
@@ -421,21 +423,19 @@ pub struct LabelDeleteResult {
 ///
 /// # Errors
 ///
-/// Returns an error if syncing fails, label lookup fails, or the API returns an error.
+/// Returns an error if label lookup fails or the API returns an error.
 pub async fn execute_delete(ctx: &CommandContext, opts: &LabelsDeleteOptions, token: &str) -> Result<()> {
-    // Initialize sync manager to resolve label ID
+    // Initialize sync manager (loads cache from disk)
     let client = TodoistClient::new(token);
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
-    // Sync to get current state (for label lookup)
-    manager.sync().await?;
-    let cache = manager.cache();
-
-    // Find the label by ID or prefix
-    let label = find_label_by_id_or_prefix(cache, &opts.label_id)?;
-    let label_id = label.id.clone();
-    let label_name = label.name.clone();
+    // Find the label by ID or prefix and extract owned data before mutation
+    let (label_id, label_name) = {
+        let cache = manager.cache();
+        let label = find_label_by_id_or_prefix(cache, &opts.label_id)?;
+        (label.id.clone(), label.name.clone())
+    };
 
     // Confirm if not forced
     if !opts.force && !ctx.quiet {
@@ -457,10 +457,9 @@ pub async fn execute_delete(ctx: &CommandContext, opts: &LabelsDeleteOptions, to
     // Create the command
     let command = SyncCommand::new("label_delete", args);
 
-    // Execute the command
-    let api_client = TodoistClient::new(token);
-    let request = SyncRequest::with_commands(vec![command]);
-    let response = api_client.sync(request).await?;
+    // Execute the command via SyncManager
+    // This sends the command, applies the response to cache, and saves to disk
+    let response = manager.execute_commands(vec![command]).await?;
 
     // Check for errors
     if response.has_errors() {
