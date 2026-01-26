@@ -7,6 +7,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use tokio::time::sleep;
 
 use crate::error::{ApiError, Error, Result};
+use crate::sync::{SyncRequest, SyncResponse};
 
 /// Base URL for the Todoist API v1.
 const BASE_URL: &str = "https://api.todoist.com/api/v1";
@@ -197,6 +198,59 @@ impl TodoistClient {
 
             match self.handle_empty_response_with_retry(response, attempt).await {
                 Ok(RetryDecision::Success(())) => return Ok(()),
+                Ok(RetryDecision::Retry { retry_after }) => {
+                    let backoff = self.calculate_backoff(attempt, retry_after);
+                    sleep(backoff).await;
+                }
+                Err(e) => return Err(e),
+            }
+        }
+
+        Err(Error::Api(ApiError::RateLimit { retry_after: None }))
+    }
+
+    /// Performs a sync request to the Todoist Sync API.
+    ///
+    /// The Sync API is the primary mechanism for reading and writing data in Todoist.
+    /// It supports:
+    /// - Full sync (sync_token = "*") to retrieve all data
+    /// - Incremental sync using a stored sync_token
+    /// - Command execution for write operations
+    ///
+    /// # Arguments
+    /// * `request` - The sync request containing sync_token, resource_types, and/or commands
+    ///
+    /// # Returns
+    /// A `SyncResponse` containing the requested resources and command results.
+    ///
+    /// # Example
+    /// ```no_run
+    /// use todoist_api::client::TodoistClient;
+    /// use todoist_api::sync::SyncRequest;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let client = TodoistClient::new("your-api-token");
+    ///     let request = SyncRequest::full_sync();
+    ///     let response = client.sync(request).await.unwrap();
+    ///     println!("Got {} projects", response.projects.len());
+    /// }
+    /// ```
+    pub async fn sync(&self, request: SyncRequest) -> Result<SyncResponse> {
+        let url = format!("{}/sync", self.base_url);
+
+        for attempt in 0..=MAX_RETRIES {
+            let response = self
+                .http_client
+                .post(&url)
+                .bearer_auth(&self.token)
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .body(request.to_form_body())
+                .send()
+                .await?;
+
+            match self.handle_response_with_retry(response, attempt).await {
+                Ok(RetryDecision::Success(value)) => return Ok(value),
                 Ok(RetryDecision::Retry { retry_after }) => {
                     let backoff = self.calculate_backoff(attempt, retry_after);
                     sleep(backoff).await;
