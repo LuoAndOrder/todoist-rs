@@ -414,27 +414,19 @@ async fn run(cli: &Cli) -> commands::Result<()> {
                     };
                     commands::reminders::execute_add(&ctx, &opts, &token).await
                 }
+                Some(RemindersCommands::Delete { reminder_id, force }) => {
+                    let opts = commands::reminders::RemindersDeleteOptions {
+                        reminder_id: reminder_id.clone(),
+                        force: *force,
+                    };
+                    commands::reminders::execute_delete(&ctx, &opts, &token).await
+                }
                 None => {
                     // Default to List if no subcommand provided
                     let opts = commands::reminders::RemindersListOptions {
                         task: task.clone(),
                     };
                     commands::reminders::execute(&ctx, &opts, &token).await
-                }
-                _ => {
-                    // Other subcommands not yet implemented
-                    if cli.json {
-                        println!(
-                            "{}",
-                            serde_json::json!({
-                                "status": "not_implemented",
-                                "command": format!("{:?}", command)
-                            })
-                        );
-                    } else if !cli.quiet {
-                        println!("Reminders subcommand not yet implemented: {:?}", command);
-                    }
-                    Ok(())
                 }
             }
         }

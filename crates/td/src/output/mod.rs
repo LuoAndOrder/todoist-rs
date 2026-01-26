@@ -1757,7 +1757,7 @@ pub fn format_reminders_table(
 // Reminder Add Output Formatting
 // ============================================================================
 
-use crate::commands::reminders::ReminderAddResult;
+use crate::commands::reminders::{ReminderAddResult, ReminderDeleteResult};
 
 /// JSON output structure for a created reminder.
 #[derive(Serialize)]
@@ -1782,6 +1782,30 @@ pub fn format_created_reminder(result: &ReminderAddResult) -> Result<String, ser
         reminder_type: &result.reminder_type,
         due: result.due.as_deref(),
         minute_offset: result.minute_offset,
+    };
+
+    serde_json::to_string_pretty(&output)
+}
+
+/// JSON output structure for a deleted reminder.
+#[derive(Serialize)]
+pub struct DeletedReminderOutput<'a> {
+    pub id: &'a str,
+    pub task_id: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task_name: Option<&'a str>,
+    pub reminder_type: &'a str,
+    pub status: &'static str,
+}
+
+/// Formats a deleted reminder as JSON.
+pub fn format_deleted_reminder(result: &ReminderDeleteResult) -> Result<String, serde_json::Error> {
+    let output = DeletedReminderOutput {
+        id: &result.id,
+        task_id: &result.task_id,
+        task_name: result.task_name.as_deref(),
+        reminder_type: &result.reminder_type,
+        status: "deleted",
     };
 
     serde_json::to_string_pretty(&output)

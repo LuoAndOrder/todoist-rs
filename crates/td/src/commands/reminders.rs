@@ -327,6 +327,191 @@ fn format_offset(minutes: i32) -> String {
     }
 }
 
+// ============================================================================
+// Reminders Delete Command
+// ============================================================================
+
+/// Options for the reminders delete command.
+#[derive(Debug)]
+pub struct RemindersDeleteOptions {
+    /// Reminder ID (full ID or prefix).
+    pub reminder_id: String,
+    /// Skip confirmation.
+    pub force: bool,
+}
+
+/// Result of a successful reminder delete operation.
+#[derive(Debug)]
+pub struct ReminderDeleteResult {
+    /// The ID of the deleted reminder.
+    pub id: String,
+    /// The task ID the reminder was attached to.
+    pub task_id: String,
+    /// The task name (content).
+    pub task_name: Option<String>,
+    /// The reminder type.
+    pub reminder_type: String,
+}
+
+/// Executes the reminders delete command.
+///
+/// # Arguments
+///
+/// * `ctx` - Command context with output settings
+/// * `opts` - Reminders delete command options
+/// * `token` - API token
+///
+/// # Errors
+///
+/// Returns an error if syncing fails, reminder lookup fails, or the API returns an error.
+pub async fn execute_delete(
+    ctx: &CommandContext,
+    opts: &RemindersDeleteOptions,
+    token: &str,
+) -> Result<()> {
+    // Initialize sync manager to resolve reminder ID
+    let client = TodoistClient::new(token);
+    let store = CacheStore::new()?;
+    let mut manager = SyncManager::new(client, store)?;
+
+    // Sync to get current state (for reminder lookup)
+    manager.sync().await?;
+    let cache = manager.cache();
+
+    // Find the reminder by ID or prefix
+    let reminder = find_reminder_by_id_or_prefix(cache, &opts.reminder_id)?;
+    let reminder_id = reminder.id.clone();
+    let task_id = reminder.item_id.clone();
+    let reminder_type = reminder.reminder_type.clone();
+
+    // Get task name for display
+    let task_name = cache
+        .items
+        .iter()
+        .find(|i| i.id == task_id)
+        .map(|i| i.content.clone());
+
+    // Confirm if not forced
+    if !opts.force && !ctx.quiet {
+        let task_display = task_name
+            .as_deref()
+            .unwrap_or(&task_id);
+        let reminder_desc = format_reminder_description(&reminder_type, reminder.minute_offset, reminder.due.as_ref());
+        eprintln!(
+            "Delete reminder '{}' for task '{}'?",
+            reminder_desc,
+            task_display
+        );
+        eprintln!("Use --force to skip this confirmation.");
+        return Err(CommandError::Config("Operation cancelled. Use --force to confirm.".to_string()));
+    }
+
+    // Build the reminder_delete command arguments
+    let args = serde_json::json!({
+        "id": reminder_id,
+    });
+
+    // Create the command
+    let command = SyncCommand::new("reminder_delete", args);
+
+    // Execute the command
+    let api_client = TodoistClient::new(token);
+    let request = SyncRequest::with_commands(vec![command]);
+    let response = api_client.sync(request).await?;
+
+    // Check for errors
+    if response.has_errors() {
+        let errors = response.errors();
+        if let Some((_, error)) = errors.first() {
+            return Err(CommandError::Api(todoist_api::error::Error::Api(
+                todoist_api::error::ApiError::Validation {
+                    field: None,
+                    message: format!("Error {}: {}", error.error_code, error.error),
+                },
+            )));
+        }
+    }
+
+    let result = ReminderDeleteResult {
+        id: reminder_id,
+        task_id,
+        task_name,
+        reminder_type,
+    };
+
+    // Output
+    if ctx.json_output {
+        let output = crate::output::format_deleted_reminder(&result)?;
+        println!("{output}");
+    } else if !ctx.quiet {
+        let task_display = result.task_name.as_deref().unwrap_or(&result.task_id);
+        if ctx.verbose {
+            println!("Deleted reminder: {} ({})", result.reminder_type, result.id);
+            println!("  Task: {}", task_display);
+        } else {
+            let prefix = &result.id[..6.min(result.id.len())];
+            println!("Deleted reminder ({}) from task: {}", prefix, task_display);
+        }
+    }
+
+    Ok(())
+}
+
+/// Finds a reminder by full ID or unique prefix.
+fn find_reminder_by_id_or_prefix<'a>(cache: &'a Cache, id: &str) -> Result<&'a Reminder> {
+    // First try exact match
+    if let Some(reminder) = cache.reminders.iter().find(|r| r.id == id && !r.is_deleted) {
+        return Ok(reminder);
+    }
+
+    // Try prefix match
+    let matches: Vec<&Reminder> = cache
+        .reminders
+        .iter()
+        .filter(|r| r.id.starts_with(id) && !r.is_deleted)
+        .collect();
+
+    match matches.len() {
+        0 => Err(CommandError::Config(format!("Reminder not found: {id}"))),
+        1 => Ok(matches[0]),
+        _ => {
+            // Ambiguous prefix - provide helpful error message
+            let mut msg = format!("Ambiguous reminder ID \"{id}\"\n\nMultiple reminders match this prefix:");
+            for reminder in matches.iter().take(5) {
+                let prefix = &reminder.id[..6.min(reminder.id.len())];
+                let desc = format_reminder_description(&reminder.reminder_type, reminder.minute_offset, reminder.due.as_ref());
+                msg.push_str(&format!("\n  {}  {}", prefix, desc));
+            }
+            if matches.len() > 5 {
+                msg.push_str(&format!("\n  ... and {} more", matches.len() - 5));
+            }
+            msg.push_str("\n\nPlease use a longer prefix.");
+            Err(CommandError::Config(msg))
+        }
+    }
+}
+
+/// Formats a reminder description for display.
+fn format_reminder_description(reminder_type: &str, minute_offset: Option<i32>, due: Option<&todoist_api::sync::Due>) -> String {
+    match reminder_type {
+        "relative" => {
+            if let Some(offset) = minute_offset {
+                format_offset(offset)
+            } else {
+                "relative reminder".to_string()
+            }
+        }
+        "absolute" => {
+            if let Some(d) = due {
+                format!("at {}", d.date)
+            } else {
+                "absolute reminder".to_string()
+            }
+        }
+        _ => reminder_type.to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -613,5 +798,134 @@ mod tests {
     fn test_format_offset_days() {
         assert_eq!(format_offset(2880), "2 days before");
         assert_eq!(format_offset(4320), "3 days before");
+    }
+
+    // ========================================================================
+    // Reminders Delete Tests
+    // ========================================================================
+
+    #[test]
+    fn test_reminders_delete_options() {
+        let opts = RemindersDeleteOptions {
+            reminder_id: "reminder-123".to_string(),
+            force: false,
+        };
+
+        assert_eq!(opts.reminder_id, "reminder-123");
+        assert!(!opts.force);
+    }
+
+    #[test]
+    fn test_reminders_delete_options_with_force() {
+        let opts = RemindersDeleteOptions {
+            reminder_id: "reminder-456".to_string(),
+            force: true,
+        };
+
+        assert_eq!(opts.reminder_id, "reminder-456");
+        assert!(opts.force);
+    }
+
+    #[test]
+    fn test_reminder_delete_result() {
+        let result = ReminderDeleteResult {
+            id: "reminder-789".to_string(),
+            task_id: "task-1".to_string(),
+            task_name: Some("Test Task".to_string()),
+            reminder_type: "relative".to_string(),
+        };
+
+        assert_eq!(result.id, "reminder-789");
+        assert_eq!(result.task_id, "task-1");
+        assert_eq!(result.task_name, Some("Test Task".to_string()));
+        assert_eq!(result.reminder_type, "relative");
+    }
+
+    #[test]
+    fn test_find_reminder_by_id_or_prefix_exact_match() {
+        let cache = make_test_cache();
+        let result = find_reminder_by_id_or_prefix(&cache, "reminder-1");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().id, "reminder-1");
+    }
+
+    #[test]
+    fn test_find_reminder_by_id_or_prefix_prefix_match() {
+        let cache = make_test_cache();
+        let result = find_reminder_by_id_or_prefix(&cache, "reminder-2");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().id, "reminder-2");
+    }
+
+    #[test]
+    fn test_find_reminder_by_id_or_prefix_not_found() {
+        let cache = make_test_cache();
+        let result = find_reminder_by_id_or_prefix(&cache, "nonexistent");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Reminder not found"));
+    }
+
+    #[test]
+    fn test_find_reminder_by_id_or_prefix_ambiguous() {
+        let cache = make_test_cache();
+        // Both reminder-1 and reminder-2 start with "reminder-"
+        let result = find_reminder_by_id_or_prefix(&cache, "reminder-");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Ambiguous"));
+    }
+
+    #[test]
+    fn test_find_reminder_by_id_or_prefix_ignores_deleted() {
+        let mut cache = make_test_cache();
+        cache.reminders[0].is_deleted = true;
+
+        let result = find_reminder_by_id_or_prefix(&cache, "reminder-1");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_format_reminder_description_relative() {
+        assert_eq!(
+            format_reminder_description("relative", Some(30), None),
+            "30 minutes before"
+        );
+        assert_eq!(
+            format_reminder_description("relative", Some(60), None),
+            "1 hour before"
+        );
+        assert_eq!(
+            format_reminder_description("relative", None, None),
+            "relative reminder"
+        );
+    }
+
+    #[test]
+    fn test_format_reminder_description_absolute() {
+        let due = Due {
+            date: "2025-01-26".to_string(),
+            datetime: Some("2025-01-26T10:00:00Z".to_string()),
+            timezone: Some("UTC".to_string()),
+            string: None,
+            is_recurring: false,
+            lang: None,
+        };
+        assert_eq!(
+            format_reminder_description("absolute", None, Some(&due)),
+            "at 2025-01-26"
+        );
+        assert_eq!(
+            format_reminder_description("absolute", None, None),
+            "absolute reminder"
+        );
+    }
+
+    #[test]
+    fn test_format_reminder_description_unknown() {
+        assert_eq!(
+            format_reminder_description("location", None, None),
+            "location"
+        );
     }
 }
