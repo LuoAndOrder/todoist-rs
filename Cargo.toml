@@ -32,6 +32,9 @@ keyring = "3"
 owo-colors = "4"
 uuid = { version = "1", features = ["v4"] }
 
+# Testing
+tempfile = "3"
+
 # Workspace crates
 todoist-api = { path = "crates/todoist-api" }
 todoist-cache = { path = "crates/todoist-cache" }

@@ -7,6 +7,7 @@ mod output;
 
 use cli::{Cli, Commands, CommentsCommands, ConfigCommands, LabelsCommands, ProjectsCommands, RemindersCommands, SectionsCommands};
 use commands::{CommandContext, CommandError};
+use commands::config::load_config;
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -73,11 +74,8 @@ async fn run(cli: &Cli) -> commands::Result<()> {
         _ => {}
     }
 
-    // Get token from CLI or environment
-    let token = cli
-        .token
-        .clone()
-        .ok_or_else(|| CommandError::Config("No API token provided. Use --token or set TODOIST_TOKEN environment variable.".to_string()))?;
+    // Get token with resolution chain: flag > env > config
+    let token = resolve_token(cli)?;
 
     match &cli.command {
         Some(Commands::List {
@@ -522,5 +520,180 @@ fn error_exit_code(e: &CommandError) -> ExitCode {
         CommandError::CacheStore(_) => ExitCode::from(5),
         CommandError::Io(_) => ExitCode::from(3),
         CommandError::Json(_) => ExitCode::from(1),
+    }
+}
+
+/// Resolves the API token with priority: flag > env > config.
+///
+/// The resolution order is:
+/// 1. `--token` command line flag (highest priority)
+/// 2. `TODOIST_TOKEN` environment variable
+/// 3. Token from config file (`~/.config/td/config.toml`)
+fn resolve_token(cli: &Cli) -> commands::Result<String> {
+    // 1. Flag takes highest priority (clap already handles env via `env = "TODOIST_TOKEN"`)
+    //    When cli.token is Some, it's either from --token flag OR from TODOIST_TOKEN env
+    if let Some(token) = &cli.token {
+        return Ok(token.clone());
+    }
+
+    // 2. Try config file
+    match load_config() {
+        Ok(config) => {
+            if let Some(token) = config.token {
+                return Ok(token);
+            }
+        }
+        Err(_) => {
+            // Config loading failed, continue to error message
+        }
+    }
+
+    // No token found anywhere
+    Err(CommandError::Config(
+        "No API token provided. Use --token flag, set TODOIST_TOKEN environment variable, or add token to config file.".to_string()
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+
+    /// Helper to create a test CLI with specified token.
+    fn cli_with_token(token: Option<String>) -> Cli {
+        Cli {
+            verbose: false,
+            quiet: false,
+            json: false,
+            no_color: false,
+            token,
+            command: Some(Commands::List {
+                filter: None,
+                project: None,
+                label: None,
+                priority: None,
+                section: None,
+                overdue: false,
+                no_due: false,
+                limit: 50,
+                all: false,
+                cursor: None,
+                sort: None,
+                reverse: false,
+            }),
+        }
+    }
+
+    #[test]
+    fn test_resolve_token_from_flag() {
+        // Token from flag takes highest priority
+        let cli = cli_with_token(Some("flag-token".to_string()));
+        let result = resolve_token(&cli);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "flag-token");
+    }
+
+    #[test]
+    fn test_resolve_token_no_token_error() {
+        // Clear env var to ensure clean test
+        let original = env::var("TODOIST_TOKEN").ok();
+        env::remove_var("TODOIST_TOKEN");
+
+        // Set config to non-existent path to ensure no config token
+        let original_config = env::var("TD_CONFIG").ok();
+        env::set_var("TD_CONFIG", "/tmp/td-test-nonexistent/config.toml");
+
+        let cli = cli_with_token(None);
+        let result = resolve_token(&cli);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, CommandError::Config(_)));
+
+        // Restore env vars
+        if let Some(val) = original {
+            env::set_var("TODOIST_TOKEN", val);
+        }
+        if let Some(val) = original_config {
+            env::set_var("TD_CONFIG", val);
+        } else {
+            env::remove_var("TD_CONFIG");
+        }
+    }
+
+    #[test]
+    fn test_resolve_token_from_config() {
+        use std::fs;
+        use std::io::Write;
+        use tempfile::TempDir;
+
+        // Create a temporary config file
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("config.toml");
+
+        let mut file = fs::File::create(&config_path).unwrap();
+        writeln!(file, r#"token = "config-token""#).unwrap();
+
+        // Set TD_CONFIG to point to our temp config
+        let original_config = env::var("TD_CONFIG").ok();
+        env::set_var("TD_CONFIG", config_path.to_str().unwrap());
+
+        // Clear TODOIST_TOKEN to ensure we're not picking it up
+        let original_token = env::var("TODOIST_TOKEN").ok();
+        env::remove_var("TODOIST_TOKEN");
+
+        let cli = cli_with_token(None);
+        let result = resolve_token(&cli);
+
+        // Restore env vars first (before assertions that might panic)
+        if let Some(val) = original_config {
+            env::set_var("TD_CONFIG", val);
+        } else {
+            env::remove_var("TD_CONFIG");
+        }
+        if let Some(val) = original_token {
+            env::set_var("TODOIST_TOKEN", val);
+        }
+
+        assert!(result.is_ok(), "Expected Ok but got: {:?}", result);
+        assert_eq!(result.unwrap(), "config-token");
+    }
+
+    #[test]
+    fn test_resolve_token_flag_overrides_config() {
+        use std::fs;
+        use std::io::Write;
+        use tempfile::TempDir;
+
+        // Create a temporary config file with a token
+        let temp_dir = TempDir::new().unwrap();
+        let config_path = temp_dir.path().join("config.toml");
+
+        let mut file = fs::File::create(&config_path).unwrap();
+        writeln!(file, r#"token = "config-token""#).unwrap();
+
+        // Set TD_CONFIG to point to our temp config
+        let original_config = env::var("TD_CONFIG").ok();
+        env::set_var("TD_CONFIG", config_path.to_str().unwrap());
+
+        // Clear TODOIST_TOKEN
+        let original_token = env::var("TODOIST_TOKEN").ok();
+        env::remove_var("TODOIST_TOKEN");
+
+        // CLI has a token from flag, should override config
+        let cli = cli_with_token(Some("flag-token".to_string()));
+        let result = resolve_token(&cli);
+
+        // Restore env vars
+        if let Some(val) = original_config {
+            env::set_var("TD_CONFIG", val);
+        } else {
+            env::remove_var("TD_CONFIG");
+        }
+        if let Some(val) = original_token {
+            env::set_var("TODOIST_TOKEN", val);
+        }
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "flag-token");
     }
 }
