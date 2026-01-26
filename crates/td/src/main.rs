@@ -639,6 +639,7 @@ mod tests {
             json: false,
             no_color: false,
             token,
+            sync: false,
             command: Some(Commands::List {
                 filter: None,
                 project: None,

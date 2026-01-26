@@ -148,6 +148,10 @@ pub struct CommandContext {
     pub quiet: bool,
     /// Whether to be verbose.
     pub verbose: bool,
+    /// Whether to sync before executing the command.
+    /// Used by read commands in Phase 2 (tasks 2.2-2.4) of the cache refactor.
+    #[allow(dead_code)]
+    pub sync_first: bool,
 }
 
 impl CommandContext {
@@ -158,6 +162,7 @@ impl CommandContext {
             use_colors: !cli.no_color,
             quiet: cli.quiet,
             verbose: cli.verbose,
+            sync_first: cli.sync,
         }
     }
 }

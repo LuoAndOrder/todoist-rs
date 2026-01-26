@@ -30,6 +30,10 @@ pub struct Cli {
     #[arg(long, global = true, env = "TODOIST_TOKEN", hide_env_values = true)]
     pub token: Option<String>,
 
+    /// Sync with Todoist before executing the command
+    #[arg(long, global = true)]
+    pub sync: bool,
+
     #[command(subcommand)]
     pub command: Option<Commands>,
 }
@@ -746,6 +750,16 @@ mod tests {
     fn test_token_flag() {
         let cli = Cli::parse_from(["td", "--token", "test-token", "list"]);
         assert_eq!(cli.token, Some("test-token".to_string()));
+    }
+
+    #[test]
+    fn test_sync_flag() {
+        let cli = Cli::parse_from(["td", "--sync", "list"]);
+        assert!(cli.sync);
+
+        // Without --sync, it should be false
+        let cli = Cli::parse_from(["td", "list"]);
+        assert!(!cli.sync);
     }
 
     #[test]
