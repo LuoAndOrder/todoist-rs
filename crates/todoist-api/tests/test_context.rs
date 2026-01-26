@@ -245,6 +245,25 @@ impl TestContext {
             .find(|l| !l.is_deleted && l.name.eq_ignore_ascii_case(name))
     }
 
+    /// Finds a reminder in the cached state by ID.
+    ///
+    /// Returns `None` if the reminder is not found or is deleted.
+    /// This does NOT make an API call.
+    pub fn find_reminder(&self, id: &str) -> Option<&Reminder> {
+        self.reminders.iter().find(|r| r.id == id && !r.is_deleted)
+    }
+
+    /// Finds all reminders for a specific task.
+    ///
+    /// Returns a vector of non-deleted reminders for the given item_id.
+    /// This does NOT make an API call.
+    pub fn find_reminders_for_task(&self, item_id: &str) -> Vec<&Reminder> {
+        self.reminders
+            .iter()
+            .filter(|r| !r.is_deleted && r.item_id == item_id)
+            .collect()
+    }
+
     /// Returns all non-deleted items in the cache.
     pub fn items(&self) -> impl Iterator<Item = &Item> {
         self.items.iter().filter(|i| !i.is_deleted)
@@ -502,9 +521,95 @@ impl TestContext {
         Ok(())
     }
 
+    /// Creates an absolute reminder and returns its real ID.
+    ///
+    /// Creates a reminder at a specific datetime.
+    pub async fn create_absolute_reminder(
+        &mut self,
+        item_id: &str,
+        due_datetime: &str,
+    ) -> Result<String, todoist_api::error::Error> {
+        let temp_id = uuid::Uuid::new_v4().to_string();
+        let command = SyncCommand::with_temp_id(
+            "reminder_add",
+            &temp_id,
+            serde_json::json!({
+                "item_id": item_id,
+                "type": "absolute",
+                "due": {
+                    "date": due_datetime
+                }
+            }),
+        );
+        let response = self.execute(vec![command]).await?;
+
+        if response.has_errors() {
+            return Err(todoist_api::error::Error::Internal(format!(
+                "reminder_add (absolute) failed: {:?}",
+                response.errors()
+            )));
+        }
+
+        response.real_id(&temp_id).cloned().ok_or_else(|| {
+            todoist_api::error::Error::Internal("No temp_id mapping returned".to_string())
+        })
+    }
+
+    /// Creates a relative reminder and returns its real ID.
+    ///
+    /// Creates a reminder that fires `minute_offset` minutes before the task's due time.
+    /// Note: The task must have a due date with time set.
+    pub async fn create_relative_reminder(
+        &mut self,
+        item_id: &str,
+        minute_offset: i32,
+    ) -> Result<String, todoist_api::error::Error> {
+        let temp_id = uuid::Uuid::new_v4().to_string();
+        let command = SyncCommand::with_temp_id(
+            "reminder_add",
+            &temp_id,
+            serde_json::json!({
+                "item_id": item_id,
+                "type": "relative",
+                "minute_offset": minute_offset
+            }),
+        );
+        let response = self.execute(vec![command]).await?;
+
+        if response.has_errors() {
+            return Err(todoist_api::error::Error::Internal(format!(
+                "reminder_add (relative) failed: {:?}",
+                response.errors()
+            )));
+        }
+
+        response.real_id(&temp_id).cloned().ok_or_else(|| {
+            todoist_api::error::Error::Internal("No temp_id mapping returned".to_string())
+        })
+    }
+
+    /// Deletes a reminder.
+    pub async fn delete_reminder(
+        &mut self,
+        reminder_id: &str,
+    ) -> Result<(), todoist_api::error::Error> {
+        let command = SyncCommand::new("reminder_delete", serde_json::json!({"id": reminder_id}));
+        let response = self.execute(vec![command]).await?;
+
+        if response.has_errors() {
+            return Err(todoist_api::error::Error::Internal(format!(
+                "reminder_delete failed: {:?}",
+                response.errors()
+            )));
+        }
+
+        Ok(())
+    }
+
     /// Batch delete multiple resources in one API call.
     ///
     /// This is more efficient than deleting one at a time.
+    /// Note: Reminders should be deleted before their associated tasks.
     pub async fn batch_delete(
         &mut self,
         task_ids: &[&str],
@@ -512,7 +617,31 @@ impl TestContext {
         section_ids: &[&str],
         label_ids: &[&str],
     ) -> Result<(), todoist_api::error::Error> {
+        self.batch_delete_with_reminders(task_ids, project_ids, section_ids, label_ids, &[])
+            .await
+    }
+
+    /// Batch delete multiple resources including reminders in one API call.
+    ///
+    /// This is more efficient than deleting one at a time.
+    /// Reminders are deleted first, then tasks, sections, projects, and labels.
+    pub async fn batch_delete_with_reminders(
+        &mut self,
+        task_ids: &[&str],
+        project_ids: &[&str],
+        section_ids: &[&str],
+        label_ids: &[&str],
+        reminder_ids: &[&str],
+    ) -> Result<(), todoist_api::error::Error> {
         let mut commands = Vec::new();
+
+        // Delete reminders first (they depend on tasks)
+        for id in reminder_ids {
+            commands.push(SyncCommand::new(
+                "reminder_delete",
+                serde_json::json!({"id": id}),
+            ));
+        }
 
         for id in task_ids {
             commands.push(SyncCommand::new(
