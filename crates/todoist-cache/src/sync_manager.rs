@@ -27,7 +27,7 @@
 
 use chrono::{DateTime, Duration, Utc};
 use todoist_api::client::TodoistClient;
-use todoist_api::sync::SyncRequest;
+use todoist_api::sync::{SyncCommand, SyncRequest, SyncResponse};
 
 use crate::{Cache, CacheStore, CacheStoreError};
 
@@ -219,6 +219,72 @@ impl SyncManager {
     pub fn reload(&mut self) -> Result<&Cache> {
         self.cache = self.store.load_or_default()?;
         Ok(&self.cache)
+    }
+
+    /// Executes one or more commands via the Sync API.
+    ///
+    /// This method sends the commands to the Todoist API, applies the response
+    /// to the cache, and saves the cache to disk. It returns the full response
+    /// so callers can access `temp_id_mapping` to resolve temporary IDs to
+    /// real IDs, and `sync_status` to check per-command results.
+    ///
+    /// # Arguments
+    ///
+    /// * `commands` - A vector of `SyncCommand` objects to execute
+    ///
+    /// # Returns
+    ///
+    /// The `SyncResponse` from the API, containing:
+    /// - `sync_status`: Success/failure for each command (keyed by command UUID)
+    /// - `temp_id_mapping`: Maps temporary IDs to real IDs for created resources
+    /// - Updated resources affected by the commands
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the API request fails or if saving the cache fails.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use todoist_api::client::TodoistClient;
+    /// use todoist_api::sync::SyncCommand;
+    /// use todoist_cache::{CacheStore, SyncManager};
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let client = TodoistClient::new("your-api-token");
+    ///     let store = CacheStore::new()?;
+    ///     let mut manager = SyncManager::new(client, store)?;
+    ///
+    ///     // Create a new task
+    ///     let temp_id = uuid::Uuid::new_v4().to_string();
+    ///     let cmd = SyncCommand::with_temp_id(
+    ///         "item_add",
+    ///         &temp_id,
+    ///         serde_json::json!({"content": "Buy milk", "project_id": "inbox"}),
+    ///     );
+    ///
+    ///     let response = manager.execute_commands(vec![cmd]).await?;
+    ///
+    ///     // Get the real ID from temp_id_mapping
+    ///     if let Some(real_id) = response.temp_id_mapping.get(&temp_id) {
+    ///         println!("Created task with ID: {}", real_id);
+    ///     }
+    ///
+    ///     Ok(())
+    /// }
+    /// ```
+    pub async fn execute_commands(&mut self, commands: Vec<SyncCommand>) -> Result<SyncResponse> {
+        let request = SyncRequest::with_commands(commands);
+        let response = self.client.sync(request).await?;
+
+        // Apply the mutation response to update cache with affected resources
+        self.cache.apply_mutation_response(&response);
+
+        // Persist the updated cache
+        self.store.save(&self.cache)?;
+
+        Ok(response)
     }
 }
 

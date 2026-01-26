@@ -434,3 +434,187 @@ async fn test_sync_updates_last_sync_timestamp() {
     assert!(last_sync >= before_sync);
     assert!(last_sync <= after_sync);
 }
+
+/// Creates a mock response for a command execution (item_add).
+fn mock_command_response() -> serde_json::Value {
+    serde_json::json!({
+        "sync_token": "post_command_token_456",
+        "full_sync": false,
+        "items": [
+            {
+                "id": "real-item-id-789",
+                "project_id": "proj-1",
+                "content": "New task from command",
+                "description": "",
+                "priority": 1,
+                "child_order": 0,
+                "day_order": 0,
+                "is_collapsed": false,
+                "labels": [],
+                "checked": false,
+                "is_deleted": false
+            }
+        ],
+        "projects": [],
+        "labels": [],
+        "sections": [],
+        "notes": [],
+        "project_notes": [],
+        "reminders": [],
+        "filters": [],
+        "collaborators": [],
+        "collaborator_states": [],
+        "live_notifications": [],
+        "sync_status": {
+            "test-cmd-uuid": "ok"
+        },
+        "temp_id_mapping": {
+            "temp-item-123": "real-item-id-789"
+        },
+        "completed_info": [],
+        "locations": []
+    })
+}
+
+#[tokio::test]
+async fn test_execute_commands_adds_item_to_cache() {
+    use todoist_api::sync::SyncCommand;
+
+    let mock_server = MockServer::start().await;
+    let temp_dir = tempdir().expect("failed to create temp dir");
+    let cache_path = temp_dir.path().join("cache.json");
+
+    // Create an existing cache with sync token
+    let store = CacheStore::with_path(cache_path.clone());
+    let mut existing_cache = Cache::new();
+    existing_cache.sync_token = "existing_token".to_string();
+    store.save(&existing_cache).expect("failed to save cache");
+
+    // Set up mock to respond to command
+    Mock::given(method("POST"))
+        .and(path("/sync"))
+        .and(body_string_contains("commands="))
+        .respond_with(ResponseTemplate::new(200).set_body_json(mock_command_response()))
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let store = CacheStore::with_path(cache_path.clone());
+    let mut manager = SyncManager::new(client, store).expect("failed to create manager");
+
+    // Initially no items in cache
+    assert_eq!(manager.cache().items.len(), 0);
+
+    // Execute item_add command
+    let cmd = SyncCommand::with_temp_id(
+        "item_add",
+        "temp-item-123",
+        serde_json::json!({"content": "New task from command", "project_id": "proj-1"}),
+    );
+    let response = manager
+        .execute_commands(vec![cmd])
+        .await
+        .expect("execute_commands failed");
+
+    // Verify response contains temp_id_mapping
+    assert_eq!(
+        response.temp_id_mapping.get("temp-item-123"),
+        Some(&"real-item-id-789".to_string())
+    );
+
+    // Verify cache was updated with the new item
+    assert_eq!(manager.cache().items.len(), 1);
+    assert_eq!(manager.cache().items[0].id, "real-item-id-789");
+    assert_eq!(manager.cache().items[0].content, "New task from command");
+
+    // Verify sync_token was updated
+    assert_eq!(manager.cache().sync_token, "post_command_token_456");
+
+    // Verify cache was persisted to disk
+    let store2 = CacheStore::with_path(cache_path);
+    let loaded = store2.load().expect("failed to load cache");
+    assert_eq!(loaded.items.len(), 1);
+    assert_eq!(loaded.sync_token, "post_command_token_456");
+}
+
+#[tokio::test]
+async fn test_execute_commands_handles_api_error() {
+    use todoist_api::sync::SyncCommand;
+
+    let mock_server = MockServer::start().await;
+    let temp_dir = tempdir().expect("failed to create temp dir");
+    let cache_path = temp_dir.path().join("cache.json");
+
+    // Create an existing cache
+    let store = CacheStore::with_path(cache_path.clone());
+    let mut existing_cache = Cache::new();
+    existing_cache.sync_token = "original_token".to_string();
+    store.save(&existing_cache).expect("failed to save cache");
+
+    Mock::given(method("POST"))
+        .and(path("/sync"))
+        .respond_with(ResponseTemplate::new(500).set_body_string("Internal Server Error"))
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let store = CacheStore::with_path(cache_path.clone());
+    let mut manager = SyncManager::new(client, store).expect("failed to create manager");
+
+    let cmd = SyncCommand::new("item_add", serde_json::json!({"content": "Test"}));
+    let result = manager.execute_commands(vec![cmd]).await;
+
+    // Should return error
+    assert!(result.is_err());
+
+    // Cache should remain unchanged (original token preserved)
+    assert_eq!(manager.cache().sync_token, "original_token");
+
+    // Disk cache should also remain unchanged
+    let store2 = CacheStore::with_path(cache_path);
+    let loaded = store2.load().expect("failed to load cache");
+    assert_eq!(loaded.sync_token, "original_token");
+}
+
+#[tokio::test]
+async fn test_execute_commands_updates_last_sync() {
+    use todoist_api::sync::SyncCommand;
+
+    let mock_server = MockServer::start().await;
+    let temp_dir = tempdir().expect("failed to create temp dir");
+    let cache_path = temp_dir.path().join("cache.json");
+
+    let store = CacheStore::with_path(cache_path.clone());
+    let mut existing_cache = Cache::new();
+    existing_cache.sync_token = "token".to_string();
+    existing_cache.last_sync = None; // No previous sync
+    store.save(&existing_cache).expect("failed to save cache");
+
+    Mock::given(method("POST"))
+        .and(path("/sync"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(mock_command_response()))
+        .mount(&mock_server)
+        .await;
+
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let store = CacheStore::with_path(cache_path);
+    let mut manager = SyncManager::new(client, store).expect("failed to create manager");
+
+    // Initially no last_sync
+    assert!(manager.cache().last_sync.is_none());
+
+    let before = chrono::Utc::now();
+    let cmd = SyncCommand::new("item_add", serde_json::json!({"content": "Test"}));
+    manager
+        .execute_commands(vec![cmd])
+        .await
+        .expect("execute_commands failed");
+    let after = chrono::Utc::now();
+
+    // last_sync should be updated
+    let last_sync = manager.cache().last_sync.expect("last_sync should be set");
+    assert!(last_sync >= before);
+    assert!(last_sync <= after);
+}
