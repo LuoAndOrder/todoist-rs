@@ -99,6 +99,17 @@ impl Error {
         }
     }
 
+    /// Returns true if this error indicates an invalid sync token.
+    ///
+    /// This is used to detect when the API rejects a sync token, which
+    /// means the client should fall back to a full sync with `sync_token='*'`.
+    pub fn is_invalid_sync_token(&self) -> bool {
+        match self {
+            Error::Api(api_err) => api_err.is_invalid_sync_token(),
+            _ => false,
+        }
+    }
+
     /// Returns the appropriate CLI exit code for this error.
     ///
     /// Exit codes follow the spec:
@@ -141,6 +152,24 @@ impl ApiError {
             ApiError::Network { .. } => 3,
             ApiError::RateLimit { .. } => 4,
             _ => 2,
+        }
+    }
+
+    /// Returns true if this error indicates an invalid sync token.
+    ///
+    /// The Todoist API returns a 400 status code with a validation error when
+    /// a sync token is invalid or expired. This method checks for common error
+    /// messages that indicate sync token issues.
+    pub fn is_invalid_sync_token(&self) -> bool {
+        match self {
+            ApiError::Validation { message, .. } => {
+                let msg_lower = message.to_lowercase();
+                msg_lower.contains("sync_token")
+                    || msg_lower.contains("sync token")
+                    || msg_lower.contains("invalid token")
+                    || msg_lower.contains("token invalid")
+            }
+            _ => false,
         }
     }
 }
@@ -548,5 +577,92 @@ mod tests {
             Err(Error::Internal("failed".to_string()))
         }
         assert!(returns_error().is_err());
+    }
+
+    // Tests for is_invalid_sync_token
+
+    #[test]
+    fn test_api_error_is_invalid_sync_token_with_sync_token_message() {
+        let error = ApiError::Validation {
+            field: None,
+            message: "Invalid sync_token".to_string(),
+        };
+        assert!(error.is_invalid_sync_token());
+    }
+
+    #[test]
+    fn test_api_error_is_invalid_sync_token_with_sync_token_spaces() {
+        let error = ApiError::Validation {
+            field: None,
+            message: "Invalid sync token provided".to_string(),
+        };
+        assert!(error.is_invalid_sync_token());
+    }
+
+    #[test]
+    fn test_api_error_is_invalid_sync_token_with_token_invalid() {
+        let error = ApiError::Validation {
+            field: None,
+            message: "Token invalid or expired".to_string(),
+        };
+        assert!(error.is_invalid_sync_token());
+    }
+
+    #[test]
+    fn test_api_error_is_invalid_sync_token_case_insensitive() {
+        let error = ApiError::Validation {
+            field: None,
+            message: "SYNC_TOKEN is not valid".to_string(),
+        };
+        assert!(error.is_invalid_sync_token());
+    }
+
+    #[test]
+    fn test_api_error_is_invalid_sync_token_false_for_other_validation() {
+        let error = ApiError::Validation {
+            field: Some("content".to_string()),
+            message: "Content is required".to_string(),
+        };
+        assert!(!error.is_invalid_sync_token());
+    }
+
+    #[test]
+    fn test_api_error_is_invalid_sync_token_false_for_auth() {
+        let error = ApiError::Auth {
+            message: "Token expired".to_string(),
+        };
+        assert!(!error.is_invalid_sync_token());
+    }
+
+    #[test]
+    fn test_api_error_is_invalid_sync_token_false_for_http() {
+        let error = ApiError::Http {
+            status: 500,
+            message: "Server error".to_string(),
+        };
+        assert!(!error.is_invalid_sync_token());
+    }
+
+    #[test]
+    fn test_error_is_invalid_sync_token_delegates_to_api_error() {
+        let error: Error = ApiError::Validation {
+            field: None,
+            message: "Invalid sync_token".to_string(),
+        }
+        .into();
+        assert!(error.is_invalid_sync_token());
+    }
+
+    #[test]
+    fn test_error_is_invalid_sync_token_false_for_non_api() {
+        let error = Error::Internal("test".to_string());
+        assert!(!error.is_invalid_sync_token());
+    }
+
+    #[test]
+    fn test_error_is_invalid_sync_token_false_for_http_error() {
+        // HTTP errors from reqwest are not sync token errors
+        let error = Error::Json(serde_json::from_str::<serde_json::Value>("bad").unwrap_err());
+        assert!(!error.is_invalid_sync_token());
     }
 }

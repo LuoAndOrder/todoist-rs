@@ -53,6 +53,13 @@ pub enum SyncError {
         /// The name or ID that was searched for.
         identifier: String,
     },
+
+    /// Sync token was rejected by the API.
+    ///
+    /// This indicates the cached sync token is no longer valid and the client
+    /// should perform a full sync to obtain a fresh token.
+    #[error("sync token invalid or expired, full sync required")]
+    SyncTokenInvalid,
 }
 
 /// Result type for sync operations.

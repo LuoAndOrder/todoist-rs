@@ -564,6 +564,7 @@ fn error_exit_code(e: &CommandError) -> ExitCode {
         CommandError::Sync(todoist_cache::SyncError::Api(_)) => ExitCode::from(2),
         CommandError::Sync(todoist_cache::SyncError::Cache(_)) => ExitCode::from(5),
         CommandError::Sync(todoist_cache::SyncError::NotFound { .. }) => ExitCode::from(5),
+        CommandError::Sync(todoist_cache::SyncError::SyncTokenInvalid) => ExitCode::from(2),
         CommandError::CacheStore(_) => ExitCode::from(5),
         CommandError::Io(_) => ExitCode::from(3),
         CommandError::Json(_) => ExitCode::from(1),
