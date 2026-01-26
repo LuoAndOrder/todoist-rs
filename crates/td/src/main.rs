@@ -191,10 +191,33 @@ async fn run(cli: &Cli) -> commands::Result<()> {
         }
 
         Some(Commands::Projects { command }) => {
-            // Default to List if no subcommand provided
-            let (tree, archived, limit) = match command {
-                Some(ProjectsCommands::List { tree, archived, limit }) => (*tree, *archived, *limit),
-                None => (false, false, None),
+            match command {
+                Some(ProjectsCommands::List { tree, archived, limit }) => {
+                    let opts = commands::projects::ProjectsListOptions {
+                        tree: *tree,
+                        archived: *archived,
+                        limit: *limit,
+                    };
+                    commands::projects::execute(&ctx, &opts, &token).await
+                }
+                Some(ProjectsCommands::Add { name, color, parent, favorite }) => {
+                    let opts = commands::projects::ProjectsAddOptions {
+                        name: name.clone(),
+                        color: color.clone(),
+                        parent: parent.clone(),
+                        favorite: *favorite,
+                    };
+                    commands::projects::execute_add(&ctx, &opts, &token).await
+                }
+                None => {
+                    // Default to List if no subcommand provided
+                    let opts = commands::projects::ProjectsListOptions {
+                        tree: false,
+                        archived: false,
+                        limit: None,
+                    };
+                    commands::projects::execute(&ctx, &opts, &token).await
+                }
                 _ => {
                     // Other subcommands not yet implemented
                     if cli.json {
@@ -208,16 +231,9 @@ async fn run(cli: &Cli) -> commands::Result<()> {
                     } else if !cli.quiet {
                         println!("Projects subcommand not yet implemented");
                     }
-                    return Ok(());
+                    Ok(())
                 }
-            };
-
-            let opts = commands::projects::ProjectsListOptions {
-                tree,
-                archived,
-                limit,
-            };
-            commands::projects::execute(&ctx, &opts, &token).await
+            }
         }
 
         Some(cmd) => {

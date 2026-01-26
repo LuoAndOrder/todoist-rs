@@ -9,6 +9,7 @@ use todoist_api::sync::Item;
 use todoist_cache::Cache;
 
 use crate::commands::add::AddResult;
+use crate::commands::projects::ProjectAddResult;
 use crate::commands::quick::QuickResult;
 use crate::commands::show::ShowResult;
 
@@ -611,6 +612,34 @@ fn format_reminder(reminder: &todoist_api::sync::Reminder) -> String {
 
 use std::collections::HashMap;
 use todoist_api::sync::Project;
+
+/// JSON output structure for a created project.
+#[derive(Serialize)]
+pub struct CreatedProjectOutput<'a> {
+    pub id: &'a str,
+    pub name: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub color: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_id: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_name: Option<&'a str>,
+    pub is_favorite: bool,
+}
+
+/// Formats a created project as JSON.
+pub fn format_created_project(result: &ProjectAddResult) -> Result<String, serde_json::Error> {
+    let output = CreatedProjectOutput {
+        id: &result.id,
+        name: &result.name,
+        color: result.color.as_deref(),
+        parent_id: result.parent_id.as_deref(),
+        parent_name: result.parent_name.as_deref(),
+        is_favorite: result.is_favorite,
+    };
+
+    serde_json::to_string_pretty(&output)
+}
 
 /// JSON output structure for projects list command.
 #[derive(Serialize)]
