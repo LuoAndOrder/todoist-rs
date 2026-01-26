@@ -108,6 +108,19 @@ async fn run(cli: &Cli) -> commands::Result<()> {
             commands::show::execute(&ctx, &opts, &token).await
         }
 
+        Some(Commands::Done {
+            task_ids,
+            all_occurrences,
+            force,
+        }) => {
+            let opts = commands::done::DoneOptions {
+                task_ids: task_ids.clone(),
+                all_occurrences: *all_occurrences,
+                force: *force,
+            };
+            commands::done::execute(&ctx, &opts, &token).await
+        }
+
         Some(cmd) => {
             // Other commands not yet implemented
             if cli.json {
