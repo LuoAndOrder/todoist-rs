@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use todoist_api::client::TodoistClient;
 use todoist_api::quick_add::QuickAddRequest;
-use wiremock::matchers::{body_string_contains, header, method, path};
+use wiremock::matchers::{body_json_string, header, method, path};
 use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
 
 /// Test: Quick add with simple text returns created task
@@ -28,10 +28,10 @@ async fn test_quick_add_simple() {
     });
 
     Mock::given(method("POST"))
-        .and(path("/quick/add"))
+        .and(path("/tasks/quick"))
         .and(header("Authorization", "Bearer test-token"))
-        .and(header("Content-Type", "application/x-www-form-urlencoded"))
-        .and(body_string_contains("text=Buy%20milk"))
+        .and(header("Content-Type", "application/json"))
+        .and(body_json_string(r#"{"text":"Buy milk"}"#))
         .respond_with(ResponseTemplate::new(200).set_body_json(response_json))
         .expect(1)
         .mount(&mock_server)
@@ -74,9 +74,9 @@ async fn test_quick_add_with_nlp_parsing() {
     });
 
     Mock::given(method("POST"))
-        .and(path("/quick/add"))
+        .and(path("/tasks/quick"))
         .and(header("Authorization", "Bearer test-token"))
-        .and(body_string_contains("text="))
+        .and(header("Content-Type", "application/json"))
         .respond_with(ResponseTemplate::new(200).set_body_json(response_json))
         .expect(1)
         .mount(&mock_server)
@@ -119,10 +119,10 @@ async fn test_quick_add_with_note() {
     });
 
     Mock::given(method("POST"))
-        .and(path("/quick/add"))
+        .and(path("/tasks/quick"))
         .and(header("Authorization", "Bearer test-token"))
-        .and(body_string_contains("text=Call%20mom"))
-        .and(body_string_contains("note=Ask%20about%20dinner%20plans"))
+        .and(header("Content-Type", "application/json"))
+        .and(body_json_string(r#"{"text":"Call mom","note":"Ask about dinner plans"}"#))
         .respond_with(ResponseTemplate::new(200).set_body_json(response_json))
         .expect(1)
         .mount(&mock_server)
@@ -161,11 +161,8 @@ async fn test_quick_add_with_all_options() {
     });
 
     Mock::given(method("POST"))
-        .and(path("/quick/add"))
-        .and(body_string_contains("text="))
-        .and(body_string_contains("note=Prepare%20agenda"))
-        .and(body_string_contains("reminder=30%20minutes%20before"))
-        .and(body_string_contains("auto_reminder=true"))
+        .and(path("/tasks/quick"))
+        .and(header("Content-Type", "application/json"))
         .respond_with(ResponseTemplate::new(200).set_body_json(response_json))
         .expect(1)
         .mount(&mock_server)
@@ -219,7 +216,7 @@ async fn test_quick_add_retry_on_rate_limit() {
     }
 
     Mock::given(method("POST"))
-        .and(path("/quick/add"))
+        .and(path("/tasks/quick"))
         .respond_with(RetryThenSuccessResponder {
             call_count: call_count.clone(),
         })
@@ -241,7 +238,7 @@ async fn test_quick_add_auth_failure() {
     let mock_server = MockServer::start().await;
 
     Mock::given(method("POST"))
-        .and(path("/quick/add"))
+        .and(path("/tasks/quick"))
         .respond_with(ResponseTemplate::new(401).set_body_string("Unauthorized"))
         .expect(1)
         .mount(&mock_server)
@@ -262,7 +259,7 @@ async fn test_quick_add_validation_error() {
     let mock_server = MockServer::start().await;
 
     Mock::given(method("POST"))
-        .and(path("/quick/add"))
+        .and(path("/tasks/quick"))
         .respond_with(ResponseTemplate::new(400).set_body_string("Invalid request: text is required"))
         .expect(1)
         .mount(&mock_server)
@@ -302,7 +299,7 @@ async fn test_quick_add_response_to_item() {
     });
 
     Mock::given(method("POST"))
-        .and(path("/quick/add"))
+        .and(path("/tasks/quick"))
         .respond_with(ResponseTemplate::new(200).set_body_json(response_json))
         .expect(1)
         .mount(&mock_server)

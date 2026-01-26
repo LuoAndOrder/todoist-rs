@@ -1,9 +1,9 @@
 //! Quick Add API types for the Todoist API.
 //!
-//! The Quick Add endpoint (`POST /api/v1/tasks/quick_add`) provides NLP-based task creation
+//! The Quick Add endpoint (`POST /api/v1/tasks/quick`) provides NLP-based task creation
 //! that parses natural language input to extract project, labels, priority, due date, etc.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::sync::{Due, Item};
 
@@ -28,7 +28,7 @@ use crate::sync::{Due, Item};
 /// let request = QuickAddRequest::new("Meeting at 3pm")
 ///     .with_auto_reminder(true);
 /// ```
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct QuickAddRequest {
     /// The text to parse using natural language processing.
     /// Supports Todoist quick add notation:
@@ -39,13 +39,16 @@ pub struct QuickAddRequest {
     pub text: String,
 
     /// Optional text to attach as a comment with the task.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
 
     /// Optional natural language date for creating a task reminder.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub reminder: Option<String>,
 
     /// When true, the default reminder will be added to the task if it has
     /// a due date with time set.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub auto_reminder: Option<bool>,
 }
 

@@ -13,9 +13,6 @@ use crate::sync::{SyncRequest, SyncResponse};
 /// Base URL for the Todoist API v1.
 const BASE_URL: &str = "https://api.todoist.com/api/v1";
 
-/// Base URL for the Todoist Sync API (used for quick_add).
-const SYNC_BASE_URL: &str = "https://api.todoist.com/sync/v9";
-
 /// Default initial backoff duration for retries (1 second).
 const DEFAULT_INITIAL_BACKOFF_SECS: u64 = 1;
 
@@ -31,7 +28,6 @@ pub struct TodoistClient {
     token: String,
     http_client: reqwest::Client,
     base_url: String,
-    sync_base_url: String,
 }
 
 impl TodoistClient {
@@ -41,18 +37,15 @@ impl TodoistClient {
             token: token.into(),
             http_client: reqwest::Client::new(),
             base_url: BASE_URL.to_string(),
-            sync_base_url: SYNC_BASE_URL.to_string(),
         }
     }
 
     /// Creates a new TodoistClient with a custom base URL (for testing).
     pub fn with_base_url(token: impl Into<String>, base_url: impl Into<String>) -> Self {
-        let base = base_url.into();
         Self {
             token: token.into(),
             http_client: reqwest::Client::new(),
-            base_url: base.clone(),
-            sync_base_url: base,
+            base_url: base_url.into(),
         }
     }
 
@@ -295,15 +288,14 @@ impl TodoistClient {
     /// }
     /// ```
     pub async fn quick_add(&self, request: QuickAddRequest) -> Result<QuickAddResponse> {
-        let url = format!("{}/quick/add", self.sync_base_url);
+        let url = format!("{}/tasks/quick", self.base_url);
 
         for attempt in 0..=MAX_RETRIES {
             let response = self
                 .http_client
                 .post(&url)
                 .bearer_auth(&self.token)
-                .header("Content-Type", "application/x-www-form-urlencoded")
-                .body(request.to_form_body())
+                .json(&request)
                 .send()
                 .await?;
 
