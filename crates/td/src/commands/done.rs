@@ -6,7 +6,7 @@ use todoist_api::client::TodoistClient;
 use todoist_api::sync::{Item, SyncCommand, SyncRequest};
 use todoist_cache::{Cache, CacheStore, SyncManager};
 
-use super::{CommandContext, CommandError, Result};
+use super::{confirm_bulk_operation, CommandContext, CommandError, ConfirmResult, Result};
 
 /// Options for the done command.
 #[derive(Debug)]
@@ -67,19 +67,23 @@ pub async fn execute(ctx: &CommandContext, opts: &DoneOptions, token: &str) -> R
         resolved_items.push((item, task_id.clone()));
     }
 
-    // Check for confirmation if multiple tasks and not forced
-    if resolved_items.len() > 1 && !opts.force && !ctx.quiet {
-        eprintln!(
-            "About to complete {} tasks:",
-            resolved_items.len()
-        );
-        for (item, _) in &resolved_items {
+    // Prompt for confirmation if multiple tasks
+    let items_for_confirm: Vec<(&str, &str)> = resolved_items
+        .iter()
+        .map(|(item, _)| {
             let id_prefix = &item.id[..6.min(item.id.len())];
-            eprintln!("  {}  {}", id_prefix, item.content);
+            (id_prefix, item.content.as_str())
+        })
+        .collect();
+
+    match confirm_bulk_operation("complete", &items_for_confirm, opts.force, ctx.quiet)? {
+        ConfirmResult::Confirmed => {}
+        ConfirmResult::Aborted => {
+            if !ctx.quiet {
+                eprintln!("Aborted.");
+            }
+            return Ok(());
         }
-        eprintln!("\nUse --force to skip this confirmation.");
-        // In a real CLI, we'd prompt for confirmation here.
-        // For now, we proceed since we don't have interactive stdin support.
     }
 
     // Build commands for all tasks
