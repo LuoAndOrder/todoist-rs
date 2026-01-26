@@ -606,6 +606,137 @@ impl TestContext {
         Ok(())
     }
 
+    /// Finds a note (task comment) in the cached state by ID.
+    ///
+    /// Returns `None` if the note is not found or is deleted.
+    /// This does NOT make an API call.
+    pub fn find_note(&self, id: &str) -> Option<&Note> {
+        self.notes.iter().find(|n| n.id == id && !n.is_deleted)
+    }
+
+    /// Finds all notes (comments) for a specific task.
+    ///
+    /// Returns a vector of non-deleted notes for the given item_id.
+    /// This does NOT make an API call.
+    pub fn find_notes_for_task(&self, item_id: &str) -> Vec<&Note> {
+        self.notes
+            .iter()
+            .filter(|n| !n.is_deleted && n.item_id == item_id)
+            .collect()
+    }
+
+    /// Finds a project note (project comment) in the cached state by ID.
+    ///
+    /// Returns `None` if the note is not found or is deleted.
+    /// This does NOT make an API call.
+    pub fn find_project_note(&self, id: &str) -> Option<&ProjectNote> {
+        self.project_notes
+            .iter()
+            .find(|n| n.id == id && !n.is_deleted)
+    }
+
+    /// Finds all notes (comments) for a specific project.
+    ///
+    /// Returns a vector of non-deleted project notes for the given project_id.
+    /// This does NOT make an API call.
+    pub fn find_notes_for_project(&self, project_id: &str) -> Vec<&ProjectNote> {
+        self.project_notes
+            .iter()
+            .filter(|n| !n.is_deleted && n.project_id == project_id)
+            .collect()
+    }
+
+    /// Creates a task comment (note) and returns its real ID.
+    pub async fn create_task_comment(
+        &mut self,
+        item_id: &str,
+        content: &str,
+    ) -> Result<String, todoist_api::error::Error> {
+        let temp_id = uuid::Uuid::new_v4().to_string();
+        let command = SyncCommand::with_temp_id(
+            "note_add",
+            &temp_id,
+            serde_json::json!({
+                "item_id": item_id,
+                "content": content
+            }),
+        );
+        let response = self.execute(vec![command]).await?;
+
+        if response.has_errors() {
+            return Err(todoist_api::error::Error::Internal(format!(
+                "note_add failed: {:?}",
+                response.errors()
+            )));
+        }
+
+        response.real_id(&temp_id).cloned().ok_or_else(|| {
+            todoist_api::error::Error::Internal("No temp_id mapping returned".to_string())
+        })
+    }
+
+    /// Deletes a task comment (note).
+    pub async fn delete_note(&mut self, note_id: &str) -> Result<(), todoist_api::error::Error> {
+        let command = SyncCommand::new("note_delete", serde_json::json!({"id": note_id}));
+        let response = self.execute(vec![command]).await?;
+
+        if response.has_errors() {
+            return Err(todoist_api::error::Error::Internal(format!(
+                "note_delete failed: {:?}",
+                response.errors()
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// Creates a project comment (project note) and returns its real ID.
+    pub async fn create_project_comment(
+        &mut self,
+        project_id: &str,
+        content: &str,
+    ) -> Result<String, todoist_api::error::Error> {
+        let temp_id = uuid::Uuid::new_v4().to_string();
+        let command = SyncCommand::with_temp_id(
+            "project_note_add",
+            &temp_id,
+            serde_json::json!({
+                "project_id": project_id,
+                "content": content
+            }),
+        );
+        let response = self.execute(vec![command]).await?;
+
+        if response.has_errors() {
+            return Err(todoist_api::error::Error::Internal(format!(
+                "project_note_add failed: {:?}",
+                response.errors()
+            )));
+        }
+
+        response.real_id(&temp_id).cloned().ok_or_else(|| {
+            todoist_api::error::Error::Internal("No temp_id mapping returned".to_string())
+        })
+    }
+
+    /// Deletes a project comment (project note).
+    pub async fn delete_project_note(
+        &mut self,
+        note_id: &str,
+    ) -> Result<(), todoist_api::error::Error> {
+        let command = SyncCommand::new("project_note_delete", serde_json::json!({"id": note_id}));
+        let response = self.execute(vec![command]).await?;
+
+        if response.has_errors() {
+            return Err(todoist_api::error::Error::Internal(format!(
+                "project_note_delete failed: {:?}",
+                response.errors()
+            )));
+        }
+
+        Ok(())
+    }
+
     /// Batch delete multiple resources in one API call.
     ///
     /// This is more efficient than deleting one at a time.
@@ -633,9 +764,79 @@ impl TestContext {
         label_ids: &[&str],
         reminder_ids: &[&str],
     ) -> Result<(), todoist_api::error::Error> {
+        self.batch_delete_all(
+            task_ids,
+            project_ids,
+            section_ids,
+            label_ids,
+            reminder_ids,
+            &[],
+            &[],
+        )
+        .await
+    }
+
+    /// Batch delete multiple resources including notes in one API call.
+    ///
+    /// This is more efficient than deleting one at a time.
+    /// Notes are deleted first (they depend on tasks/projects), then tasks, sections, projects, and labels.
+    pub async fn batch_delete_with_notes(
+        &mut self,
+        task_ids: &[&str],
+        project_ids: &[&str],
+        note_ids: &[&str],
+        project_note_ids: &[&str],
+    ) -> Result<(), todoist_api::error::Error> {
+        self.batch_delete_all(
+            task_ids,
+            project_ids,
+            &[],
+            &[],
+            &[],
+            note_ids,
+            project_note_ids,
+        )
+        .await
+    }
+
+    /// Batch delete all types of resources in one API call.
+    ///
+    /// This is the most flexible cleanup method. Resources are deleted in dependency order:
+    /// 1. Notes and project notes (depend on tasks/projects)
+    /// 2. Reminders (depend on tasks)
+    /// 3. Tasks
+    /// 4. Sections
+    /// 5. Projects
+    /// 6. Labels
+    pub async fn batch_delete_all(
+        &mut self,
+        task_ids: &[&str],
+        project_ids: &[&str],
+        section_ids: &[&str],
+        label_ids: &[&str],
+        reminder_ids: &[&str],
+        note_ids: &[&str],
+        project_note_ids: &[&str],
+    ) -> Result<(), todoist_api::error::Error> {
         let mut commands = Vec::new();
 
-        // Delete reminders first (they depend on tasks)
+        // Delete notes first (they depend on tasks)
+        for id in note_ids {
+            commands.push(SyncCommand::new(
+                "note_delete",
+                serde_json::json!({"id": id}),
+            ));
+        }
+
+        // Delete project notes (they depend on projects)
+        for id in project_note_ids {
+            commands.push(SyncCommand::new(
+                "project_note_delete",
+                serde_json::json!({"id": id}),
+            ));
+        }
+
+        // Delete reminders (they depend on tasks)
         for id in reminder_ids {
             commands.push(SyncCommand::new(
                 "reminder_delete",
