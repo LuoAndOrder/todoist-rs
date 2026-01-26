@@ -4,7 +4,7 @@
 
 use chrono::Utc;
 use todoist_api::client::TodoistClient;
-use todoist_api::sync::{Note, ProjectNote};
+use todoist_api::sync::{Note, ProjectNote, SyncCommand, SyncRequest};
 use todoist_cache::{Cache, CacheStore, SyncManager};
 
 use super::{CommandContext, CommandError, Result};
@@ -228,6 +228,179 @@ fn resolve_project_id(cache: &Cache, project: &str) -> Result<String> {
     }
 }
 
+// ============================================================================
+// Comments Add Command
+// ============================================================================
+
+/// Options for the comments add command.
+#[derive(Debug)]
+pub struct CommentsAddOptions {
+    /// Comment text content.
+    pub content: String,
+    /// Task ID (for task comment).
+    pub task: Option<String>,
+    /// Project ID (for project comment).
+    pub project: Option<String>,
+}
+
+/// Result of a successful comment add operation.
+#[derive(Debug)]
+pub struct CommentAddResult {
+    /// The real ID of the created comment.
+    pub id: String,
+    /// The content of the comment.
+    pub content: String,
+    /// Whether this is a task comment (vs project comment).
+    pub is_task_comment: bool,
+    /// The parent ID (task_id or project_id).
+    pub parent_id: String,
+    /// The parent name (task content or project name).
+    pub parent_name: Option<String>,
+}
+
+/// Executes the comments add command.
+///
+/// # Arguments
+///
+/// * `ctx` - Command context with output settings
+/// * `opts` - Comments add command options
+/// * `token` - API token
+///
+/// # Errors
+///
+/// Returns an error if neither --task nor --project is specified,
+/// or if the API returns an error.
+pub async fn execute_add(
+    ctx: &CommandContext,
+    opts: &CommentsAddOptions,
+    token: &str,
+) -> Result<()> {
+    // Require exactly one of --task or --project
+    if opts.task.is_none() && opts.project.is_none() {
+        return Err(CommandError::Config(
+            "Either --task or --project is required to add a comment.".to_string(),
+        ));
+    }
+    if opts.task.is_some() && opts.project.is_some() {
+        return Err(CommandError::Config(
+            "Cannot specify both --task and --project. Choose one.".to_string(),
+        ));
+    }
+
+    // Initialize sync manager to resolve IDs
+    let client = TodoistClient::new(token);
+    let store = CacheStore::new()?;
+    let mut manager = SyncManager::new(client, store)?;
+
+    // Sync to get current state (for task/project lookup)
+    manager.sync().await?;
+    let cache = manager.cache();
+
+    // Determine if this is a task comment or project comment
+    let (is_task_comment, parent_id, parent_name) = if let Some(ref task) = opts.task {
+        let task_id = resolve_task_id(cache, task)?;
+        let task_name = cache
+            .items
+            .iter()
+            .find(|i| i.id == task_id)
+            .map(|i| i.content.clone());
+        (true, task_id, task_name)
+    } else if let Some(ref project) = opts.project {
+        let project_id = resolve_project_id(cache, project)?;
+        let project_name = cache
+            .projects
+            .iter()
+            .find(|p| p.id == project_id)
+            .map(|p| p.name.clone());
+        (false, project_id, project_name)
+    } else {
+        unreachable!("Already validated that one of task or project is provided");
+    };
+
+    // Build the note_add command arguments
+    // Both task and project comments use note_add, but with different parent ID field
+    let temp_id = uuid::Uuid::new_v4().to_string();
+    let args = if is_task_comment {
+        serde_json::json!({
+            "item_id": parent_id,
+            "content": opts.content,
+        })
+    } else {
+        serde_json::json!({
+            "project_id": parent_id,
+            "content": opts.content,
+        })
+    };
+
+    // Create the command
+    let command = SyncCommand::with_temp_id("note_add", &temp_id, args);
+
+    // Execute the command
+    let api_client = TodoistClient::new(token);
+    let request = SyncRequest::with_commands(vec![command]);
+    let response = api_client.sync(request).await?;
+
+    // Check for errors
+    if response.has_errors() {
+        let errors = response.errors();
+        if let Some((_, error)) = errors.first() {
+            return Err(CommandError::Api(todoist_api::error::Error::Api(
+                todoist_api::error::ApiError::Validation {
+                    field: None,
+                    message: format!("Error {}: {}", error.error_code, error.error),
+                },
+            )));
+        }
+    }
+
+    // Get the real ID from the temp_id_mapping
+    let real_id = response
+        .real_id(&temp_id)
+        .ok_or_else(|| {
+            CommandError::Config("Comment created but no ID returned in response".to_string())
+        })?
+        .clone();
+
+    let result = CommentAddResult {
+        id: real_id,
+        content: opts.content.clone(),
+        is_task_comment,
+        parent_id,
+        parent_name,
+    };
+
+    // Output
+    if ctx.json_output {
+        let output = crate::output::format_created_comment(&result)?;
+        println!("{output}");
+    } else if !ctx.quiet {
+        let parent_type = if result.is_task_comment { "task" } else { "project" };
+        let parent_display = result
+            .parent_name
+            .as_deref()
+            .unwrap_or(&result.parent_id);
+        if ctx.verbose {
+            println!("Created comment: {}", result.id);
+            println!("  On {}: {}", parent_type, parent_display);
+            println!("  Content: {}", result.content);
+        } else {
+            let prefix = &result.id[..6.min(result.id.len())];
+            // Truncate content for display
+            let content_display = if result.content.len() > 40 {
+                format!("{}...", &result.content[..37])
+            } else {
+                result.content.clone()
+            };
+            println!(
+                "Added comment ({}) to {}: {}",
+                prefix, parent_display, content_display
+            );
+        }
+    }
+
+    Ok(())
+}
+
 /// Filters comments based on task_id or project_id.
 fn filter_comments(
     cache: &Cache,
@@ -274,6 +447,66 @@ mod tests {
 
         assert!(opts.task.is_none());
         assert!(opts.project.is_none());
+    }
+
+    #[test]
+    fn test_comments_add_options_with_task() {
+        let opts = CommentsAddOptions {
+            content: "My comment".to_string(),
+            task: Some("task-123".to_string()),
+            project: None,
+        };
+
+        assert_eq!(opts.content, "My comment");
+        assert_eq!(opts.task, Some("task-123".to_string()));
+        assert!(opts.project.is_none());
+    }
+
+    #[test]
+    fn test_comments_add_options_with_project() {
+        let opts = CommentsAddOptions {
+            content: "Project comment".to_string(),
+            task: None,
+            project: Some("project-456".to_string()),
+        };
+
+        assert_eq!(opts.content, "Project comment");
+        assert!(opts.task.is_none());
+        assert_eq!(opts.project, Some("project-456".to_string()));
+    }
+
+    #[test]
+    fn test_comment_add_result_task() {
+        let result = CommentAddResult {
+            id: "note-123".to_string(),
+            content: "Test comment".to_string(),
+            is_task_comment: true,
+            parent_id: "task-1".to_string(),
+            parent_name: Some("My Task".to_string()),
+        };
+
+        assert_eq!(result.id, "note-123");
+        assert_eq!(result.content, "Test comment");
+        assert!(result.is_task_comment);
+        assert_eq!(result.parent_id, "task-1");
+        assert_eq!(result.parent_name, Some("My Task".to_string()));
+    }
+
+    #[test]
+    fn test_comment_add_result_project() {
+        let result = CommentAddResult {
+            id: "pnote-456".to_string(),
+            content: "Project comment".to_string(),
+            is_task_comment: false,
+            parent_id: "project-1".to_string(),
+            parent_name: Some("My Project".to_string()),
+        };
+
+        assert_eq!(result.id, "pnote-456");
+        assert_eq!(result.content, "Project comment");
+        assert!(!result.is_task_comment);
+        assert_eq!(result.parent_id, "project-1");
+        assert_eq!(result.parent_name, Some("My Project".to_string()));
     }
 
     #[test]

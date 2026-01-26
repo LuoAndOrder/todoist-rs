@@ -347,6 +347,17 @@ async fn run(cli: &Cli) -> commands::Result<()> {
                     };
                     commands::comments::execute(&ctx, &opts, &token).await
                 }
+                Some(CommentsCommands::Add { text, task: add_task, project: add_project }) => {
+                    // Use the add-specific options if provided, otherwise fall back to parent options
+                    let effective_task = add_task.clone().or_else(|| task.clone());
+                    let effective_project = add_project.clone().or_else(|| project.clone());
+                    let opts = commands::comments::CommentsAddOptions {
+                        content: text.clone(),
+                        task: effective_task,
+                        project: effective_project,
+                    };
+                    commands::comments::execute_add(&ctx, &opts, &token).await
+                }
                 None => {
                     // Default to List if no subcommand provided
                     let opts = commands::comments::CommentsListOptions {
