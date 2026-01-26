@@ -176,6 +176,7 @@ impl<'a> FilterEvaluator<'a> {
             Filter::Tomorrow => self.is_due_tomorrow(item),
             Filter::Overdue => self.is_overdue(item),
             Filter::NoDate => self.has_no_date(item),
+            Filter::Next7Days => self.is_due_within_7_days(item),
 
             // Priority filters
             // Note: Todoist API uses inverted priority (4 = highest, 1 = lowest)
@@ -247,6 +248,19 @@ impl<'a> FilterEvaluator<'a> {
     /// Checks if the item has no due date.
     fn has_no_date(&self, item: &Item) -> bool {
         item.due.is_none()
+    }
+
+    /// Checks if the item is due within the next 7 days (including today).
+    fn is_due_within_7_days(&self, item: &Item) -> bool {
+        let Some(due) = &item.due else {
+            return false;
+        };
+
+        let today = Local::now().date_naive();
+        let end_date = today + chrono::Duration::days(7);
+
+        self.parse_due_date(&due.date)
+            .is_some_and(|due_date| due_date >= today && due_date < end_date)
     }
 
     /// Parses a date string in YYYY-MM-DD format.
@@ -397,6 +411,12 @@ mod tests {
             .to_string()
     }
 
+    fn days_from_today_str(days: i64) -> String {
+        (Local::now() + chrono::Duration::days(days))
+            .format("%Y-%m-%d")
+            .to_string()
+    }
+
     // ==================== Date Filter Tests ====================
 
     #[test]
@@ -523,6 +543,89 @@ mod tests {
         let mut item = make_item("1", "Task");
         item.due = Some(make_due(&today_str()));
 
+        assert!(!evaluator.matches(&item));
+    }
+
+    #[test]
+    fn test_filter_7_days_matches_today() {
+        let context = FilterContext::new(&[], &[], &[]);
+        let filter = Filter::Next7Days;
+        let evaluator = FilterEvaluator::new(&filter, &context);
+
+        let mut item = make_item("1", "Task");
+        item.due = Some(make_due(&today_str()));
+
+        assert!(evaluator.matches(&item));
+    }
+
+    #[test]
+    fn test_filter_7_days_matches_in_5_days() {
+        let context = FilterContext::new(&[], &[], &[]);
+        let filter = Filter::Next7Days;
+        let evaluator = FilterEvaluator::new(&filter, &context);
+
+        let mut item = make_item("1", "Task");
+        item.due = Some(make_due(&days_from_today_str(5)));
+
+        assert!(evaluator.matches(&item));
+    }
+
+    #[test]
+    fn test_filter_7_days_matches_in_6_days() {
+        let context = FilterContext::new(&[], &[], &[]);
+        let filter = Filter::Next7Days;
+        let evaluator = FilterEvaluator::new(&filter, &context);
+
+        let mut item = make_item("1", "Task");
+        item.due = Some(make_due(&days_from_today_str(6)));
+
+        assert!(evaluator.matches(&item));
+    }
+
+    #[test]
+    fn test_filter_7_days_no_match_in_7_days() {
+        let context = FilterContext::new(&[], &[], &[]);
+        let filter = Filter::Next7Days;
+        let evaluator = FilterEvaluator::new(&filter, &context);
+
+        let mut item = make_item("1", "Task");
+        item.due = Some(make_due(&days_from_today_str(7)));
+
+        // 7 days out is NOT included (it's day 8 in human terms)
+        assert!(!evaluator.matches(&item));
+    }
+
+    #[test]
+    fn test_filter_7_days_no_match_in_10_days() {
+        let context = FilterContext::new(&[], &[], &[]);
+        let filter = Filter::Next7Days;
+        let evaluator = FilterEvaluator::new(&filter, &context);
+
+        let mut item = make_item("1", "Task");
+        item.due = Some(make_due(&days_from_today_str(10)));
+
+        assert!(!evaluator.matches(&item));
+    }
+
+    #[test]
+    fn test_filter_7_days_no_match_overdue() {
+        let context = FilterContext::new(&[], &[], &[]);
+        let filter = Filter::Next7Days;
+        let evaluator = FilterEvaluator::new(&filter, &context);
+
+        let mut item = make_item("1", "Task");
+        item.due = Some(make_due(&yesterday_str()));
+
+        assert!(!evaluator.matches(&item));
+    }
+
+    #[test]
+    fn test_filter_7_days_no_match_no_due() {
+        let context = FilterContext::new(&[], &[], &[]);
+        let filter = Filter::Next7Days;
+        let evaluator = FilterEvaluator::new(&filter, &context);
+
+        let item = make_item("1", "Task");
         assert!(!evaluator.matches(&item));
     }
 

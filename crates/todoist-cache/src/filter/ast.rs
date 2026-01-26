@@ -19,6 +19,9 @@ pub enum Filter {
     /// Matches items without any due date set.
     NoDate,
 
+    /// Matches items due within the next 7 days (including today).
+    Next7Days,
+
     // ==================== Priority Filters ====================
     /// Matches items with priority level 1 (highest/red).
     Priority1,

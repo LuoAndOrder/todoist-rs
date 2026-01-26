@@ -578,6 +578,76 @@ async fn test_filter_no_date() {
         .expect("cleanup");
 }
 
+#[tokio::test]
+async fn test_filter_7_days() {
+    let Ok(mut ctx) = FilterTestContext::new().await else {
+        eprintln!("Skipping test: no API token");
+        return;
+    };
+
+    let inbox_id = ctx.inbox_id().to_string();
+    let today = today_str();
+    let in_5_days = days_from_now(5);
+    let in_10_days = days_from_now(10);
+
+    // Create tasks
+    let task_today = ctx
+        .create_task(
+            "E2E filter test - due today",
+            &inbox_id,
+            Some(serde_json::json!({"due": {"date": today}})),
+        )
+        .await
+        .expect("create task");
+
+    let task_5_days = ctx
+        .create_task(
+            "E2E filter test - due in 5 days",
+            &inbox_id,
+            Some(serde_json::json!({"due": {"date": in_5_days}})),
+        )
+        .await
+        .expect("create task");
+
+    let task_10_days = ctx
+        .create_task(
+            "E2E filter test - due in 10 days",
+            &inbox_id,
+            Some(serde_json::json!({"due": {"date": in_10_days}})),
+        )
+        .await
+        .expect("create task");
+
+    // Evaluate filter
+    let matches = ctx.evaluate_filter("7 days");
+
+    // Tasks due today and in 5 days should match (within 7 days)
+    assert!(
+        matches.iter().any(|i| i.id == task_today),
+        "Filter '7 days' should match task due today"
+    );
+    assert!(
+        matches.iter().any(|i| i.id == task_5_days),
+        "Filter '7 days' should match task due in 5 days"
+    );
+
+    // Task due in 10 days should NOT match
+    assert!(
+        !matches.iter().any(|i| i.id == task_10_days),
+        "Filter '7 days' should NOT match task due in 10 days"
+    );
+
+    // Cleanup
+    ctx.batch_delete(
+        &[&task_today, &task_5_days, &task_10_days],
+        &[],
+        &[],
+        &[],
+    )
+    .await
+    .expect("cleanup");
+}
+
 // ============================================================================
 // 9.2 Priority Filters
 // ============================================================================

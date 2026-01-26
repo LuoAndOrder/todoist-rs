@@ -58,6 +58,9 @@ pub enum FilterToken {
     /// The `no date` keyword (parsed as two words).
     NoDate,
 
+    /// The `7 days` keyword - tasks due within the next 7 days.
+    Next7Days,
+
     // ==================== Priority ====================
     /// Priority level (1-4).
     Priority(u8),
@@ -313,6 +316,29 @@ impl<'a> Lexer<'a> {
                 self.try_keyword(&lower, token_start)
             }
 
+            // Number-based keywords (e.g., "7 days")
+            '7' => {
+                self.next_char(); // consume '7'
+                self.skip_whitespace();
+                if let Some(&next_c) = self.peek() {
+                    if next_c.is_alphabetic() {
+                        let word = self.read_identifier();
+                        if word.to_lowercase() == "days" {
+                            return Some(PositionedToken {
+                                token: FilterToken::Next7Days,
+                                position: token_start,
+                            });
+                        }
+                    }
+                }
+                // Just "7" by itself is not valid
+                self.errors.push(LexerError {
+                    character: '7',
+                    position: token_start,
+                });
+                self.next_token()
+            }
+
             // Unknown character - record error and continue
             _ => {
                 let error_pos = self.current_position();
@@ -426,6 +452,21 @@ mod tests {
 
         let tokens = Lexer::new("No Date").tokenize();
         assert_eq!(tokens, vec![FilterToken::NoDate]);
+    }
+
+    #[test]
+    fn test_tokenize_7_days() {
+        let tokens = Lexer::new("7 days").tokenize();
+        assert_eq!(tokens, vec![FilterToken::Next7Days]);
+    }
+
+    #[test]
+    fn test_tokenize_7_days_case_insensitive() {
+        let tokens = Lexer::new("7 DAYS").tokenize();
+        assert_eq!(tokens, vec![FilterToken::Next7Days]);
+
+        let tokens = Lexer::new("7 Days").tokenize();
+        assert_eq!(tokens, vec![FilterToken::Next7Days]);
     }
 
     #[test]

@@ -199,6 +199,7 @@ impl FilterParser {
             FilterToken::Tomorrow => Ok(Filter::Tomorrow),
             FilterToken::Overdue => Ok(Filter::Overdue),
             FilterToken::NoDate => Ok(Filter::NoDate),
+            FilterToken::Next7Days => Ok(Filter::Next7Days),
 
             // Priority
             FilterToken::Priority(level) => match level {
