@@ -365,6 +365,13 @@ async fn run(cli: &Cli) -> commands::Result<()> {
                     };
                     commands::comments::execute_edit(&ctx, &opts, &token).await
                 }
+                Some(CommentsCommands::Delete { comment_id, force }) => {
+                    let opts = commands::comments::CommentsDeleteOptions {
+                        comment_id: comment_id.clone(),
+                        force: *force,
+                    };
+                    commands::comments::execute_delete(&ctx, &opts, &token).await
+                }
                 None => {
                     // Default to List if no subcommand provided
                     let opts = commands::comments::CommentsListOptions {

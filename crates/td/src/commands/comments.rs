@@ -522,6 +522,160 @@ pub async fn execute_edit(
     Ok(())
 }
 
+// ============================================================================
+// Comments Delete Command
+// ============================================================================
+
+/// Options for the comments delete command.
+#[derive(Debug)]
+pub struct CommentsDeleteOptions {
+    /// Comment ID to delete.
+    pub comment_id: String,
+    /// Skip confirmation.
+    pub force: bool,
+}
+
+/// Result of a successful comment delete operation.
+#[derive(Debug)]
+pub struct CommentDeleteResult {
+    /// The ID of the deleted comment.
+    pub id: String,
+    /// The content of the deleted comment (truncated for display).
+    pub content: String,
+    /// Whether this was a task comment (vs project comment).
+    pub is_task_comment: bool,
+    /// The parent ID (task_id or project_id).
+    pub parent_id: String,
+    /// The parent name (task content or project name).
+    pub parent_name: Option<String>,
+}
+
+/// Executes the comments delete command.
+///
+/// # Arguments
+///
+/// * `ctx` - Command context with output settings
+/// * `opts` - Comments delete command options
+/// * `token` - API token
+///
+/// # Errors
+///
+/// Returns an error if the comment is not found or the API returns an error.
+pub async fn execute_delete(
+    ctx: &CommandContext,
+    opts: &CommentsDeleteOptions,
+    token: &str,
+) -> Result<()> {
+    // Initialize sync manager to resolve comment ID
+    let client = TodoistClient::new(token);
+    let store = CacheStore::new()?;
+    let mut manager = SyncManager::new(client, store)?;
+
+    // Sync to get current state (for comment lookup)
+    manager.sync().await?;
+    let cache = manager.cache();
+
+    // Find the comment by ID (check both task notes and project notes)
+    let (comment_id, is_task_comment, parent_id, parent_name) =
+        resolve_comment(cache, &opts.comment_id)?;
+
+    // Get comment content for confirmation message
+    let comment_content = get_comment_content(cache, &comment_id);
+    let content_preview = if comment_content.len() > 40 {
+        format!("{}...", &comment_content[..37])
+    } else {
+        comment_content.clone()
+    };
+
+    // Confirm if not forced
+    if !opts.force && !ctx.quiet {
+        let parent_type = if is_task_comment { "task" } else { "project" };
+        let parent_display = parent_name.as_deref().unwrap_or(&parent_id);
+        eprintln!(
+            "Delete comment ({}) on {} '{}'?",
+            &comment_id[..6.min(comment_id.len())],
+            parent_type,
+            parent_display
+        );
+        eprintln!("  Content: {}", content_preview);
+        eprintln!("Use --force to skip this confirmation.");
+        return Err(CommandError::Config(
+            "Operation cancelled. Use --force to confirm.".to_string(),
+        ));
+    }
+
+    // Build the note_delete command
+    let args = serde_json::json!({
+        "id": comment_id,
+    });
+
+    let command = SyncCommand::new("note_delete", args);
+
+    // Execute the command
+    let api_client = TodoistClient::new(token);
+    let request = SyncRequest::with_commands(vec![command]);
+    let response = api_client.sync(request).await?;
+
+    // Check for errors
+    if response.has_errors() {
+        let errors = response.errors();
+        if let Some((_, error)) = errors.first() {
+            return Err(CommandError::Api(todoist_api::error::Error::Api(
+                todoist_api::error::ApiError::Validation {
+                    field: None,
+                    message: format!("Error {}: {}", error.error_code, error.error),
+                },
+            )));
+        }
+    }
+
+    let result = CommentDeleteResult {
+        id: comment_id,
+        content: content_preview,
+        is_task_comment,
+        parent_id,
+        parent_name,
+    };
+
+    // Output
+    if ctx.json_output {
+        let output = crate::output::format_deleted_comment(&result)?;
+        println!("{output}");
+    } else if !ctx.quiet {
+        let parent_type = if result.is_task_comment {
+            "task"
+        } else {
+            "project"
+        };
+        let parent_display = result.parent_name.as_deref().unwrap_or(&result.parent_id);
+        if ctx.verbose {
+            println!("Deleted comment: {}", result.id);
+            println!("  On {}: {}", parent_type, parent_display);
+            println!("  Content: {}", result.content);
+        } else {
+            let prefix = &result.id[..6.min(result.id.len())];
+            println!("Deleted comment ({}) from {}", prefix, parent_display);
+        }
+    }
+
+    Ok(())
+}
+
+/// Gets the content of a comment by ID.
+fn get_comment_content(cache: &Cache, comment_id: &str) -> String {
+    // Check task notes
+    if let Some(note) = cache.notes.iter().find(|n| n.id == comment_id) {
+        return note.content.clone();
+    }
+
+    // Check project notes
+    if let Some(note) = cache.project_notes.iter().find(|n| n.id == comment_id) {
+        return note.content.clone();
+    }
+
+    String::new()
+}
+
 /// Resolves a comment ID from either task notes or project notes.
 /// Returns (full_id, is_task_comment, parent_id, parent_name).
 fn resolve_comment(
@@ -1076,5 +1230,86 @@ mod tests {
         let (id, is_task, _, _) = result.unwrap();
         assert_eq!(id, "note-abc123def456");
         assert!(is_task);
+    }
+
+    // ========================================================================
+    // Comments Delete Tests
+    // ========================================================================
+
+    #[test]
+    fn test_comments_delete_options() {
+        let opts = CommentsDeleteOptions {
+            comment_id: "note-123".to_string(),
+            force: false,
+        };
+
+        assert_eq!(opts.comment_id, "note-123");
+        assert!(!opts.force);
+    }
+
+    #[test]
+    fn test_comments_delete_options_with_force() {
+        let opts = CommentsDeleteOptions {
+            comment_id: "note-456".to_string(),
+            force: true,
+        };
+
+        assert_eq!(opts.comment_id, "note-456");
+        assert!(opts.force);
+    }
+
+    #[test]
+    fn test_comment_delete_result_task() {
+        let result = CommentDeleteResult {
+            id: "note-123".to_string(),
+            content: "Deleted comment".to_string(),
+            is_task_comment: true,
+            parent_id: "task-1".to_string(),
+            parent_name: Some("My Task".to_string()),
+        };
+
+        assert_eq!(result.id, "note-123");
+        assert_eq!(result.content, "Deleted comment");
+        assert!(result.is_task_comment);
+        assert_eq!(result.parent_id, "task-1");
+        assert_eq!(result.parent_name, Some("My Task".to_string()));
+    }
+
+    #[test]
+    fn test_comment_delete_result_project() {
+        let result = CommentDeleteResult {
+            id: "pnote-456".to_string(),
+            content: "Deleted project comment".to_string(),
+            is_task_comment: false,
+            parent_id: "project-1".to_string(),
+            parent_name: Some("My Project".to_string()),
+        };
+
+        assert_eq!(result.id, "pnote-456");
+        assert_eq!(result.content, "Deleted project comment");
+        assert!(!result.is_task_comment);
+        assert_eq!(result.parent_id, "project-1");
+        assert_eq!(result.parent_name, Some("My Project".to_string()));
+    }
+
+    #[test]
+    fn test_get_comment_content_task_note() {
+        let cache = make_test_cache();
+        let content = get_comment_content(&cache, "note-1");
+        assert_eq!(content, "First comment");
+    }
+
+    #[test]
+    fn test_get_comment_content_project_note() {
+        let cache = make_test_cache();
+        let content = get_comment_content(&cache, "pnote-1");
+        assert_eq!(content, "Project comment");
+    }
+
+    #[test]
+    fn test_get_comment_content_not_found() {
+        let cache = make_test_cache();
+        let content = get_comment_content(&cache, "nonexistent");
+        assert_eq!(content, "");
     }
 }
