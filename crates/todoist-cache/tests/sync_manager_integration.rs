@@ -618,3 +618,283 @@ async fn test_execute_commands_updates_last_sync() {
     assert!(last_sync >= before);
     assert!(last_sync <= after);
 }
+
+/// Creates a mock response for item_delete command.
+/// The item is returned with is_deleted: true, which triggers removal from cache.
+fn mock_delete_command_response() -> serde_json::Value {
+    serde_json::json!({
+        "sync_token": "post_delete_token_789",
+        "full_sync": false,
+        "items": [
+            {
+                "id": "item-to-delete",
+                "project_id": "proj-1",
+                "content": "Task to delete",
+                "description": "",
+                "priority": 1,
+                "child_order": 0,
+                "day_order": 0,
+                "is_collapsed": false,
+                "labels": [],
+                "checked": false,
+                "is_deleted": true
+            }
+        ],
+        "projects": [],
+        "labels": [],
+        "sections": [],
+        "notes": [],
+        "project_notes": [],
+        "reminders": [],
+        "filters": [],
+        "collaborators": [],
+        "collaborator_states": [],
+        "live_notifications": [],
+        "sync_status": {
+            "delete-cmd-uuid": "ok"
+        },
+        "temp_id_mapping": {},
+        "completed_info": [],
+        "locations": []
+    })
+}
+
+#[tokio::test]
+async fn test_execute_commands_removes_item_on_delete() {
+    use todoist_api::sync::SyncCommand;
+
+    let mock_server = MockServer::start().await;
+    let temp_dir = tempdir().expect("failed to create temp dir");
+    let cache_path = temp_dir.path().join("cache.json");
+
+    // Create a cache with an existing item that we'll delete
+    let store = CacheStore::with_path(cache_path.clone());
+    let mut existing_cache = Cache::new();
+    existing_cache.sync_token = "pre_delete_token".to_string();
+    existing_cache.items = vec![
+        todoist_api::sync::Item {
+            id: "item-to-delete".to_string(),
+            user_id: None,
+            project_id: "proj-1".to_string(),
+            content: "Task to delete".to_string(),
+            description: String::new(),
+            priority: 1,
+            due: None,
+            deadline: None,
+            parent_id: None,
+            child_order: 0,
+            section_id: None,
+            day_order: 0,
+            is_collapsed: false,
+            labels: vec![],
+            added_by_uid: None,
+            assigned_by_uid: None,
+            responsible_uid: None,
+            checked: false,
+            is_deleted: false,
+            added_at: None,
+            updated_at: None,
+            completed_at: None,
+            duration: None,
+        },
+        todoist_api::sync::Item {
+            id: "item-to-keep".to_string(),
+            user_id: None,
+            project_id: "proj-1".to_string(),
+            content: "Task to keep".to_string(),
+            description: String::new(),
+            priority: 1,
+            due: None,
+            deadline: None,
+            parent_id: None,
+            child_order: 1,
+            section_id: None,
+            day_order: 0,
+            is_collapsed: false,
+            labels: vec![],
+            added_by_uid: None,
+            assigned_by_uid: None,
+            responsible_uid: None,
+            checked: false,
+            is_deleted: false,
+            added_at: None,
+            updated_at: None,
+            completed_at: None,
+            duration: None,
+        },
+    ];
+    store.save(&existing_cache).expect("failed to save cache");
+
+    // Set up mock to respond to delete command
+    Mock::given(method("POST"))
+        .and(path("/sync"))
+        .and(body_string_contains("commands="))
+        .respond_with(ResponseTemplate::new(200).set_body_json(mock_delete_command_response()))
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let store = CacheStore::with_path(cache_path.clone());
+    let mut manager = SyncManager::new(client, store).expect("failed to create manager");
+
+    // Initially 2 items in cache
+    assert_eq!(manager.cache().items.len(), 2);
+    assert!(manager.cache().items.iter().any(|i| i.id == "item-to-delete"));
+
+    // Execute item_delete command
+    let cmd = SyncCommand::new("item_delete", serde_json::json!({"id": "item-to-delete"}));
+    manager
+        .execute_commands(vec![cmd])
+        .await
+        .expect("execute_commands failed");
+
+    // Verify deleted item was removed from cache
+    assert_eq!(manager.cache().items.len(), 1);
+    assert!(!manager.cache().items.iter().any(|i| i.id == "item-to-delete"));
+    assert!(manager.cache().items.iter().any(|i| i.id == "item-to-keep"));
+
+    // Verify sync_token was updated
+    assert_eq!(manager.cache().sync_token, "post_delete_token_789");
+
+    // Verify cache was persisted to disk without the deleted item
+    let store2 = CacheStore::with_path(cache_path);
+    let loaded = store2.load().expect("failed to load cache");
+    assert_eq!(loaded.items.len(), 1);
+    assert!(!loaded.items.iter().any(|i| i.id == "item-to-delete"));
+}
+
+/// Creates a mock response for item_update command.
+/// The item is returned with updated fields.
+fn mock_update_command_response() -> serde_json::Value {
+    serde_json::json!({
+        "sync_token": "post_update_token_abc",
+        "full_sync": false,
+        "items": [
+            {
+                "id": "item-to-update",
+                "project_id": "proj-1",
+                "content": "Updated task content",
+                "description": "New description",
+                "priority": 4,
+                "child_order": 0,
+                "day_order": 0,
+                "is_collapsed": false,
+                "labels": ["work"],
+                "checked": false,
+                "is_deleted": false
+            }
+        ],
+        "projects": [],
+        "labels": [],
+        "sections": [],
+        "notes": [],
+        "project_notes": [],
+        "reminders": [],
+        "filters": [],
+        "collaborators": [],
+        "collaborator_states": [],
+        "live_notifications": [],
+        "sync_status": {
+            "update-cmd-uuid": "ok"
+        },
+        "temp_id_mapping": {},
+        "completed_info": [],
+        "locations": []
+    })
+}
+
+#[tokio::test]
+async fn test_execute_commands_updates_item_on_edit() {
+    use todoist_api::sync::SyncCommand;
+
+    let mock_server = MockServer::start().await;
+    let temp_dir = tempdir().expect("failed to create temp dir");
+    let cache_path = temp_dir.path().join("cache.json");
+
+    // Create a cache with an existing item that we'll update
+    let store = CacheStore::with_path(cache_path.clone());
+    let mut existing_cache = Cache::new();
+    existing_cache.sync_token = "pre_update_token".to_string();
+    existing_cache.items = vec![todoist_api::sync::Item {
+        id: "item-to-update".to_string(),
+        user_id: None,
+        project_id: "proj-1".to_string(),
+        content: "Original task content".to_string(),
+        description: String::new(),
+        priority: 1,
+        due: None,
+        deadline: None,
+        parent_id: None,
+        child_order: 0,
+        section_id: None,
+        day_order: 0,
+        is_collapsed: false,
+        labels: vec![],
+        added_by_uid: None,
+        assigned_by_uid: None,
+        responsible_uid: None,
+        checked: false,
+        is_deleted: false,
+        added_at: None,
+        updated_at: None,
+        completed_at: None,
+        duration: None,
+    }];
+    store.save(&existing_cache).expect("failed to save cache");
+
+    // Set up mock to respond to update command
+    Mock::given(method("POST"))
+        .and(path("/sync"))
+        .and(body_string_contains("commands="))
+        .respond_with(ResponseTemplate::new(200).set_body_json(mock_update_command_response()))
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let store = CacheStore::with_path(cache_path.clone());
+    let mut manager = SyncManager::new(client, store).expect("failed to create manager");
+
+    // Verify original state
+    assert_eq!(manager.cache().items.len(), 1);
+    assert_eq!(manager.cache().items[0].content, "Original task content");
+    assert_eq!(manager.cache().items[0].description, "");
+    assert_eq!(manager.cache().items[0].priority, 1);
+    assert!(manager.cache().items[0].labels.is_empty());
+
+    // Execute item_update command
+    let cmd = SyncCommand::new(
+        "item_update",
+        serde_json::json!({
+            "id": "item-to-update",
+            "content": "Updated task content",
+            "description": "New description",
+            "priority": 4,
+            "labels": ["work"]
+        }),
+    );
+    manager
+        .execute_commands(vec![cmd])
+        .await
+        .expect("execute_commands failed");
+
+    // Verify item was updated in cache
+    assert_eq!(manager.cache().items.len(), 1);
+    let updated_item = &manager.cache().items[0];
+    assert_eq!(updated_item.id, "item-to-update");
+    assert_eq!(updated_item.content, "Updated task content");
+    assert_eq!(updated_item.description, "New description");
+    assert_eq!(updated_item.priority, 4);
+    assert_eq!(updated_item.labels, vec!["work"]);
+
+    // Verify sync_token was updated
+    assert_eq!(manager.cache().sync_token, "post_update_token_abc");
+
+    // Verify cache was persisted to disk with updated item
+    let store2 = CacheStore::with_path(cache_path);
+    let loaded = store2.load().expect("failed to load cache");
+    assert_eq!(loaded.items.len(), 1);
+    assert_eq!(loaded.items[0].content, "Updated task content");
+    assert_eq!(loaded.items[0].priority, 4);
+}
