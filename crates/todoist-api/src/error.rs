@@ -1,49 +1,133 @@
 //! Error types for the Todoist API client.
 
-use std::fmt;
+use thiserror::Error;
 
-/// Errors that can occur when interacting with the Todoist API.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ApiError {
-    /// HTTP-level error with status code.
-    Http { status: u16, message: String },
-    /// Authentication failure.
-    Auth { message: String },
-    /// Rate limit exceeded.
-    RateLimit { retry_after: Option<u64> },
-    /// Resource not found.
-    NotFound { resource: String, id: String },
-    /// API validation error.
-    Validation {
-        field: Option<String>,
-        message: String,
-    },
-    /// Network/connection error.
-    Network { message: String },
+/// Top-level error type for the Todoist API client.
+///
+/// This wraps all possible errors that can occur when using the client,
+/// including API-specific errors, network errors, and serialization errors.
+#[derive(Debug, Error)]
+pub enum Error {
+    /// An API-specific error (auth failure, rate limiting, validation, etc.)
+    #[error(transparent)]
+    Api(#[from] ApiError),
+
+    /// An HTTP request/response error from reqwest.
+    #[error("HTTP error: {0}")]
+    Http(#[from] reqwest::Error),
+
+    /// JSON serialization/deserialization error.
+    #[error("JSON error: {0}")]
+    Json(#[from] serde_json::Error),
+
+    /// Internal/unexpected error.
+    #[error("Internal error: {0}")]
+    Internal(String),
 }
 
-impl fmt::Display for ApiError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+/// Result type alias using our Error type.
+pub type Result<T> = std::result::Result<T, Error>;
+
+/// API-specific errors from the Todoist API.
+///
+/// These represent errors returned by the API itself (not transport-level errors).
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum ApiError {
+    /// HTTP-level error with status code (for unexpected status codes).
+    #[error("HTTP error {status}: {message}")]
+    Http {
+        /// HTTP status code
+        status: u16,
+        /// Error message from the response
+        message: String,
+    },
+
+    /// Authentication failure (401 Unauthorized, 403 Forbidden).
+    #[error("Authentication failed: {message}")]
+    Auth {
+        /// Descriptive error message
+        message: String,
+    },
+
+    /// Rate limit exceeded (429 Too Many Requests).
+    #[error("{}", match .retry_after {
+        Some(secs) => format!("Rate limited, retry after {} seconds", secs),
+        None => "Rate limited".to_string(),
+    })]
+    RateLimit {
+        /// Seconds to wait before retrying (from Retry-After header)
+        retry_after: Option<u64>,
+    },
+
+    /// Resource not found (404 Not Found).
+    #[error("{resource} not found: {id}")]
+    NotFound {
+        /// Type of resource (e.g., "task", "project")
+        resource: String,
+        /// ID of the resource that was not found
+        id: String,
+    },
+
+    /// API validation error (400 Bad Request with validation details).
+    #[error("{}", match .field {
+        Some(f) => format!("Validation error on {}: {}", f, .message),
+        None => format!("Validation error: {}", .message),
+    })]
+    Validation {
+        /// Field that failed validation (if known)
+        field: Option<String>,
+        /// Validation error message
+        message: String,
+    },
+
+    /// Network/connection error.
+    #[error("Network error: {message}")]
+    Network {
+        /// Descriptive error message
+        message: String,
+    },
+}
+
+impl Error {
+    /// Returns true if this error is potentially retryable.
+    pub fn is_retryable(&self) -> bool {
         match self {
-            ApiError::Http { status, message } => write!(f, "HTTP error {}: {}", status, message),
-            ApiError::Auth { message } => write!(f, "Auth error: {}", message),
-            ApiError::RateLimit { retry_after } => match retry_after {
-                Some(secs) => write!(f, "Rate limited, retry after {} seconds", secs),
-                None => write!(f, "Rate limited"),
-            },
-            ApiError::NotFound { resource, id } => {
-                write!(f, "{} not found: {}", resource, id)
+            Error::Api(api_err) => api_err.is_retryable(),
+            Error::Http(req_err) => req_err.is_timeout() || req_err.is_connect(),
+            Error::Json(_) => false,
+            Error::Internal(_) => false,
+        }
+    }
+
+    /// Returns the appropriate CLI exit code for this error.
+    ///
+    /// Exit codes follow the spec:
+    /// - 2: API error (auth failure, not found, validation error)
+    /// - 3: Network error (connection failed, timeout)
+    /// - 4: Rate limited (with retry-after information)
+    pub fn exit_code(&self) -> i32 {
+        match self {
+            Error::Api(api_err) => api_err.exit_code(),
+            Error::Http(req_err) => {
+                if req_err.is_timeout() || req_err.is_connect() {
+                    3 // Network error
+                } else {
+                    2 // API error
+                }
             }
-            ApiError::Validation { field, message } => match field {
-                Some(f_name) => write!(f, "Validation error on {}: {}", f_name, message),
-                None => write!(f, "Validation error: {}", message),
-            },
-            ApiError::Network { message } => write!(f, "Network error: {}", message),
+            Error::Json(_) => 2, // API error (bad response)
+            Error::Internal(_) => 2, // Treat as API error
+        }
+    }
+
+    /// Returns the underlying API error if this is an API error variant.
+    pub fn as_api_error(&self) -> Option<&ApiError> {
+        match self {
+            Error::Api(api_err) => Some(api_err),
+            _ => None,
         }
     }
 }
-
-impl std::error::Error for ApiError {}
 
 impl ApiError {
     /// Returns true if this error is potentially retryable.
@@ -335,5 +419,134 @@ mod tests {
             message: "Server error".to_string(),
         };
         assert_eq!(error.exit_code(), 2);
+    }
+
+    // Tests for the top-level Error type
+
+    #[test]
+    fn test_error_from_api_error() {
+        let api_error = ApiError::Auth {
+            message: "test".to_string(),
+        };
+        let error: Error = api_error.into();
+        assert!(matches!(error, Error::Api(_)));
+    }
+
+    #[test]
+    fn test_error_api_variant_is_retryable() {
+        let error: Error = ApiError::RateLimit {
+            retry_after: Some(5),
+        }
+        .into();
+        assert!(error.is_retryable());
+    }
+
+    #[test]
+    fn test_error_api_variant_not_retryable() {
+        let error: Error = ApiError::Auth {
+            message: "bad token".to_string(),
+        }
+        .into();
+        assert!(!error.is_retryable());
+    }
+
+    #[test]
+    fn test_error_json_not_retryable() {
+        // Create a JSON error by trying to parse invalid JSON
+        let json_err = serde_json::from_str::<serde_json::Value>("invalid").unwrap_err();
+        let error: Error = json_err.into();
+        assert!(!error.is_retryable());
+    }
+
+    #[test]
+    fn test_error_internal_not_retryable() {
+        let error = Error::Internal("something went wrong".to_string());
+        assert!(!error.is_retryable());
+    }
+
+    #[test]
+    fn test_error_exit_code_api() {
+        let error: Error = ApiError::RateLimit { retry_after: None }.into();
+        assert_eq!(error.exit_code(), 4);
+
+        let error: Error = ApiError::Network {
+            message: "timeout".to_string(),
+        }
+        .into();
+        assert_eq!(error.exit_code(), 3);
+
+        let error: Error = ApiError::Auth {
+            message: "bad".to_string(),
+        }
+        .into();
+        assert_eq!(error.exit_code(), 2);
+    }
+
+    #[test]
+    fn test_error_exit_code_json() {
+        let json_err = serde_json::from_str::<serde_json::Value>("bad").unwrap_err();
+        let error: Error = json_err.into();
+        assert_eq!(error.exit_code(), 2);
+    }
+
+    #[test]
+    fn test_error_exit_code_internal() {
+        let error = Error::Internal("panic".to_string());
+        assert_eq!(error.exit_code(), 2);
+    }
+
+    #[test]
+    fn test_error_as_api_error() {
+        let api_error = ApiError::NotFound {
+            resource: "task".to_string(),
+            id: "123".to_string(),
+        };
+        let error: Error = api_error.clone().into();
+        assert_eq!(error.as_api_error(), Some(&api_error));
+    }
+
+    #[test]
+    fn test_error_as_api_error_none() {
+        let error = Error::Internal("test".to_string());
+        assert_eq!(error.as_api_error(), None);
+    }
+
+    #[test]
+    fn test_error_display_api() {
+        let error: Error = ApiError::Auth {
+            message: "Invalid token".to_string(),
+        }
+        .into();
+        let display = error.to_string();
+        assert!(display.contains("Invalid token"));
+    }
+
+    #[test]
+    fn test_error_display_internal() {
+        let error = Error::Internal("unexpected state".to_string());
+        let display = error.to_string();
+        assert!(display.contains("unexpected state"));
+    }
+
+    #[test]
+    fn test_error_implements_std_error() {
+        let error: Box<dyn std::error::Error> = Box::new(Error::Internal("test".to_string()));
+        assert!(error.to_string().contains("test"));
+    }
+
+    #[test]
+    fn test_result_type_alias() {
+        fn returns_result() -> Result<i32> {
+            Ok(42)
+        }
+        assert_eq!(returns_result().unwrap(), 42);
+    }
+
+    #[test]
+    fn test_result_type_alias_error() {
+        fn returns_error() -> Result<i32> {
+            Err(Error::Internal("failed".to_string()))
+        }
+        assert!(returns_error().is_err());
     }
 }
