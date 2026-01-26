@@ -9,6 +9,7 @@ pub mod config;
 pub mod delete;
 pub mod done;
 pub mod edit;
+pub mod filters;
 pub mod labels;
 pub mod list;
 pub mod projects;

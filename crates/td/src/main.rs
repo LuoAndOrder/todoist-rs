@@ -5,7 +5,7 @@ mod cli;
 mod commands;
 mod output;
 
-use cli::{Cli, Commands, CommentsCommands, ConfigCommands, LabelsCommands, ProjectsCommands, RemindersCommands, SectionsCommands};
+use cli::{Cli, Commands, CommentsCommands, ConfigCommands, FiltersCommands, LabelsCommands, ProjectsCommands, RemindersCommands, SectionsCommands};
 use commands::{CommandContext, CommandError};
 use commands::config::load_config;
 
@@ -469,6 +469,52 @@ async fn run(cli: &Cli) -> commands::Result<()> {
                         task: task.clone(),
                     };
                     commands::reminders::execute(&ctx, &opts, &token).await
+                }
+            }
+        }
+
+        Some(Commands::Filters { command }) => {
+            match command {
+                Some(FiltersCommands::List) => {
+                    let opts = commands::filters::FiltersListOptions::default();
+                    commands::filters::execute(&ctx, &opts, &token).await
+                }
+                Some(FiltersCommands::Add { name, query, color, favorite }) => {
+                    let opts = commands::filters::FiltersAddOptions {
+                        name: name.clone(),
+                        query: query.clone(),
+                        color: color.clone(),
+                        favorite: *favorite,
+                    };
+                    commands::filters::execute_add(&ctx, &opts, &token).await
+                }
+                Some(FiltersCommands::Show { filter_id }) => {
+                    let opts = commands::filters::FiltersShowOptions {
+                        filter_id: filter_id.clone(),
+                    };
+                    commands::filters::execute_show(&ctx, &opts, &token).await
+                }
+                Some(FiltersCommands::Edit { filter_id, name, query, color, favorite }) => {
+                    let opts = commands::filters::FiltersEditOptions {
+                        filter_id: filter_id.clone(),
+                        name: name.clone(),
+                        query: query.clone(),
+                        color: color.clone(),
+                        favorite: *favorite,
+                    };
+                    commands::filters::execute_edit(&ctx, &opts, &token).await
+                }
+                Some(FiltersCommands::Delete { filter_id, force }) => {
+                    let opts = commands::filters::FiltersDeleteOptions {
+                        filter_id: filter_id.clone(),
+                        force: *force,
+                    };
+                    commands::filters::execute_delete(&ctx, &opts, &token).await
+                }
+                None => {
+                    // Default to List if no subcommand provided
+                    let opts = commands::filters::FiltersListOptions::default();
+                    commands::filters::execute(&ctx, &opts, &token).await
                 }
             }
         }

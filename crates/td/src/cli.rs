@@ -307,6 +307,13 @@ pub enum Commands {
         command: Option<RemindersCommands>,
     },
 
+    /// List and manage saved filters
+    #[command(alias = "f")]
+    Filters {
+        #[command(subcommand)]
+        command: Option<FiltersCommands>,
+    },
+
     /// View and edit configuration
     Config {
         #[command(subcommand)]
@@ -613,6 +620,69 @@ pub enum RemindersCommands {
     Delete {
         /// Reminder ID
         reminder_id: String,
+
+        /// Skip confirmation
+        #[arg(short, long)]
+        force: bool,
+    },
+}
+
+/// Filter subcommands
+#[derive(Subcommand, Debug)]
+pub enum FiltersCommands {
+    /// List all filters (default)
+    List,
+
+    /// Create a new filter
+    Add {
+        /// Filter name
+        name: String,
+
+        /// Filter query string (e.g., "today & p1")
+        #[arg(long)]
+        query: String,
+
+        /// Filter color
+        #[arg(long)]
+        color: Option<String>,
+
+        /// Mark as favorite
+        #[arg(long)]
+        favorite: bool,
+    },
+
+    /// Show filter details
+    Show {
+        /// Filter ID
+        filter_id: String,
+    },
+
+    /// Edit a filter
+    Edit {
+        /// Filter ID
+        filter_id: String,
+
+        /// New name
+        #[arg(long)]
+        name: Option<String>,
+
+        /// New query
+        #[arg(long)]
+        query: Option<String>,
+
+        /// New color
+        #[arg(long)]
+        color: Option<String>,
+
+        /// Toggle favorite
+        #[arg(long)]
+        favorite: Option<bool>,
+    },
+
+    /// Delete a filter
+    Delete {
+        /// Filter ID
+        filter_id: String,
 
         /// Skip confirmation
         #[arg(short, long)]
