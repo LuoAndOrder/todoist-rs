@@ -85,11 +85,13 @@ impl<'a> FilterContext<'a> {
     }
 
     /// Finds a project by name (case-insensitive).
+    ///
+    /// Only returns non-deleted projects.
     pub fn find_project_by_name(&self, name: &str) -> Option<&Project> {
         let name_lower = name.to_lowercase();
         self.projects
             .iter()
-            .find(|p| p.name.to_lowercase() == name_lower)
+            .find(|p| !p.is_deleted && p.name.to_lowercase() == name_lower)
     }
 
     /// Gets all project IDs that match the given project name or are subprojects of it.
@@ -115,19 +117,23 @@ impl<'a> FilterContext<'a> {
     }
 
     /// Finds a section by name (case-insensitive).
+    ///
+    /// Only returns non-deleted sections.
     pub fn find_section_by_name(&self, name: &str) -> Option<&Section> {
         let name_lower = name.to_lowercase();
         self.sections
             .iter()
-            .find(|s| s.name.to_lowercase() == name_lower)
+            .find(|s| !s.is_deleted && s.name.to_lowercase() == name_lower)
     }
 
     /// Checks if a label name exists (case-insensitive).
+    ///
+    /// Only considers non-deleted labels.
     pub fn label_exists(&self, name: &str) -> bool {
         let name_lower = name.to_lowercase();
         self.labels
             .iter()
-            .any(|l| l.name.to_lowercase() == name_lower)
+            .any(|l| !l.is_deleted && l.name.to_lowercase() == name_lower)
     }
 }
 
@@ -1209,5 +1215,110 @@ mod tests {
         assert!(context.label_exists("URGENT")); // case insensitive
         assert!(context.label_exists("work"));
         assert!(!context.label_exists("personal"));
+    }
+
+    // ==================== is_deleted Filtering Tests ====================
+
+    #[test]
+    fn test_context_find_project_excludes_deleted() {
+        let mut deleted_project = make_project("proj-1", "Work", None);
+        deleted_project.is_deleted = true;
+
+        let active_project = make_project("proj-2", "Personal", None);
+        let projects = vec![deleted_project, active_project];
+        let context = FilterContext::new(&projects, &[], &[]);
+
+        // Deleted project should not be found
+        assert!(context.find_project_by_name("Work").is_none());
+
+        // Active project should be found
+        assert!(context.find_project_by_name("Personal").is_some());
+    }
+
+    #[test]
+    fn test_context_find_section_excludes_deleted() {
+        let mut deleted_section = make_section("sec-1", "To Do", "proj-1");
+        deleted_section.is_deleted = true;
+
+        let active_section = make_section("sec-2", "Done", "proj-1");
+        let sections = vec![deleted_section, active_section];
+        let context = FilterContext::new(&[], &sections, &[]);
+
+        // Deleted section should not be found
+        assert!(context.find_section_by_name("To Do").is_none());
+
+        // Active section should be found
+        assert!(context.find_section_by_name("Done").is_some());
+    }
+
+    #[test]
+    fn test_context_label_exists_excludes_deleted() {
+        let mut deleted_label = make_label("l1", "urgent");
+        deleted_label.is_deleted = true;
+
+        let active_label = make_label("l2", "work");
+        let labels = vec![deleted_label, active_label];
+        let context = FilterContext::new(&[], &[], &labels);
+
+        // Deleted label should not exist
+        assert!(!context.label_exists("urgent"));
+
+        // Active label should exist
+        assert!(context.label_exists("work"));
+    }
+
+    #[test]
+    fn test_context_get_project_ids_with_subprojects_excludes_deleted() {
+        let root_project = make_project("proj-1", "Work", None);
+
+        let mut deleted_subproject = make_project("proj-2", "Meetings", Some("proj-1"));
+        deleted_subproject.is_deleted = true;
+
+        let active_subproject = make_project("proj-3", "Tasks", Some("proj-1"));
+
+        let projects = vec![root_project, deleted_subproject, active_subproject];
+        let context = FilterContext::new(&projects, &[], &[]);
+
+        let ids = context.get_project_ids_with_subprojects("Work");
+
+        // Should include root and active subproject, but not deleted subproject
+        assert_eq!(ids.len(), 2);
+        assert!(ids.contains(&"proj-1"));
+        assert!(!ids.contains(&"proj-2")); // Deleted
+        assert!(ids.contains(&"proj-3"));
+    }
+
+    #[test]
+    fn test_filter_project_excludes_deleted_project() {
+        let mut deleted_project = make_project("proj-1", "Work", None);
+        deleted_project.is_deleted = true;
+
+        let projects = vec![deleted_project];
+        let context = FilterContext::new(&projects, &[], &[]);
+        let filter = Filter::Project("Work".to_string());
+        let evaluator = FilterEvaluator::new(&filter, &context);
+
+        let mut item = make_item("1", "Task");
+        item.project_id = "proj-1".to_string();
+
+        // Filter should not match because project is deleted
+        assert!(!evaluator.matches(&item));
+    }
+
+    #[test]
+    fn test_filter_section_excludes_deleted_section() {
+        let mut deleted_section = make_section("sec-1", "Inbox", "proj-1");
+        deleted_section.is_deleted = true;
+
+        let sections = vec![deleted_section];
+        let context = FilterContext::new(&[], &sections, &[]);
+        let filter = Filter::Section("Inbox".to_string());
+        let evaluator = FilterEvaluator::new(&filter, &context);
+
+        let mut item = make_item("1", "Task");
+        item.section_id = Some("sec-1".to_string());
+
+        // Filter should not match because section is deleted
+        assert!(!evaluator.matches(&item));
     }
 }
