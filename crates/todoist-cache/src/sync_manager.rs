@@ -44,6 +44,15 @@ pub enum SyncError {
     /// API error.
     #[error("API error: {0}")]
     Api(#[from] todoist_api::error::Error),
+
+    /// Resource not found in cache (even after sync).
+    #[error("{resource_type} not found: {identifier}")]
+    NotFound {
+        /// The type of resource that was not found (e.g., "project", "label").
+        resource_type: &'static str,
+        /// The name or ID that was searched for.
+        identifier: String,
+    },
 }
 
 /// Result type for sync operations.
@@ -289,6 +298,82 @@ impl SyncManager {
         self.store.save(&self.cache)?;
 
         Ok(response)
+    }
+
+    // ==================== Smart Lookup Methods ====================
+
+    /// Resolves a project by name or ID, with auto-sync fallback.
+    ///
+    /// This method first attempts to find the project in the cache. If not found,
+    /// it performs a sync and retries the lookup. This provides a seamless experience
+    /// where users can reference recently-created projects without manual syncing.
+    ///
+    /// # Arguments
+    ///
+    /// * `name_or_id` - The project name (case-insensitive) or ID to search for
+    ///
+    /// # Returns
+    ///
+    /// A reference to the matching `Project` from the cache.
+    ///
+    /// # Errors
+    ///
+    /// Returns `SyncError::NotFound` if the project cannot be found even after syncing.
+    /// Returns `SyncError::Api` if the sync operation fails.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use todoist_api::client::TodoistClient;
+    /// use todoist_cache::{CacheStore, SyncManager};
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let client = TodoistClient::new("your-api-token");
+    ///     let store = CacheStore::new()?;
+    ///     let mut manager = SyncManager::new(client, store)?;
+    ///
+    ///     // Find by name (case-insensitive)
+    ///     let project = manager.resolve_project("work").await?;
+    ///     println!("Found project: {} ({})", project.name, project.id);
+    ///
+    ///     // Find by ID
+    ///     let project = manager.resolve_project("12345678").await?;
+    ///     println!("Found project: {}", project.name);
+    ///
+    ///     Ok(())
+    /// }
+    /// ```
+    pub async fn resolve_project(
+        &mut self,
+        name_or_id: &str,
+    ) -> Result<&todoist_api::sync::Project> {
+        // Try cache first
+        if self.find_project_in_cache(name_or_id).is_some() {
+            // Re-borrow to return reference (can't return from the if-let due to borrow checker)
+            return Ok(self.find_project_in_cache(name_or_id).unwrap());
+        }
+
+        // Not found - sync and retry
+        self.sync().await?;
+
+        // Try again after sync
+        self.find_project_in_cache(name_or_id).ok_or_else(|| SyncError::NotFound {
+            resource_type: "project",
+            identifier: name_or_id.to_string(),
+        })
+    }
+
+    /// Helper to find a project in the cache by name or ID.
+    ///
+    /// Searches for non-deleted projects where either:
+    /// - The name matches (case-insensitive)
+    /// - The ID matches exactly
+    fn find_project_in_cache(&self, name_or_id: &str) -> Option<&todoist_api::sync::Project> {
+        let name_lower = name_or_id.to_lowercase();
+        self.cache.projects.iter().find(|p| {
+            !p.is_deleted && (p.name.to_lowercase() == name_lower || p.id == name_or_id)
+        })
     }
 }
 
