@@ -61,45 +61,29 @@ pub async fn execute(ctx: &CommandContext, opts: &AddOptions, token: &str) -> Re
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
-    // Use cache for lookups (no pre-mutation sync needed)
-    // In Phase 3, we'll add auto-sync fallback if lookup fails
-    let cache = manager.cache();
-
-    // Resolve project name to ID
+    // Resolve project name to ID using smart lookup (cache-first with auto-sync fallback)
     let project_id = if let Some(ref project_name) = opts.project {
-        let project_name_lower = project_name.to_lowercase();
-        cache
-            .projects
-            .iter()
-            .find(|p| p.name.to_lowercase() == project_name_lower || p.id == *project_name)
-            .map(|p| p.id.clone())
-            .ok_or_else(|| CommandError::Config(format!("Project not found: {project_name}")))?
+        manager.resolve_project(project_name).await?.id.clone()
     } else {
         // Use inbox project if no project specified
-        cache
+        manager
+            .cache()
             .projects
             .iter()
-            .find(|p| p.inbox_project)
+            .find(|p| p.inbox_project && !p.is_deleted)
             .map(|p| p.id.clone())
             .ok_or_else(|| CommandError::Config("Inbox project not found".to_string()))?
     };
 
-    // Resolve section name to ID
+    // Resolve section name to ID using smart lookup (cache-first with auto-sync fallback)
     let section_id = if let Some(ref section_name) = opts.section {
-        let section_name_lower = section_name.to_lowercase();
-        let section = cache
-            .sections
-            .iter()
-            .find(|s| {
-                (s.name.to_lowercase() == section_name_lower || s.id == *section_name)
-                    && s.project_id == project_id
-            })
-            .ok_or_else(|| {
-                CommandError::Config(format!(
-                    "Section not found: {section_name} (in project {project_id})"
-                ))
-            })?;
-        Some(section.id.clone())
+        Some(
+            manager
+                .resolve_section(section_name, Some(&project_id))
+                .await?
+                .id
+                .clone(),
+        )
     } else {
         None
     };
