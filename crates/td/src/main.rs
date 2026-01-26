@@ -5,7 +5,7 @@ mod cli;
 mod commands;
 mod output;
 
-use cli::{Cli, Commands, LabelsCommands, ProjectsCommands, SectionsCommands};
+use cli::{Cli, Commands, CommentsCommands, LabelsCommands, ProjectsCommands, SectionsCommands};
 use commands::{CommandContext, CommandError};
 
 #[tokio::main]
@@ -334,6 +334,41 @@ async fn run(cli: &Cli) -> commands::Result<()> {
                         limit: None,
                     };
                     commands::sections::execute(&ctx, &opts, &token).await
+                }
+            }
+        }
+
+        Some(Commands::Comments { task, project, command }) => {
+            match command {
+                Some(CommentsCommands::List) => {
+                    let opts = commands::comments::CommentsListOptions {
+                        task: task.clone(),
+                        project: project.clone(),
+                    };
+                    commands::comments::execute(&ctx, &opts, &token).await
+                }
+                None => {
+                    // Default to List if no subcommand provided
+                    let opts = commands::comments::CommentsListOptions {
+                        task: task.clone(),
+                        project: project.clone(),
+                    };
+                    commands::comments::execute(&ctx, &opts, &token).await
+                }
+                _ => {
+                    // Other subcommands not yet implemented
+                    if cli.json {
+                        println!(
+                            "{}",
+                            serde_json::json!({
+                                "status": "not_implemented",
+                                "command": format!("{:?}", command)
+                            })
+                        );
+                    } else if !cli.quiet {
+                        println!("Comments subcommand not yet implemented: {:?}", command);
+                    }
+                    Ok(())
                 }
             }
         }
