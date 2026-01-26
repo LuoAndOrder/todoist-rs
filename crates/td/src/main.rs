@@ -60,6 +60,9 @@ async fn run(cli: &Cli) -> commands::Result<()> {
                 }
             };
         }
+        Some(Commands::Completions { shell }) => {
+            return commands::completions::execute(shell).map_err(CommandError::Io);
+        }
         None => {
             if !cli.quiet {
                 println!("td - Todoist CLI");

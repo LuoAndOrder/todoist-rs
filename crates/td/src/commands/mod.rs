@@ -4,6 +4,7 @@
 
 pub mod add;
 pub mod comments;
+pub mod completions;
 pub mod config;
 pub mod delete;
 pub mod done;
