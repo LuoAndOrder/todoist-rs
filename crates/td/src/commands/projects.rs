@@ -1,10 +1,11 @@
 //! Projects command implementation.
 //!
 //! Lists and manages projects via the Sync API.
+//! Uses SyncManager::execute_commands() to automatically update the cache.
 
 use chrono::Utc;
 use todoist_api::client::TodoistClient;
-use todoist_api::sync::{Project, SyncCommand, SyncRequest};
+use todoist_api::sync::{Project, SyncCommand};
 use todoist_cache::{Cache, CacheStore, SyncManager};
 
 use super::{CommandContext, CommandError, Result};
@@ -146,22 +147,19 @@ pub struct ProjectAddResult {
 ///
 /// Returns an error if syncing fails, parent project lookup fails, or the API returns an error.
 pub async fn execute_add(ctx: &CommandContext, opts: &ProjectsAddOptions, token: &str) -> Result<()> {
-    // Initialize sync manager to resolve parent project name to ID
+    // Initialize sync manager (loads cache from disk)
     let client = TodoistClient::new(token);
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
-    // Sync to get current state (for parent project lookup)
-    manager.sync().await?;
-    let cache = manager.cache();
-
-    // Resolve parent project name to ID if provided
+    // Resolve parent project name to ID if provided (extract owned data before mutation)
     let (parent_id, parent_name) = if let Some(ref parent_ref) = opts.parent {
+        let cache = manager.cache();
         let parent_ref_lower = parent_ref.to_lowercase();
         let parent = cache
             .projects
             .iter()
-            .find(|p| p.name.to_lowercase() == parent_ref_lower || p.id == *parent_ref)
+            .find(|p| !p.is_deleted && (p.name.to_lowercase() == parent_ref_lower || p.id == *parent_ref))
             .ok_or_else(|| CommandError::Config(format!("Parent project not found: {parent_ref}")))?;
         (Some(parent.id.clone()), Some(parent.name.clone()))
     } else {
@@ -199,10 +197,9 @@ pub async fn execute_add(ctx: &CommandContext, opts: &ProjectsAddOptions, token:
     // Create the command
     let command = SyncCommand::with_temp_id("project_add", &temp_id, args);
 
-    // Execute the command
-    let api_client = TodoistClient::new(token);
-    let request = SyncRequest::with_commands(vec![command]);
-    let response = api_client.sync(request).await?;
+    // Execute the command via SyncManager
+    // This sends the command, applies the response to cache, and saves to disk
+    let response = manager.execute_commands(vec![command]).await?;
 
     // Check for errors
     if response.has_errors() {
@@ -478,19 +475,17 @@ pub async fn execute_edit(ctx: &CommandContext, opts: &ProjectsEditOptions, toke
         ));
     }
 
-    // Initialize sync manager to resolve project ID
+    // Initialize sync manager (loads cache from disk)
     let client = TodoistClient::new(token);
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
-    // Sync to get current state (for project lookup)
-    manager.sync().await?;
-    let cache = manager.cache();
-
-    // Find the project by ID or prefix
-    let project = find_project_by_id_or_prefix(cache, &opts.project_id)?;
-    let project_id = project.id.clone();
-    let project_name = project.name.clone();
+    // Find the project by ID or prefix and extract owned data before mutation
+    let (project_id, project_name) = {
+        let cache = manager.cache();
+        let project = find_project_by_id_or_prefix(cache, &opts.project_id)?;
+        (project.id.clone(), project.name.clone())
+    };
 
     // Validate color if provided
     if let Some(ref color) = opts.color {
@@ -540,10 +535,9 @@ pub async fn execute_edit(ctx: &CommandContext, opts: &ProjectsEditOptions, toke
     // Create the command
     let command = SyncCommand::new("project_update", args);
 
-    // Execute the command
-    let api_client = TodoistClient::new(token);
-    let request = SyncRequest::with_commands(vec![command]);
-    let response = api_client.sync(request).await?;
+    // Execute the command via SyncManager
+    // This sends the command, applies the response to cache, and saves to disk
+    let response = manager.execute_commands(vec![command]).await?;
 
     // Check for errors
     if response.has_errors() {
@@ -615,22 +609,20 @@ pub struct ProjectArchiveResult {
 ///
 /// Returns an error if syncing fails, project lookup fails, or the API returns an error.
 pub async fn execute_archive(ctx: &CommandContext, opts: &ProjectsArchiveOptions, token: &str) -> Result<()> {
-    // Initialize sync manager to resolve project ID
+    // Initialize sync manager (loads cache from disk)
     let client = TodoistClient::new(token);
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
-    // Sync to get current state (for project lookup)
-    manager.sync().await?;
-    let cache = manager.cache();
-
-    // Find the project by ID or prefix
-    let project = find_project_by_id_or_prefix(cache, &opts.project_id)?;
-    let project_id = project.id.clone();
-    let project_name = project.name.clone();
+    // Find the project by ID or prefix and extract owned data before mutation
+    let (project_id, project_name, is_archived, is_inbox) = {
+        let cache = manager.cache();
+        let project = find_project_by_id_or_prefix(cache, &opts.project_id)?;
+        (project.id.clone(), project.name.clone(), project.is_archived, project.inbox_project)
+    };
 
     // Check if project is already archived
-    if project.is_archived {
+    if is_archived {
         return Err(CommandError::Config(format!(
             "Project '{}' is already archived",
             project_name
@@ -638,7 +630,7 @@ pub async fn execute_archive(ctx: &CommandContext, opts: &ProjectsArchiveOptions
     }
 
     // Check if this is the inbox project
-    if project.inbox_project {
+    if is_inbox {
         return Err(CommandError::Config(
             "Cannot archive the Inbox project".to_string()
         ));
@@ -664,10 +656,9 @@ pub async fn execute_archive(ctx: &CommandContext, opts: &ProjectsArchiveOptions
     // Create the command
     let command = SyncCommand::new("project_archive", args);
 
-    // Execute the command
-    let api_client = TodoistClient::new(token);
-    let request = SyncRequest::with_commands(vec![command]);
-    let response = api_client.sync(request).await?;
+    // Execute the command via SyncManager
+    // This sends the command, applies the response to cache, and saves to disk
+    let response = manager.execute_commands(vec![command]).await?;
 
     // Check for errors
     if response.has_errors() {
@@ -735,22 +726,20 @@ pub struct ProjectUnarchiveResult {
 ///
 /// Returns an error if syncing fails, project lookup fails, or the API returns an error.
 pub async fn execute_unarchive(ctx: &CommandContext, opts: &ProjectsUnarchiveOptions, token: &str) -> Result<()> {
-    // Initialize sync manager to resolve project ID
+    // Initialize sync manager (loads cache from disk)
     let client = TodoistClient::new(token);
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
-    // Sync to get current state (for project lookup)
-    manager.sync().await?;
-    let cache = manager.cache();
-
-    // Find the project by ID or prefix (include archived projects)
-    let project = find_project_by_id_or_prefix_include_archived(cache, &opts.project_id)?;
-    let project_id = project.id.clone();
-    let project_name = project.name.clone();
+    // Find the project by ID or prefix (include archived projects) and extract owned data
+    let (project_id, project_name, is_archived) = {
+        let cache = manager.cache();
+        let project = find_project_by_id_or_prefix_include_archived(cache, &opts.project_id)?;
+        (project.id.clone(), project.name.clone(), project.is_archived)
+    };
 
     // Check if project is not archived
-    if !project.is_archived {
+    if !is_archived {
         return Err(CommandError::Config(format!(
             "Project '{}' is not archived",
             project_name
@@ -765,10 +754,9 @@ pub async fn execute_unarchive(ctx: &CommandContext, opts: &ProjectsUnarchiveOpt
     // Create the command
     let command = SyncCommand::new("project_unarchive", args);
 
-    // Execute the command
-    let api_client = TodoistClient::new(token);
-    let request = SyncRequest::with_commands(vec![command]);
-    let response = api_client.sync(request).await?;
+    // Execute the command via SyncManager
+    // This sends the command, applies the response to cache, and saves to disk
+    let response = manager.execute_commands(vec![command]).await?;
 
     // Check for errors
     if response.has_errors() {
@@ -838,22 +826,21 @@ pub struct ProjectDeleteResult {
 ///
 /// Returns an error if syncing fails, project lookup fails, or the API returns an error.
 pub async fn execute_delete(ctx: &CommandContext, opts: &ProjectsDeleteOptions, token: &str) -> Result<()> {
-    // Initialize sync manager to resolve project ID
+    // Initialize sync manager (loads cache from disk)
     let client = TodoistClient::new(token);
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
-    // Sync to get current state (for project lookup)
-    manager.sync().await?;
-    let cache = manager.cache();
-
     // Find the project by ID or prefix (include archived projects since they can be deleted)
-    let project = find_project_by_id_or_prefix_include_archived(cache, &opts.project_id)?;
-    let project_id = project.id.clone();
-    let project_name = project.name.clone();
+    // Extract owned data before mutation
+    let (project_id, project_name, is_inbox) = {
+        let cache = manager.cache();
+        let project = find_project_by_id_or_prefix_include_archived(cache, &opts.project_id)?;
+        (project.id.clone(), project.name.clone(), project.inbox_project)
+    };
 
     // Check if this is the inbox project
-    if project.inbox_project {
+    if is_inbox {
         return Err(CommandError::Config(
             "Cannot delete the Inbox project".to_string()
         ));
@@ -879,10 +866,9 @@ pub async fn execute_delete(ctx: &CommandContext, opts: &ProjectsDeleteOptions, 
     // Create the command
     let command = SyncCommand::new("project_delete", args);
 
-    // Execute the command
-    let api_client = TodoistClient::new(token);
-    let request = SyncRequest::with_commands(vec![command]);
-    let response = api_client.sync(request).await?;
+    // Execute the command via SyncManager
+    // This sends the command, applies the response to cache, and saves to disk
+    let response = manager.execute_commands(vec![command]).await?;
 
     // Check for errors
     if response.has_errors() {
