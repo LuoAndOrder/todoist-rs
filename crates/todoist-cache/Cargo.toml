@@ -1,0 +1,19 @@
+[package]
+name = "todoist-cache"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Local cache for Todoist data"
+
+[lib]
+name = "todoist_cache"
+path = "src/lib.rs"
+
+[dependencies]
+todoist-api.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+directories.workspace = true

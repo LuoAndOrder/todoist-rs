@@ -1,0 +1,24 @@
+[package]
+name = "td"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "A Rust CLI for the Todoist API"
+
+[[bin]]
+name = "td"
+path = "src/main.rs"
+
+[dependencies]
+todoist-api.workspace = true
+todoist-cache.workspace = true
+clap.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+chrono.workspace = true
+thiserror.workspace = true
+directories.workspace = true
+owo-colors.workspace = true
