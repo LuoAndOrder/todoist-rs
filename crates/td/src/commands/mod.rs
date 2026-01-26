@@ -6,6 +6,7 @@ pub mod add;
 pub mod delete;
 pub mod done;
 pub mod edit;
+pub mod labels;
 pub mod list;
 pub mod projects;
 pub mod quick;

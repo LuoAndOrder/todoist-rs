@@ -5,7 +5,7 @@ mod cli;
 mod commands;
 mod output;
 
-use cli::{Cli, Commands, ProjectsCommands};
+use cli::{Cli, Commands, LabelsCommands, ProjectsCommands};
 use commands::{CommandContext, CommandError};
 
 #[tokio::main]
@@ -255,6 +255,44 @@ async fn run(cli: &Cli) -> commands::Result<()> {
                         limit: None,
                     };
                     commands::projects::execute(&ctx, &opts, &token).await
+                }
+            }
+        }
+
+        Some(Commands::Labels { command }) => {
+            match command {
+                Some(LabelsCommands::List) => {
+                    let opts = commands::labels::LabelsListOptions::default();
+                    commands::labels::execute(&ctx, &opts, &token).await
+                }
+                Some(LabelsCommands::Add { name, color, favorite }) => {
+                    let opts = commands::labels::LabelsAddOptions {
+                        name: name.clone(),
+                        color: color.clone(),
+                        favorite: *favorite,
+                    };
+                    commands::labels::execute_add(&ctx, &opts, &token).await
+                }
+                Some(LabelsCommands::Edit { label_id, name, color, favorite }) => {
+                    let opts = commands::labels::LabelsEditOptions {
+                        label_id: label_id.clone(),
+                        name: name.clone(),
+                        color: color.clone(),
+                        favorite: *favorite,
+                    };
+                    commands::labels::execute_edit(&ctx, &opts, &token).await
+                }
+                Some(LabelsCommands::Delete { label_id, force }) => {
+                    let opts = commands::labels::LabelsDeleteOptions {
+                        label_id: label_id.clone(),
+                        force: *force,
+                    };
+                    commands::labels::execute_delete(&ctx, &opts, &token).await
+                }
+                None => {
+                    // Default to List if no subcommand provided
+                    let opts = commands::labels::LabelsListOptions::default();
+                    commands::labels::execute(&ctx, &opts, &token).await
                 }
             }
         }
