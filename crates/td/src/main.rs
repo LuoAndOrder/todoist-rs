@@ -129,6 +129,14 @@ async fn run(cli: &Cli) -> commands::Result<()> {
             commands::reopen::execute(&ctx, &opts, &token).await
         }
 
+        Some(Commands::Delete { task_ids, force }) => {
+            let opts = commands::delete::DeleteOptions {
+                task_ids: task_ids.clone(),
+                force: *force,
+            };
+            commands::delete::execute(&ctx, &opts, &token).await
+        }
+
         Some(cmd) => {
             // Other commands not yet implemented
             if cli.json {
