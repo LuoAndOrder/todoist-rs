@@ -108,6 +108,35 @@ async fn run(cli: &Cli) -> commands::Result<()> {
             commands::show::execute(&ctx, &opts, &token).await
         }
 
+        Some(Commands::Edit {
+            task_id,
+            content,
+            project,
+            priority,
+            due,
+            no_due,
+            label,
+            add_label,
+            remove_label,
+            section,
+            description,
+        }) => {
+            let opts = commands::edit::EditOptions {
+                task_id: task_id.clone(),
+                content: content.clone(),
+                project: project.clone(),
+                priority: *priority,
+                due: due.clone(),
+                no_due: *no_due,
+                labels: label.clone(),
+                add_label: add_label.clone(),
+                remove_label: remove_label.clone(),
+                section: section.clone(),
+                description: description.clone(),
+            };
+            commands::edit::execute(&ctx, &opts, &token).await
+        }
+
         Some(Commands::Done {
             task_ids,
             all_occurrences,
