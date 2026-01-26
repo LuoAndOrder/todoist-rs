@@ -3,7 +3,7 @@
 //! Handles initial configuration when no token is found:
 //! 1. Detects first run (no config file, no token)
 //! 2. Prompts user to enter API token
-//! 3. Asks where to store token (config file vs env var)
+//! 3. Asks where to store token (keyring, config file, or env var)
 //! 4. Writes config file with chosen settings
 //! 5. Performs initial sync after setup
 
@@ -14,11 +14,14 @@ use owo_colors::OwoColorize;
 use todoist_cache::{CacheStore, SyncManager};
 
 use super::config::{get_config_path, load_config, Config};
+use super::keyring;
 use super::{CommandContext, CommandError, Result};
 
 /// Token storage options.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenStorage {
+    /// Store in OS keyring (most secure).
+    Keyring,
     /// Store in config file.
     Config,
     /// Expect from environment variable (don't store).
@@ -28,6 +31,7 @@ pub enum TokenStorage {
 impl TokenStorage {
     fn as_str(&self) -> &'static str {
         match self {
+            TokenStorage::Keyring => "keyring",
             TokenStorage::Config => "config",
             TokenStorage::Env => "env",
         }
@@ -134,18 +138,39 @@ pub async fn run_setup(ctx: &CommandContext) -> Result<String> {
     }
 
     // Ask where to store token
-    let storage_options = &["Config file (recommended)", "Environment variable only"];
-    let storage_selection = Select::new()
-        .with_prompt("Where should we store your token?")
-        .items(storage_options)
-        .default(0)
-        .interact()
-        .map_err(|e| CommandError::Io(io::Error::other(e.to_string())))?;
+    let keyring_available = keyring::is_available();
+    let storage = if keyring_available {
+        let storage_options = &[
+            "OS Keychain (recommended - most secure)",
+            "Config file",
+            "Environment variable only",
+        ];
+        let storage_selection = Select::new()
+            .with_prompt("Where should we store your token?")
+            .items(storage_options)
+            .default(0)
+            .interact()
+            .map_err(|e| CommandError::Io(io::Error::other(e.to_string())))?;
 
-    let storage = if storage_selection == 0 {
-        TokenStorage::Config
+        match storage_selection {
+            0 => TokenStorage::Keyring,
+            1 => TokenStorage::Config,
+            _ => TokenStorage::Env,
+        }
     } else {
-        TokenStorage::Env
+        let storage_options = &["Config file (recommended)", "Environment variable only"];
+        let storage_selection = Select::new()
+            .with_prompt("Where should we store your token?")
+            .items(storage_options)
+            .default(0)
+            .interact()
+            .map_err(|e| CommandError::Io(io::Error::other(e.to_string())))?;
+
+        if storage_selection == 0 {
+            TokenStorage::Config
+        } else {
+            TokenStorage::Env
+        }
     };
 
     // Save config
@@ -156,6 +181,15 @@ pub async fn run_setup(ctx: &CommandContext) -> Result<String> {
         println!();
         let config_path = get_config_path()?;
         match storage {
+            TokenStorage::Keyring => {
+                if ctx.use_colors {
+                    println!("{}", "Setup complete!".green().bold());
+                } else {
+                    println!("Setup complete!");
+                }
+                println!("Token stored securely in OS keychain.");
+                println!("Config saved to: {}", config_path.display());
+            }
             TokenStorage::Config => {
                 if ctx.use_colors {
                     println!("{}", "Setup complete!".green().bold());
@@ -199,11 +233,16 @@ fn save_setup_config(token: &str, storage: TokenStorage) -> Result<()> {
             .map_err(|e| CommandError::Config(format!("Failed to create config directory: {}", e)))?;
     }
 
-    // Build config
+    // If using keyring, store the token there
+    if storage == TokenStorage::Keyring {
+        keyring::store_token(token)?;
+    }
+
+    // Build config (don't store token in config if using keyring or env)
     let config = Config {
         token: match storage {
             TokenStorage::Config => Some(token.to_string()),
-            TokenStorage::Env => None,
+            TokenStorage::Keyring | TokenStorage::Env => None,
         },
         token_storage: Some(storage.as_str().to_string()),
         ..Default::default()
@@ -234,6 +273,7 @@ mod tests {
 
     #[test]
     fn test_token_storage_as_str() {
+        assert_eq!(TokenStorage::Keyring.as_str(), "keyring");
         assert_eq!(TokenStorage::Config.as_str(), "config");
         assert_eq!(TokenStorage::Env.as_str(), "env");
     }

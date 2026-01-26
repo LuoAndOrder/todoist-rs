@@ -569,12 +569,13 @@ fn error_exit_code(e: &CommandError) -> ExitCode {
     }
 }
 
-/// Resolves the API token with priority: flag > env > config.
+/// Resolves the API token with priority: flag > env > keyring > config.
 ///
 /// The resolution order is:
 /// 1. `--token` command line flag (highest priority)
 /// 2. `TODOIST_TOKEN` environment variable
-/// 3. Token from config file (`~/.config/td/config.toml`)
+/// 3. OS keyring (if `token_storage == "keyring"` in config)
+/// 4. Token from config file (`~/.config/td/config.toml`)
 ///
 /// Returns `None` if no token is found (allowing caller to trigger setup).
 fn resolve_token_optional(cli: &Cli) -> commands::Result<Option<String>> {
@@ -584,9 +585,17 @@ fn resolve_token_optional(cli: &Cli) -> commands::Result<Option<String>> {
         return Ok(Some(token.clone()));
     }
 
-    // 2. Try config file
+    // 2. Try config file and check storage method
     match load_config() {
         Ok(config) => {
+            // 3. If token_storage == "keyring", try keyring
+            if config.token_storage.as_deref() == Some("keyring") {
+                if let Some(token) = commands::keyring::get_token()? {
+                    return Ok(Some(token));
+                }
+            }
+
+            // 4. Fall back to config file token
             if let Some(token) = config.token {
                 return Ok(Some(token));
             }

@@ -25,6 +25,7 @@ directories.workspace = true
 owo-colors.workspace = true
 uuid.workspace = true
 dialoguer.workspace = true
+keyring.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
