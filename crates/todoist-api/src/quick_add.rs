@@ -119,21 +119,7 @@ impl QuickAddRequest {
 
     /// Converts the request to form-urlencoded format for the API.
     pub fn to_form_body(&self) -> String {
-        let mut parts = vec![format!("text={}", urlencoding::encode(&self.text))];
-
-        if let Some(note) = &self.note {
-            parts.push(format!("note={}", urlencoding::encode(note)));
-        }
-
-        if let Some(reminder) = &self.reminder {
-            parts.push(format!("reminder={}", urlencoding::encode(reminder)));
-        }
-
-        if let Some(auto_reminder) = self.auto_reminder {
-            parts.push(format!("auto_reminder={}", auto_reminder));
-        }
-
-        parts.join("&")
+        serde_urlencoded::to_string(self).expect("form serialization should not fail")
     }
 }
 
@@ -369,7 +355,10 @@ mod tests {
         let request = QuickAddRequest::new("Test task").unwrap();
         let body = request.to_form_body();
 
-        assert_eq!(body, "text=Test%20task");
+        // Decode and verify the text field is correctly encoded
+        let decoded: std::collections::HashMap<String, String> =
+            serde_urlencoded::from_str(&body).unwrap();
+        assert_eq!(decoded.get("text").unwrap(), "Test task");
     }
 
     #[test]
@@ -381,10 +370,13 @@ mod tests {
             .with_auto_reminder(true);
         let body = request.to_form_body();
 
-        assert!(body.contains("text=Test%20task"));
-        assert!(body.contains("note=A%20note"));
-        assert!(body.contains("reminder=tomorrow"));
-        assert!(body.contains("auto_reminder=true"));
+        // Decode and verify all fields are correctly encoded
+        let decoded: std::collections::HashMap<String, String> =
+            serde_urlencoded::from_str(&body).unwrap();
+        assert_eq!(decoded.get("text").unwrap(), "Test task");
+        assert_eq!(decoded.get("note").unwrap(), "A note");
+        assert_eq!(decoded.get("reminder").unwrap(), "tomorrow");
+        assert_eq!(decoded.get("auto_reminder").unwrap(), "true");
     }
 
     #[test]
@@ -392,8 +384,10 @@ mod tests {
         let request = QuickAddRequest::new("Buy milk #Shopping @errands").unwrap();
         let body = request.to_form_body();
 
-        // # and @ should be URL encoded
-        assert!(body.contains("text=Buy%20milk%20%23Shopping%20%40errands"));
+        // Decode and verify special characters are handled correctly
+        let decoded: std::collections::HashMap<String, String> =
+            serde_urlencoded::from_str(&body).unwrap();
+        assert_eq!(decoded.get("text").unwrap(), "Buy milk #Shopping @errands");
     }
 
     #[test]

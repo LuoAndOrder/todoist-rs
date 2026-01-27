@@ -18,6 +18,17 @@ pub struct SyncRequest {
     pub commands: Vec<SyncCommand>,
 }
 
+/// Internal struct for form encoding.
+/// The Sync API expects resource_types and commands as JSON-encoded strings.
+#[derive(Serialize)]
+struct SyncRequestForm<'a> {
+    sync_token: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    resource_types: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    commands: Option<String>,
+}
+
 impl SyncRequest {
     /// Creates a new SyncRequest for a full sync of all resources.
     pub fn full_sync() -> Self {
@@ -65,29 +76,27 @@ impl SyncRequest {
     /// - `resource_types`: JSON-encoded array of strings
     /// - `commands`: JSON-encoded array of command objects (if any)
     pub fn to_form_body(&self) -> String {
-        let mut parts = Vec::new();
+        let form = SyncRequestForm {
+            sync_token: &self.sync_token,
+            resource_types: if self.resource_types.is_empty() {
+                None
+            } else {
+                Some(
+                    serde_json::to_string(&self.resource_types)
+                        .expect("resource_types serialization should not fail"),
+                )
+            },
+            commands: if self.commands.is_empty() {
+                None
+            } else {
+                Some(
+                    serde_json::to_string(&self.commands)
+                        .expect("commands serialization should not fail"),
+                )
+            },
+        };
 
-        // sync_token
-        parts.push(format!(
-            "sync_token={}",
-            urlencoding::encode(&self.sync_token)
-        ));
-
-        // resource_types (always include if non-empty)
-        if !self.resource_types.is_empty() {
-            let json = serde_json::to_string(&self.resource_types)
-                .expect("resource_types serialization should not fail");
-            parts.push(format!("resource_types={}", urlencoding::encode(&json)));
-        }
-
-        // commands (only include if non-empty)
-        if !self.commands.is_empty() {
-            let json = serde_json::to_string(&self.commands)
-                .expect("commands serialization should not fail");
-            parts.push(format!("commands={}", urlencoding::encode(&json)));
-        }
-
-        parts.join("&")
+        serde_urlencoded::to_string(&form).expect("form serialization should not fail")
     }
 }
 
@@ -193,8 +202,13 @@ mod tests {
         let request = SyncRequest::full_sync();
         let body = request.to_form_body();
 
-        assert!(body.contains("sync_token=%2A")); // "*" encoded
-        assert!(body.contains("resource_types=%5B%22all%22%5D")); // ["all"] encoded
+        // Decode and verify the fields are correctly encoded
+        let decoded: std::collections::HashMap<String, String> =
+            serde_urlencoded::from_str(&body).unwrap();
+        assert_eq!(decoded.get("sync_token").unwrap(), "*");
+        let resource_types: Vec<String> =
+            serde_json::from_str(decoded.get("resource_types").unwrap()).unwrap();
+        assert_eq!(resource_types, vec!["all"]);
     }
 
     #[test]
@@ -218,20 +232,14 @@ mod tests {
 
         // Verify commands are included and properly encoded
         assert!(body.contains("commands="));
-        // The JSON should contain our command type
-        let decoded = urlencoding::decode(
-            body.split("commands=")
-                .nth(1)
-                .unwrap()
-                .split('&')
-                .next()
-                .unwrap(),
-        )
-        .unwrap();
-        assert!(decoded.contains("item_add"));
-        assert!(decoded.contains("test-uuid"));
-        assert!(decoded.contains("temp-123"));
-        assert!(decoded.contains("Buy milk"));
+        // Decode the form body and check the commands field
+        let decoded: std::collections::HashMap<String, String> =
+            serde_urlencoded::from_str(&body).unwrap();
+        let commands_json = decoded.get("commands").unwrap();
+        assert!(commands_json.contains("item_add"));
+        assert!(commands_json.contains("test-uuid"));
+        assert!(commands_json.contains("temp-123"));
+        assert!(commands_json.contains("Buy milk"));
     }
 
     #[test]
@@ -240,17 +248,11 @@ mod tests {
             .with_resource_types(vec!["items".to_string(), "projects".to_string()]);
         let body = request.to_form_body();
 
-        // Decode and check the JSON
-        let decoded = urlencoding::decode(
-            body.split("resource_types=")
-                .nth(1)
-                .unwrap()
-                .split('&')
-                .next()
-                .unwrap(),
-        )
-        .unwrap();
-        let types: Vec<String> = serde_json::from_str(&decoded).unwrap();
+        // Decode the form body and check the resource_types field
+        let decoded: std::collections::HashMap<String, String> =
+            serde_urlencoded::from_str(&body).unwrap();
+        let resource_types_json = decoded.get("resource_types").unwrap();
+        let types: Vec<String> = serde_json::from_str(resource_types_json).unwrap();
         assert_eq!(types, vec!["items", "projects"]);
     }
 

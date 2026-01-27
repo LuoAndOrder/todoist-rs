@@ -66,7 +66,7 @@ async fn test_sync_full_sync() {
         .and(path("/sync"))
         .and(header("Authorization", "Bearer test-token"))
         .and(header("Content-Type", "application/x-www-form-urlencoded"))
-        .and(body_string_contains("sync_token=%2A")) // "*" URL-encoded
+        .and(body_string_contains("sync_token=*")) // "*" is unreserved, no encoding needed
         .and(body_string_contains("resource_types="))
         .respond_with(ResponseTemplate::new(200).set_body_json(response_json))
         .expect(1)

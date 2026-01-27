@@ -121,7 +121,7 @@ async fn test_sync_performs_full_sync_when_no_cache() {
     // Set up mock to expect full sync request (sync_token=*)
     Mock::given(method("POST"))
         .and(path("/sync"))
-        .and(body_string_contains("sync_token=%2A")) // URL-encoded "*"
+        .and(body_string_contains("sync_token=*")) // "*" is unreserved, no encoding needed
         .respond_with(ResponseTemplate::new(200).set_body_json(mock_full_sync_response()))
         .expect(1)
         .mount(&mock_server)
@@ -228,7 +228,7 @@ async fn test_full_sync_forces_full_sync_even_with_existing_token() {
     // Set up mock to expect FULL sync request (sync_token=*), not incremental
     Mock::given(method("POST"))
         .and(path("/sync"))
-        .and(body_string_contains("sync_token=%2A")) // URL-encoded "*"
+        .and(body_string_contains("sync_token=*")) // "*" is unreserved, no encoding needed
         .respond_with(ResponseTemplate::new(200).set_body_json(mock_full_sync_response()))
         .expect(1)
         .mount(&mock_server)
@@ -1701,7 +1701,7 @@ async fn test_sync_falls_back_to_full_sync_on_invalid_token() {
     // Second request: full sync (sync_token=*) -> success with fresh data
     Mock::given(method("POST"))
         .and(path("/sync"))
-        .and(body_string_contains("sync_token=%2A")) // URL-encoded "*"
+        .and(body_string_contains("sync_token=*")) // "*" is unreserved, no encoding needed
         .respond_with(ResponseTemplate::new(200).set_body_json(mock_full_sync_response()))
         .expect(1)
         .mount(&mock_server)
