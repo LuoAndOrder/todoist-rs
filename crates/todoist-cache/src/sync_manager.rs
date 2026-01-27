@@ -114,6 +114,35 @@ pub type Result<T> = std::result::Result<T, SyncError>;
 ///
 /// `SyncManager` provides methods for syncing data, checking cache staleness,
 /// and forcing full syncs when needed.
+///
+/// # Thread Safety
+///
+/// `SyncManager` is [`Send`] but **not** [`Sync`]. Most methods require `&mut self`
+/// because they modify the internal cache and persist changes to disk.
+///
+/// For multi-threaded usage, wrap in `Arc<Mutex<SyncManager>>` or
+/// `Arc<tokio::sync::Mutex<SyncManager>>`:
+///
+/// ```no_run
+/// use std::sync::Arc;
+/// use tokio::sync::Mutex;
+/// use todoist_api::client::TodoistClient;
+/// use todoist_cache::{CacheStore, SyncManager};
+///
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// let client = TodoistClient::new("token");
+/// let store = CacheStore::new()?;
+/// let manager = Arc::new(Mutex::new(SyncManager::new(client, store)?));
+///
+/// // Lock before calling mutable methods
+/// let mut guard = manager.lock().await;
+/// guard.sync().await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// In typical CLI usage, the manager is owned by a single async task and no
+/// synchronization is needed.
 pub struct SyncManager {
     /// The Todoist API client.
     client: TodoistClient,

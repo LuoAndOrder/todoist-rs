@@ -84,6 +84,23 @@ pub type Result<T> = std::result::Result<T, CacheStoreError>;
 /// `CacheStore` handles reading and writing the cache to disk using XDG-compliant
 /// paths. On Unix systems, the cache is stored at `~/.cache/td/cache.json`.
 ///
+/// # Thread Safety
+///
+/// `CacheStore` is [`Send`] and [`Sync`], but file operations are not atomic.
+/// Concurrent calls to `save()` from multiple threads could result in corrupted
+/// data on disk. For concurrent access, use external synchronization:
+///
+/// ```no_run
+/// use std::sync::{Arc, Mutex};
+/// use todoist_cache::CacheStore;
+///
+/// let store = Arc::new(Mutex::new(CacheStore::new()?));
+/// # Ok::<(), todoist_cache::CacheStoreError>(())
+/// ```
+///
+/// In typical CLI usage, the store is owned by a single-threaded runtime
+/// and external synchronization is not needed.
+///
 /// # Example
 ///
 /// ```no_run

@@ -48,6 +48,11 @@ impl Default for RetryConfig {
 
 /// Builder for creating a [`TodoistClient`] with custom configuration.
 ///
+/// # Thread Safety
+///
+/// The builder itself is [`Send`] and [`Sync`]. The built [`TodoistClient`]
+/// is also thread-safe and can be freely shared across threads.
+///
 /// # Example
 ///
 /// ```
@@ -147,6 +152,25 @@ impl TodoistClientBuilder {
 }
 
 /// Client for interacting with the Todoist API.
+///
+/// # Thread Safety
+///
+/// `TodoistClient` is both [`Send`] and [`Sync`], making it safe to share across
+/// threads. The underlying HTTP client (`reqwest::Client`) handles connection
+/// pooling and is designed for concurrent use.
+///
+/// For optimal performance, create a single client instance and share it
+/// (via `Arc` or cloning) across tasks rather than creating new clients.
+///
+/// ```
+/// use std::sync::Arc;
+/// use todoist_api::client::TodoistClient;
+///
+/// let client = Arc::new(TodoistClient::new("token"));
+///
+/// // Clone the Arc to share across tasks
+/// let client_clone = Arc::clone(&client);
+/// ```
 #[derive(Clone)]
 pub struct TodoistClient {
     token: String,

@@ -48,6 +48,30 @@ use todoist_api::sync::{
 ///
 /// The cache structure mirrors the Sync API response for easy updates from sync operations.
 /// It stores all relevant resources and metadata about the last sync.
+///
+/// # Thread Safety
+///
+/// `Cache` is [`Send`] and [`Sync`], but it has no internal synchronization.
+/// Concurrent reads are safe, but concurrent writes or read-modify-write
+/// patterns require external synchronization.
+///
+/// For multi-threaded access, wrap in `Arc<RwLock<Cache>>`:
+///
+/// ```
+/// use std::sync::{Arc, RwLock};
+/// use todoist_cache::Cache;
+///
+/// let cache = Arc::new(RwLock::new(Cache::new()));
+///
+/// // Read access
+/// let items_count = cache.read().unwrap().items.len();
+///
+/// // Write access
+/// cache.write().unwrap().sync_token = "new_token".to_string();
+/// ```
+///
+/// In typical CLI usage, the cache is owned by a single-threaded runtime
+/// and external synchronization is not needed.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Cache {
     /// The sync token for incremental syncs.
