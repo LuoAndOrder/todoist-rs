@@ -786,7 +786,7 @@ async fn test_task_with_many_labels() {
         let label_id = ctx
             .create_label(&label_name)
             .await
-            .expect(&format!("Should create label {}", i));
+            .unwrap_or_else(|_| panic!("Should create label {}", i));
         label_ids.push(label_id);
         label_names.push(label_name);
     }
@@ -864,7 +864,7 @@ async fn test_project_with_many_sections() {
         let section_id = ctx
             .create_section(&section_name, &project_id)
             .await
-            .expect(&format!("Should create section {}", i));
+            .unwrap_or_else(|_| panic!("Should create section {}", i));
         section_ids.push(section_id);
         section_names.push(section_name);
     }
@@ -1009,7 +1009,7 @@ async fn test_rapid_update_cycle() {
                 }),
             )])
             .await
-            .expect(&format!("Update {} should succeed", i));
+            .unwrap_or_else(|_| panic!("Update {} should succeed", i));
 
         assert!(
             !response.has_errors(),

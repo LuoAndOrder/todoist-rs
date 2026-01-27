@@ -317,9 +317,9 @@ async fn test_delete_project_with_tasks() {
 
     // Check if tasks are gone or their project is deleted
     let tasks_handled = task1.is_none() && task2.is_none() && task3.is_none();
-    let tasks_orphaned = task1.map_or(true, |t| ctx.find_project(&t.project_id).is_none())
-        && task2.map_or(true, |t| ctx.find_project(&t.project_id).is_none())
-        && task3.map_or(true, |t| ctx.find_project(&t.project_id).is_none());
+    let tasks_orphaned = task1.is_none_or(|t| ctx.find_project(&t.project_id).is_none())
+        && task2.is_none_or(|t| ctx.find_project(&t.project_id).is_none())
+        && task3.is_none_or(|t| ctx.find_project(&t.project_id).is_none());
 
     assert!(
         tasks_handled || tasks_orphaned,
@@ -1053,11 +1053,10 @@ async fn test_delete_section_with_tasks() {
 
     // Tasks should still exist (either at project root or deleted)
     let tasks_exist = task1.is_some() && task2.is_some();
-    let tasks_moved = task1.map_or(true, |t| {
-        t.section_id.is_none() || t.section_id.as_ref() != Some(&section_id)
-    }) && task2.map_or(true, |t| {
-        t.section_id.is_none() || t.section_id.as_ref() != Some(&section_id)
-    });
+    let tasks_moved = task1
+        .is_none_or(|t| t.section_id.is_none() || t.section_id.as_ref() != Some(&section_id))
+        && task2
+            .is_none_or(|t| t.section_id.is_none() || t.section_id.as_ref() != Some(&section_id));
 
     assert!(
         tasks_exist || tasks_moved,

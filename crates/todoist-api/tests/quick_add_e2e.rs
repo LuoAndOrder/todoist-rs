@@ -798,7 +798,7 @@ async fn test_quick_add_due_with_time() {
             || due
                 .datetime
                 .as_ref()
-                .map_or(false, |dt| dt.starts_with(&today)),
+                .is_some_and(|dt| dt.starts_with(&today)),
         "Should be due today ({}), got date: {}, datetime: {:?}",
         today,
         due.date,

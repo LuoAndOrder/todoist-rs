@@ -445,7 +445,7 @@ mod tests {
     fn test_error_message_format_write() {
         let error = CacheStoreError::WriteError {
             path: PathBuf::from("/home/user/.cache/td/cache.json"),
-            source: io::Error::new(io::ErrorKind::Other, "disk full"),
+            source: io::Error::other("disk full"),
         };
 
         let msg = error.to_string();

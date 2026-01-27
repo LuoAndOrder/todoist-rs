@@ -1020,48 +1020,48 @@ mod tests {
     #[test]
     fn test_find_similar_name_exact_match_returns_none() {
         // Exact match should not return a suggestion
-        let candidates = vec!["Work", "Personal", "Shopping"];
-        let result = find_similar_name("Work", candidates.iter().map(|s| *s));
+        let candidates = ["Work", "Personal", "Shopping"];
+        let result = find_similar_name("Work", candidates.iter().copied());
         assert!(result.is_none());
     }
 
     #[test]
     fn test_find_similar_name_case_insensitive_exact_match_returns_none() {
         // Case-insensitive exact match should not return a suggestion
-        let candidates = vec!["Work", "Personal", "Shopping"];
-        let result = find_similar_name("work", candidates.iter().map(|s| *s));
+        let candidates = ["Work", "Personal", "Shopping"];
+        let result = find_similar_name("work", candidates.iter().copied());
         assert!(result.is_none());
     }
 
     #[test]
     fn test_find_similar_name_single_typo() {
         // Single character typo should suggest
-        let candidates = vec!["Work", "Personal", "Shopping"];
-        let result = find_similar_name("Wrok", candidates.iter().map(|s| *s));
+        let candidates = ["Work", "Personal", "Shopping"];
+        let result = find_similar_name("Wrok", candidates.iter().copied());
         assert_eq!(result, Some("Work".to_string()));
     }
 
     #[test]
     fn test_find_similar_name_missing_letter() {
         // Missing letter should suggest
-        let candidates = vec!["Inbox", "Personal", "Shopping"];
-        let result = find_similar_name("inbx", candidates.iter().map(|s| *s));
+        let candidates = ["Inbox", "Personal", "Shopping"];
+        let result = find_similar_name("inbx", candidates.iter().copied());
         assert_eq!(result, Some("Inbox".to_string()));
     }
 
     #[test]
     fn test_find_similar_name_extra_letter() {
         // Extra letter should suggest
-        let candidates = vec!["Work", "Personal", "Shopping"];
-        let result = find_similar_name("Workk", candidates.iter().map(|s| *s));
+        let candidates = ["Work", "Personal", "Shopping"];
+        let result = find_similar_name("Workk", candidates.iter().copied());
         assert_eq!(result, Some("Work".to_string()));
     }
 
     #[test]
     fn test_find_similar_name_too_different() {
         // Very different string should not suggest
-        let candidates = vec!["Work", "Personal", "Shopping"];
-        let result = find_similar_name("Completely Different", candidates.iter().map(|s| *s));
+        let candidates = ["Work", "Personal", "Shopping"];
+        let result = find_similar_name("Completely Different", candidates.iter().copied());
         assert!(result.is_none());
     }
 
@@ -1069,15 +1069,15 @@ mod tests {
     fn test_find_similar_name_empty_candidates() {
         // Empty candidates list should return None
         let candidates: Vec<&str> = vec![];
-        let result = find_similar_name("Work", candidates.iter().map(|s| *s));
+        let result = find_similar_name("Work", candidates.iter().copied());
         assert!(result.is_none());
     }
 
     #[test]
     fn test_find_similar_name_best_match_selected() {
         // Should select the best (closest) match
-        let candidates = vec!["Workshop", "Work", "Working"];
-        let result = find_similar_name("Wok", candidates.iter().map(|s| *s));
+        let candidates = ["Workshop", "Work", "Working"];
+        let result = find_similar_name("Wok", candidates.iter().copied());
         assert_eq!(result, Some("Work".to_string()));
     }
 

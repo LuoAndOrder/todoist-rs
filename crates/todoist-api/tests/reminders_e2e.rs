@@ -25,6 +25,7 @@
 mod test_context;
 
 use test_context::TestContext;
+use todoist_api_rs::models::ReminderType;
 use todoist_api_rs::sync::SyncCommand;
 
 /// Helper to check if reminders are available (requires Pro).
@@ -112,7 +113,8 @@ async fn test_create_absolute_reminder() {
 
     assert_eq!(reminder.item_id, task_id, "Reminder should be for the task");
     assert_eq!(
-        reminder.reminder_type, "absolute",
+        reminder.reminder_type,
+        ReminderType::Absolute,
         "Reminder type should be absolute"
     );
     assert!(reminder.due.is_some(), "Absolute reminder should have due");
@@ -174,7 +176,8 @@ async fn test_create_relative_reminder() {
 
     assert_eq!(reminder.item_id, task_id, "Reminder should be for the task");
     assert_eq!(
-        reminder.reminder_type, "relative",
+        reminder.reminder_type,
+        ReminderType::Relative,
         "Reminder type should be relative"
     );
     assert_eq!(
@@ -407,10 +410,10 @@ async fn test_multiple_reminders_on_task() {
     // Verify different types exist
     let has_absolute = reminders_for_task
         .iter()
-        .any(|r| r.reminder_type == "absolute");
+        .any(|r| r.reminder_type == ReminderType::Absolute);
     let has_relative = reminders_for_task
         .iter()
-        .any(|r| r.reminder_type == "relative");
+        .any(|r| r.reminder_type == ReminderType::Relative);
     assert!(has_absolute, "Should have at least one absolute reminder");
     assert!(has_relative, "Should have at least one relative reminder");
 
@@ -581,7 +584,7 @@ async fn test_reminder_appears_in_cache() {
         .expect("Reminder should be in cache immediately after creation");
 
     assert_eq!(reminder.item_id, task_id);
-    assert_eq!(reminder.reminder_type, "absolute");
+    assert_eq!(reminder.reminder_type, ReminderType::Absolute);
     assert!(!reminder.is_deleted);
 
     // Do a refresh to verify it persists across syncs

@@ -16,6 +16,7 @@
 //! allowing ~10x more API calls before hitting rate limits.
 
 #![cfg(feature = "e2e")]
+#![allow(dead_code)]
 
 use std::fs;
 use todoist_api_rs::client::TodoistClient;
@@ -802,6 +803,7 @@ impl TestContext {
     /// 4. Sections
     /// 5. Projects
     /// 6. Labels
+    #[allow(clippy::too_many_arguments)]
     pub async fn batch_delete_all(
         &mut self,
         task_ids: &[&str],
