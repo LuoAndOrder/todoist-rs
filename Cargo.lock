@@ -1620,7 +1620,7 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "todoist-api-rs"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "chrono",
  "reqwest",
@@ -1635,7 +1635,7 @@ dependencies = [
 
 [[package]]
 name = "todoist-cache-rs"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "chrono",
  "directories",
@@ -1652,7 +1652,7 @@ dependencies = [
 
 [[package]]
 name = "todoist-cli-rs"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "chrono",
  "clap",
