@@ -512,7 +512,8 @@ fn format_reminder_description(reminder_type: &str, minute_offset: Option<i32>, 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use todoist_api::sync::{Due, Item, Project};
+    use todoist_api::models::Due;
+    use todoist_api::sync::{Item, Project};
 
     #[test]
     fn test_reminders_list_options_defaults() {

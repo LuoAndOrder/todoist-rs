@@ -6,6 +6,11 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 
+use super::common::{Deadline, Due, Duration};
+
+#[cfg(test)]
+use super::common::DurationUnit;
+
 /// A task in Todoist.
 ///
 /// Tasks are the core entity in Todoist, representing items that can be
@@ -91,64 +96,6 @@ fn default_priority() -> i32 {
     1
 }
 
-/// Due date/time information for a task.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Due {
-    /// The date in YYYY-MM-DD format (always present).
-    pub date: String,
-
-    /// The full datetime in RFC3339 format (if a time is set).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub datetime: Option<String>,
-
-    /// Whether this is a recurring due date.
-    #[serde(default)]
-    pub is_recurring: bool,
-
-    /// Human-readable representation of the due date (e.g., "every day").
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub string: Option<String>,
-
-    /// The timezone for the due datetime.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub timezone: Option<String>,
-
-    /// The language used for parsing the date string.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub lang: Option<String>,
-}
-
-/// Deadline for a task (separate from due date).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Deadline {
-    /// The deadline date in YYYY-MM-DD format.
-    pub date: String,
-
-    /// The language used for the deadline string.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub lang: Option<String>,
-}
-
-/// Estimated duration for completing a task.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Duration {
-    /// The amount of time (positive integer).
-    pub amount: i32,
-
-    /// The unit of time ("minute" or "day").
-    pub unit: DurationUnit,
-}
-
-/// Unit of time for task duration.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum DurationUnit {
-    /// Duration in minutes.
-    Minute,
-    /// Duration in days.
-    Day,
-}
-
 impl Task {
     /// Returns true if the task has a due date set.
     pub fn has_due_date(&self) -> bool {
@@ -175,68 +122,6 @@ impl Task {
     /// Returns true if this is a high priority task (priority 3 or 4).
     pub fn is_high_priority(&self) -> bool {
         self.priority >= 3
-    }
-}
-
-impl Due {
-    /// Creates a new Due with just a date.
-    pub fn from_date(date: impl Into<String>) -> Self {
-        Self {
-            date: date.into(),
-            datetime: None,
-            is_recurring: false,
-            string: None,
-            timezone: None,
-            lang: None,
-        }
-    }
-
-    /// Creates a new Due with a datetime.
-    pub fn from_datetime(date: impl Into<String>, datetime: impl Into<String>) -> Self {
-        Self {
-            date: date.into(),
-            datetime: Some(datetime.into()),
-            is_recurring: false,
-            string: None,
-            timezone: None,
-            lang: None,
-        }
-    }
-
-    /// Returns the due date as a NaiveDate.
-    pub fn as_naive_date(&self) -> Option<NaiveDate> {
-        NaiveDate::parse_from_str(&self.date, "%Y-%m-%d").ok()
-    }
-
-    /// Returns true if a specific time is set.
-    pub fn has_time(&self) -> bool {
-        self.datetime.is_some()
-    }
-}
-
-impl Duration {
-    /// Creates a duration in minutes.
-    pub fn minutes(amount: i32) -> Self {
-        Self {
-            amount,
-            unit: DurationUnit::Minute,
-        }
-    }
-
-    /// Creates a duration in days.
-    pub fn days(amount: i32) -> Self {
-        Self {
-            amount,
-            unit: DurationUnit::Day,
-        }
-    }
-
-    /// Returns the duration in minutes.
-    pub fn as_minutes(&self) -> i32 {
-        match self.unit {
-            DurationUnit::Minute => self.amount,
-            DurationUnit::Day => self.amount * 24 * 60,
-        }
     }
 }
 

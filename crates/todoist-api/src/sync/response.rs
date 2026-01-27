@@ -4,6 +4,9 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
+// Re-export common types that are used by sync API consumers
+pub use crate::models::{Deadline, Due, Duration, DurationUnit};
+
 /// Response from the Sync API endpoint.
 ///
 /// Contains all requested resources and metadata about the sync operation.
@@ -236,54 +239,6 @@ pub struct Item {
 
 fn default_priority() -> i32 {
     1
-}
-
-/// Due date information.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Due {
-    /// Date in YYYY-MM-DD format.
-    pub date: String,
-
-    /// Full datetime in RFC3339 format (if time is set).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub datetime: Option<String>,
-
-    /// Human-readable string (e.g., "every day").
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub string: Option<String>,
-
-    /// Timezone for the due datetime.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub timezone: Option<String>,
-
-    /// Whether this is a recurring due date.
-    #[serde(default)]
-    pub is_recurring: bool,
-
-    /// Language used for parsing.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub lang: Option<String>,
-}
-
-/// Deadline information (separate from due date).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Deadline {
-    /// Deadline date in YYYY-MM-DD format.
-    pub date: String,
-
-    /// Language used.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub lang: Option<String>,
-}
-
-/// Task duration.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Duration {
-    /// Amount of time.
-    pub amount: i32,
-
-    /// Unit: "minute" or "day".
-    pub unit: String,
 }
 
 /// A project.
@@ -837,7 +792,7 @@ mod tests {
 
         let duration = item.duration.unwrap();
         assert_eq!(duration.amount, 15);
-        assert_eq!(duration.unit, "minute");
+        assert_eq!(duration.unit, DurationUnit::Minute);
     }
 
     #[test]

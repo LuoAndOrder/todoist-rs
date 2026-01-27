@@ -324,7 +324,7 @@ impl<'a> FilterEvaluator<'a> {
 mod tests {
     use super::*;
     use chrono::Local;
-    use todoist_api::sync::Due;
+    use todoist_api::models::Due;
 
     // ==================== Test Helpers ====================
 

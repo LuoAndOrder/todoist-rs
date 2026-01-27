@@ -5,7 +5,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::sync::{Due, Item};
+use crate::models::Due;
+use crate::sync::Item;
 
 /// Request body for the Quick Add endpoint.
 ///

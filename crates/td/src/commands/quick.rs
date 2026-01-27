@@ -143,7 +143,7 @@ async fn resolve_project_name(token: &str, response: &QuickAddResponse) -> Optio
 #[cfg(test)]
 mod tests {
     use super::*;
-    use todoist_api::sync::Due;
+    use todoist_api::models::Due;
 
     #[test]
     fn test_quick_options_defaults() {
