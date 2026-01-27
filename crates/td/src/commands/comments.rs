@@ -659,7 +659,7 @@ pub async fn execute_delete(
             println!("  On {}: {}", parent_type, parent_display);
             println!("  Content: {}", result.content);
         } else {
-            let prefix = &result.id[..6.min(result.id.len())];
+            let prefix = &result.id[..ID_DISPLAY_LENGTH.min(result.id.len())];
             println!("Deleted comment ({}) from {}", prefix, parent_display);
         }
     }
