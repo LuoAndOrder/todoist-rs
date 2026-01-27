@@ -31,9 +31,45 @@ pub enum CacheStoreError {
     #[error("failed to determine cache directory: no valid home directory found")]
     NoCacheDir,
 
-    /// I/O error during file operations.
-    #[error("I/O error: {0}")]
-    Io(#[from] io::Error),
+    /// I/O error during file read.
+    #[error("failed to read cache file '{path}': {source}")]
+    ReadError {
+        /// The path that failed to read.
+        path: PathBuf,
+        /// The underlying I/O error.
+        #[source]
+        source: io::Error,
+    },
+
+    /// I/O error during file write.
+    #[error("failed to write cache file '{path}': {source}")]
+    WriteError {
+        /// The path that failed to write.
+        path: PathBuf,
+        /// The underlying I/O error.
+        #[source]
+        source: io::Error,
+    },
+
+    /// I/O error during directory creation.
+    #[error("failed to create cache directory '{path}': {source}")]
+    CreateDirError {
+        /// The directory path that failed to create.
+        path: PathBuf,
+        /// The underlying I/O error.
+        #[source]
+        source: io::Error,
+    },
+
+    /// I/O error during file delete.
+    #[error("failed to delete cache file '{path}': {source}")]
+    DeleteError {
+        /// The path that failed to delete.
+        path: PathBuf,
+        /// The underlying I/O error.
+        #[source]
+        source: io::Error,
+    },
 
     /// JSON serialization/deserialization error.
     #[error("JSON error: {0}")]
@@ -114,7 +150,7 @@ impl CacheStore {
     ///
     /// # Errors
     ///
-    /// - Returns `CacheStoreError::Io` if the file cannot be read.
+    /// - Returns `CacheStoreError::ReadError` if the file cannot be read.
     /// - Returns `CacheStoreError::Json` if the file contains invalid JSON.
     ///
     /// # Note
@@ -123,7 +159,10 @@ impl CacheStore {
     /// `ErrorKind::NotFound`. Use `load_or_default()` to get a default cache
     /// when the file is missing.
     pub fn load(&self) -> Result<Cache> {
-        let contents = fs::read_to_string(&self.path)?;
+        let contents = fs::read_to_string(&self.path).map_err(|e| CacheStoreError::ReadError {
+            path: self.path.clone(),
+            source: e,
+        })?;
         let cache = serde_json::from_str(&contents)?;
         Ok(cache)
     }
@@ -132,12 +171,14 @@ impl CacheStore {
     ///
     /// # Errors
     ///
-    /// - Returns `CacheStoreError::Io` for I/O errors other than "file not found".
+    /// - Returns `CacheStoreError::ReadError` for I/O errors other than "file not found".
     /// - Returns `CacheStoreError::Json` if the file contains invalid JSON.
     pub fn load_or_default(&self) -> Result<Cache> {
         match self.load() {
             Ok(cache) => Ok(cache),
-            Err(CacheStoreError::Io(ref e)) if e.kind() == io::ErrorKind::NotFound => {
+            Err(CacheStoreError::ReadError { ref source, .. })
+                if source.kind() == io::ErrorKind::NotFound =>
+            {
                 Ok(Cache::default())
             }
             Err(e) => Err(e),
@@ -154,12 +195,16 @@ impl CacheStore {
     ///
     /// # Errors
     ///
-    /// - Returns `CacheStoreError::Io` if the file or directory cannot be created/written.
+    /// - Returns `CacheStoreError::CreateDirError` if the directory cannot be created.
+    /// - Returns `CacheStoreError::WriteError` if the file cannot be written.
     /// - Returns `CacheStoreError::Json` if serialization fails.
     pub fn save(&self, cache: &Cache) -> Result<()> {
         // Ensure parent directory exists
         if let Some(parent) = self.path.parent() {
-            fs::create_dir_all(parent)?;
+            fs::create_dir_all(parent).map_err(|e| CacheStoreError::CreateDirError {
+                path: parent.to_path_buf(),
+                source: e,
+            })?;
         }
 
         let json = serde_json::to_string_pretty(cache)?;
@@ -167,8 +212,14 @@ impl CacheStore {
         // Atomic write: write to temp file, then rename
         // This prevents corruption if the process crashes mid-write
         let temp_path = self.path.with_extension("tmp");
-        fs::write(&temp_path, &json)?;
-        fs::rename(&temp_path, &self.path)?;
+        fs::write(&temp_path, &json).map_err(|e| CacheStoreError::WriteError {
+            path: temp_path.clone(),
+            source: e,
+        })?;
+        fs::rename(&temp_path, &self.path).map_err(|e| CacheStoreError::WriteError {
+            path: self.path.clone(),
+            source: e,
+        })?;
 
         Ok(())
     }
@@ -182,13 +233,16 @@ impl CacheStore {
     ///
     /// # Errors
     ///
-    /// Returns `CacheStoreError::Io` if the file cannot be deleted.
+    /// Returns `CacheStoreError::DeleteError` if the file cannot be deleted.
     /// Does not return an error if the file doesn't exist.
     pub fn delete(&self) -> Result<()> {
         match fs::remove_file(&self.path) {
             Ok(()) => Ok(()),
             Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
-            Err(e) => Err(CacheStoreError::Io(e)),
+            Err(e) => Err(CacheStoreError::DeleteError {
+                path: self.path.clone(),
+                source: e,
+            }),
         }
     }
 }
@@ -241,6 +295,174 @@ mod tests {
             path_str.contains("td"),
             "path should contain 'td': {}",
             path_str
+        );
+    }
+
+    #[test]
+    fn test_read_error_includes_file_path() {
+        let path = PathBuf::from("/nonexistent/path/to/cache.json");
+        let store = CacheStore::with_path(path.clone());
+
+        let result = store.load();
+        assert!(result.is_err());
+
+        let error = result.unwrap_err();
+        let error_msg = error.to_string();
+
+        // Error message should include the file path
+        assert!(
+            error_msg.contains("/nonexistent/path/to/cache.json"),
+            "error should include file path: {}",
+            error_msg
+        );
+        assert!(
+            error_msg.contains("failed to read cache file"),
+            "error should describe the operation: {}",
+            error_msg
+        );
+    }
+
+    #[test]
+    fn test_read_error_has_source() {
+        use std::error::Error;
+
+        let path = PathBuf::from("/nonexistent/path/to/cache.json");
+        let store = CacheStore::with_path(path);
+
+        let result = store.load();
+        let error = result.unwrap_err();
+
+        // Should have an underlying source error
+        assert!(
+            error.source().is_some(),
+            "error should have a source io::Error"
+        );
+    }
+
+    #[test]
+    fn test_load_or_default_still_works_for_not_found() {
+        let path = PathBuf::from("/nonexistent/path/to/cache.json");
+        let store = CacheStore::with_path(path);
+
+        // load_or_default should return a default cache for missing files
+        let result = store.load_or_default();
+        assert!(result.is_ok());
+
+        let cache = result.unwrap();
+        assert_eq!(cache.sync_token, "*");
+    }
+
+    #[test]
+    fn test_write_error_includes_file_path() {
+        // Try to write to a path where we can't create directories
+        let path = PathBuf::from("/nonexistent_root_dir/subdir/cache.json");
+        let store = CacheStore::with_path(path);
+
+        let cache = crate::Cache::new();
+        let result = store.save(&cache);
+        assert!(result.is_err());
+
+        let error = result.unwrap_err();
+        let error_msg = error.to_string();
+
+        // Error message should describe the operation and include a path
+        assert!(
+            error_msg.contains("failed to create cache directory")
+                || error_msg.contains("failed to write cache file"),
+            "error should describe the operation: {}",
+            error_msg
+        );
+        assert!(
+            error_msg.contains("/nonexistent_root_dir"),
+            "error should include path component: {}",
+            error_msg
+        );
+    }
+
+    #[test]
+    fn test_delete_error_includes_file_path() {
+        // Create a directory where a file is expected - delete will fail
+        use tempfile::tempdir;
+
+        let temp_dir = tempdir().expect("failed to create temp dir");
+        let path = temp_dir.path().join("cache.json");
+
+        // Create a directory at the cache path (can't delete a directory with remove_file)
+        fs::create_dir(&path).expect("failed to create directory");
+
+        let store = CacheStore::with_path(path.clone());
+        let result = store.delete();
+
+        // On some systems this may succeed or fail depending on behavior
+        // If it fails, the error should include the path
+        if let Err(error) = result {
+            let error_msg = error.to_string();
+            assert!(
+                error_msg.contains("cache.json"),
+                "error should include file path: {}",
+                error_msg
+            );
+            assert!(
+                error_msg.contains("failed to delete cache file"),
+                "error should describe the operation: {}",
+                error_msg
+            );
+        }
+    }
+
+    #[test]
+    fn test_error_message_format_read() {
+        let error = CacheStoreError::ReadError {
+            path: PathBuf::from("/home/user/.cache/td/cache.json"),
+            source: io::Error::new(io::ErrorKind::PermissionDenied, "permission denied"),
+        };
+
+        let msg = error.to_string();
+        assert_eq!(
+            msg,
+            "failed to read cache file '/home/user/.cache/td/cache.json': permission denied"
+        );
+    }
+
+    #[test]
+    fn test_error_message_format_write() {
+        let error = CacheStoreError::WriteError {
+            path: PathBuf::from("/home/user/.cache/td/cache.json"),
+            source: io::Error::new(io::ErrorKind::Other, "disk full"),
+        };
+
+        let msg = error.to_string();
+        assert_eq!(
+            msg,
+            "failed to write cache file '/home/user/.cache/td/cache.json': disk full"
+        );
+    }
+
+    #[test]
+    fn test_error_message_format_create_dir() {
+        let error = CacheStoreError::CreateDirError {
+            path: PathBuf::from("/home/user/.cache/td"),
+            source: io::Error::new(io::ErrorKind::PermissionDenied, "permission denied"),
+        };
+
+        let msg = error.to_string();
+        assert_eq!(
+            msg,
+            "failed to create cache directory '/home/user/.cache/td': permission denied"
+        );
+    }
+
+    #[test]
+    fn test_error_message_format_delete() {
+        let error = CacheStoreError::DeleteError {
+            path: PathBuf::from("/home/user/.cache/td/cache.json"),
+            source: io::Error::new(io::ErrorKind::PermissionDenied, "permission denied"),
+        };
+
+        let msg = error.to_string();
+        assert_eq!(
+            msg,
+            "failed to delete cache file '/home/user/.cache/td/cache.json': permission denied"
         );
     }
 }

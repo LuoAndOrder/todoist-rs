@@ -38,17 +38,23 @@ fn test_load_missing_file_returns_error() {
     let temp_dir = tempdir().expect("failed to create temp dir");
     let cache_path = temp_dir.path().join("nonexistent.json");
 
-    let store = CacheStore::with_path(cache_path);
+    let store = CacheStore::with_path(cache_path.clone());
 
     let result = store.load();
     assert!(result.is_err(), "load should fail for missing file");
 
-    // Verify it's an I/O error
+    // Verify it's a read error with the file path
     let err = result.unwrap_err();
+    let err_msg = err.to_string();
     assert!(
-        err.to_string().contains("I/O error"),
-        "error should be I/O related: {}",
-        err
+        err_msg.contains("failed to read cache file"),
+        "error should describe the read operation: {}",
+        err_msg
+    );
+    assert!(
+        err_msg.contains("nonexistent.json"),
+        "error should include the file path: {}",
+        err_msg
     );
 }
 
