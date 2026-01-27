@@ -493,6 +493,10 @@ alias tdq="td quick"
 alias tds="td sync && td today"
 ```
 
+## Claude Code Integration
+
+If you use [Claude Code](https://docs.anthropic.com/en/docs/claude-code), there's a skill available that teaches Claude how to use the `td` CLI effectively. See [skills/README.md](skills/README.md) for installation instructions.
+
 ## Contributing
 
 Contributions are welcome! Please open an issue or pull request on [GitHub](https://github.com/LuoAndOrder/todoist-rs).
