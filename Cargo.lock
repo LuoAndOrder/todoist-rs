@@ -1540,7 +1540,7 @@ dependencies = [
 
 [[package]]
 name = "todoist-api-rs"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "reqwest",
@@ -1555,7 +1555,7 @@ dependencies = [
 
 [[package]]
 name = "todoist-cache-rs"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "directories",
@@ -1572,7 +1572,7 @@ dependencies = [
 
 [[package]]
 name = "todoist-cli-rs"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "chrono",
  "clap",

@@ -1,5 +1,9 @@
 # td - Todoist CLI
 
+[![CI](https://github.com/LuoAndOrder/todoist-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/LuoAndOrder/todoist-rs/actions/workflows/ci.yml)
+[![Crates.io](https://img.shields.io/crates/v/todoist-cli-rs.svg)](https://crates.io/crates/todoist-cli-rs)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A fast, offline-capable command-line interface for Todoist written in Rust.
 
 ## Features
@@ -20,22 +24,44 @@ This is a Cargo workspace with three crates:
 
 | Crate | Description |
 |-------|-------------|
-| `td` | CLI binary with all user-facing commands |
-| `todoist-api` | Todoist Sync API client library |
-| `todoist-cache` | Local cache and filter expression engine |
+| [`todoist-cli-rs`](https://crates.io/crates/todoist-cli-rs) | CLI binary (installs as `td`) |
+| [`todoist-api-rs`](https://crates.io/crates/todoist-api-rs) | Todoist Sync API client library |
+| [`todoist-cache-rs`](https://crates.io/crates/todoist-cache-rs) | Local cache and filter expression engine |
 
 ## Installation
 
-### From source
+### Pre-built binaries (recommended)
+
+Download the latest release for your platform from [GitHub Releases](https://github.com/LuoAndOrder/todoist-rs/releases):
+
+| Platform | Download |
+|----------|----------|
+| macOS (Apple Silicon) | `td-aarch64-apple-darwin.tar.gz` |
+| macOS (Intel) | `td-x86_64-apple-darwin.tar.gz` |
+| Linux (x64) | `td-x86_64-unknown-linux-gnu.tar.gz` |
+| Linux (ARM64) | `td-aarch64-unknown-linux-gnu.tar.gz` |
+| Windows (x64) | `td-x86_64-pc-windows-msvc.zip` |
 
 ```bash
-cargo install --path crates/td
+# macOS/Linux: extract and move to PATH
+tar xzf td-*.tar.gz
+sudo mv td /usr/local/bin/
+
+# Or install to user directory (no sudo)
+mkdir -p ~/.local/bin
+mv td ~/.local/bin/
+```
+
+### With Cargo
+
+```bash
+cargo install todoist-cli-rs
 ```
 
 ### Build from source
 
 ```bash
-git clone https://github.com/luoandorder/todoist-rs
+git clone https://github.com/LuoAndOrder/todoist-rs
 cd todoist-rs
 cargo build --release
 ```
@@ -468,7 +494,7 @@ alias tds="td sync && td today"
 
 ## Contributing
 
-Contributions are welcome! Please see the [GitHub repository](https://github.com/luoandorder/todoist-rs) for issues and pull requests.
+Contributions are welcome! Please open an issue or pull request on [GitHub](https://github.com/LuoAndOrder/todoist-rs).
 
 ## License
 
