@@ -14,6 +14,9 @@ use serde::{Deserialize, Serialize};
 
 use super::{CommandContext, CommandError, Result};
 
+/// Current config file version. Increment when making breaking changes to schema.
+const CONFIG_VERSION: u32 = 1;
+
 /// Minimum token length to apply masking (show first and last N characters).
 const TOKEN_MASK_MIN_LENGTH: usize = 8;
 
@@ -23,6 +26,9 @@ const TOKEN_MASK_VISIBLE_CHARS: usize = 4;
 /// Default config file contents.
 const DEFAULT_CONFIG: &str = r#"# td - Todoist CLI Configuration
 # https://github.com/your-org/todoist-rs
+
+# Config schema version (do not modify)
+version = 1
 
 # API token (can also use TODOIST_TOKEN env var)
 # token = "your-api-token-here"
@@ -41,8 +47,13 @@ const DEFAULT_CONFIG: &str = r#"# td - Todoist CLI Configuration
 "#;
 
 /// Configuration file structure.
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
+    /// Config schema version for migrations.
+    /// Defaults to current version when not present in file.
+    #[serde(default = "default_version")]
+    pub version: u32,
+
     /// API token (optional, can use env var instead).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub token: Option<String>,
@@ -58,6 +69,23 @@ pub struct Config {
     /// Cache settings.
     #[serde(default)]
     pub cache: CacheConfig,
+}
+
+/// Returns the current config version (used by serde default).
+fn default_version() -> u32 {
+    CONFIG_VERSION
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            version: CONFIG_VERSION,
+            token: None,
+            token_storage: None,
+            output: OutputConfig::default(),
+            cache: CacheConfig::default(),
+        }
+    }
 }
 
 /// Output configuration.
@@ -125,8 +153,31 @@ pub fn load_config() -> Result<Config> {
     let content = fs::read_to_string(&path)
         .map_err(|e| CommandError::Config(format!("Failed to read config: {}", e)))?;
 
-    toml::from_str(&content)
-        .map_err(|e| CommandError::Config(format!("Failed to parse config: {}", e)))
+    let config: Config = toml::from_str(&content)
+        .map_err(|e| CommandError::Config(format!("Failed to parse config: {}", e)))?;
+
+    // Migrate config if needed (stub for future migrations)
+    migrate_config(config)
+}
+
+/// Migrates config to current version if needed.
+/// Returns the config as-is if already at current version.
+fn migrate_config(mut config: Config) -> Result<Config> {
+    // No migrations needed yet - version 1 is the initial version
+    // Future migrations would be handled here:
+    //
+    // if config.version < 2 {
+    //     // Apply v1 -> v2 migration
+    //     config.version = 2;
+    // }
+    // if config.version < 3 {
+    //     // Apply v2 -> v3 migration
+    //     config.version = 3;
+    // }
+
+    // Ensure version is current
+    config.version = CONFIG_VERSION;
+    Ok(config)
 }
 
 /// Saves the configuration to disk.
@@ -424,6 +475,7 @@ mod tests {
     #[test]
     fn test_default_config() {
         let config = Config::default();
+        assert_eq!(config.version, CONFIG_VERSION);
         assert!(config.token.is_none());
         assert!(config.token_storage.is_none());
         assert!(config.output.color.is_none());
@@ -433,6 +485,7 @@ mod tests {
     #[test]
     fn test_config_serialization() {
         let config = Config {
+            version: CONFIG_VERSION,
             token: None,
             token_storage: Some("config".to_string()),
             output: OutputConfig {
@@ -445,6 +498,7 @@ mod tests {
         };
 
         let toml_str = toml::to_string_pretty(&config).unwrap();
+        assert!(toml_str.contains("version = 1"));
         assert!(toml_str.contains("token_storage"));
         assert!(toml_str.contains("[output]"));
         assert!(toml_str.contains("color = true"));
@@ -454,6 +508,7 @@ mod tests {
     #[test]
     fn test_config_deserialization() {
         let toml_str = r#"
+version = 1
 token_storage = "keyring"
 
 [output]
@@ -464,6 +519,7 @@ date_format = "iso"
 enabled = true
 "#;
         let config: Config = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.version, 1);
         assert_eq!(config.token_storage, Some("keyring".to_string()));
         assert_eq!(config.output.color, Some(false));
         assert_eq!(config.output.date_format, Some("iso".to_string()));
@@ -474,6 +530,8 @@ enabled = true
     fn test_config_deserialization_empty() {
         let toml_str = "";
         let config: Config = toml::from_str(toml_str).unwrap();
+        // Missing version defaults to current version
+        assert_eq!(config.version, CONFIG_VERSION);
         assert!(config.token.is_none());
         assert!(config.token_storage.is_none());
     }
@@ -485,6 +543,8 @@ enabled = true
 color = true
 "#;
         let config: Config = toml::from_str(toml_str).unwrap();
+        // Missing version defaults to current version
+        assert_eq!(config.version, CONFIG_VERSION);
         assert!(config.token.is_none());
         assert_eq!(config.output.color, Some(true));
         assert!(config.output.date_format.is_none());
@@ -527,5 +587,54 @@ color = true
         // Mixed ASCII, emoji, and Chinese
         // "key🔑密码token" = 11 characters -> should mask
         assert_eq!(mask_token("key🔑密码token"), "key🔑...oken");
+    }
+
+    #[test]
+    fn test_config_version_constant() {
+        // Verify the current version constant
+        assert_eq!(CONFIG_VERSION, 1);
+    }
+
+    #[test]
+    fn test_config_version_default_function() {
+        // Verify the default version function returns current version
+        assert_eq!(default_version(), CONFIG_VERSION);
+    }
+
+    #[test]
+    fn test_migrate_config_preserves_data() {
+        // Migration should preserve all config data
+        let config = Config {
+            version: 1,
+            token: Some("test-token".to_string()),
+            token_storage: Some("keyring".to_string()),
+            output: OutputConfig {
+                color: Some(true),
+                date_format: Some("iso".to_string()),
+            },
+            cache: CacheConfig {
+                enabled: Some(true),
+            },
+        };
+
+        let migrated = migrate_config(config).unwrap();
+        assert_eq!(migrated.version, CONFIG_VERSION);
+        assert_eq!(migrated.token, Some("test-token".to_string()));
+        assert_eq!(migrated.token_storage, Some("keyring".to_string()));
+        assert_eq!(migrated.output.color, Some(true));
+        assert_eq!(migrated.output.date_format, Some("iso".to_string()));
+        assert_eq!(migrated.cache.enabled, Some(true));
+    }
+
+    #[test]
+    fn test_config_deserialization_with_future_version() {
+        // Config with a future version should still parse
+        let toml_str = r#"
+version = 999
+token_storage = "env"
+"#;
+        let config: Config = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.version, 999);
+        assert_eq!(config.token_storage, Some("env".to_string()));
     }
 }
