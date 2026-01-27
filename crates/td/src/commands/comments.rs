@@ -17,6 +17,15 @@ const CONTENT_PREVIEW_LENGTH: usize = 30;
 /// Maximum length for content display in verbose output.
 const CONTENT_DISPLAY_LENGTH: usize = 40;
 
+/// Number of task matches to preview in ambiguous ID messages.
+const TASK_MATCHES_PREVIEW: usize = 3;
+
+/// Number of project matches to preview in ambiguous ID messages.
+const PROJECT_MATCHES_PREVIEW: usize = 3;
+
+/// Maximum total matches displayed (task + project previews).
+const MAX_DISPLAYED_MATCHES: usize = TASK_MATCHES_PREVIEW + PROJECT_MATCHES_PREVIEW;
+
 /// Options for the comments list command.
 #[derive(Debug, Default)]
 pub struct CommentsListOptions {
@@ -741,7 +750,7 @@ fn resolve_comment(
         if total_matches > 1 {
             let mut msg =
                 format!("Ambiguous comment ID \"{comment_id}\"\n\nMultiple comments match this prefix:");
-            for note in task_note_matches.iter().take(3) {
+            for note in task_note_matches.iter().take(TASK_MATCHES_PREVIEW) {
                 let prefix = &note.id[..ID_DISPLAY_LENGTH.min(note.id.len())];
                 let content_preview = if note.content.len() > CONTENT_PREVIEW_LENGTH {
                     format!("{}...", &note.content[..CONTENT_PREVIEW_LENGTH - 3])
@@ -750,7 +759,7 @@ fn resolve_comment(
                 };
                 msg.push_str(&format!("\n  {} (task): {}", prefix, content_preview));
             }
-            for note in project_note_matches.iter().take(3) {
+            for note in project_note_matches.iter().take(PROJECT_MATCHES_PREVIEW) {
                 let prefix = &note.id[..ID_DISPLAY_LENGTH.min(note.id.len())];
                 let content_preview = if note.content.len() > CONTENT_PREVIEW_LENGTH {
                     format!("{}...", &note.content[..CONTENT_PREVIEW_LENGTH - 3])
@@ -759,8 +768,11 @@ fn resolve_comment(
                 };
                 msg.push_str(&format!("\n  {} (project): {}", prefix, content_preview));
             }
-            if total_matches > ID_DISPLAY_LENGTH {
-                msg.push_str(&format!("\n  ... and {} more", total_matches - ID_DISPLAY_LENGTH));
+            if total_matches > MAX_DISPLAYED_MATCHES {
+                msg.push_str(&format!(
+                    "\n  ... and {} more",
+                    total_matches - MAX_DISPLAYED_MATCHES
+                ));
             }
             msg.push_str("\n\nPlease use a longer prefix.");
             return Err(CommandError::Config(msg));
