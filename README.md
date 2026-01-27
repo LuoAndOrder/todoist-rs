@@ -8,8 +8,21 @@ A fast, offline-capable command-line interface for Todoist written in Rust.
 - **Sync on demand**: Explicit `--sync` flag or `td sync` command to fetch updates
 - **Filter expressions**: Powerful query syntax compatible with Todoist filters
 - **Natural language**: Quick-add tasks with dates, projects, and labels
+- **Secure token storage**: OS keyring integration (macOS Keychain, Windows Credential Manager, Linux Secret Service)
+- **Interactive setup**: First-run wizard guides you through configuration
+- **Smart suggestions**: "Did you mean?" hints for project and label typos
 - **JSON output**: Machine-readable output for scripting and automation
 - **Shell completions**: Tab completion for bash, zsh, fish, and PowerShell
+
+## Project Structure
+
+This is a Cargo workspace with three crates:
+
+| Crate | Description |
+|-------|-------------|
+| `td` | CLI binary with all user-facing commands |
+| `todoist-api` | Todoist Sync API client library |
+| `todoist-cache` | Local cache and filter expression engine |
 
 ## Installation
 
@@ -22,7 +35,7 @@ cargo install --path crates/td
 ### Build from source
 
 ```bash
-git clone https://github.com/your-username/todoist-rs
+git clone https://github.com/luoandorder/todoist-rs
 cd todoist-rs
 cargo build --release
 ```
@@ -31,9 +44,20 @@ The binary will be at `target/release/td`.
 
 ## Quick Start
 
-### 1. Set up your API token
+### 1. Run any command to start the setup wizard
 
-Get your API token from [Todoist Settings > Integrations > Developer](https://todoist.com/app/settings/integrations/developer).
+On first run, `td` will guide you through setup interactively:
+
+```bash
+td list
+```
+
+The wizard will:
+1. Prompt for your API token (get it from [Todoist Settings > Integrations > Developer](https://todoist.com/app/settings/integrations/developer))
+2. Validate the token by syncing your data
+3. Ask where to store the token (OS keyring, config file, or environment variable)
+
+### Manual setup (alternative)
 
 ```bash
 # Option 1: Environment variable
@@ -43,13 +67,7 @@ export TODOIST_TOKEN="your-api-token"
 td config set token "your-api-token"
 ```
 
-### 2. Sync your data
-
-```bash
-td sync
-```
-
-### 3. List your tasks
+### 2. List your tasks
 
 ```bash
 td list
@@ -117,6 +135,24 @@ td projects --sync          # Sync then list projects
 Commands that modify data (`add`, `done`, `edit`, `delete`) always communicate with the Todoist API directly. They also update the local cache to keep it consistent.
 
 ## Commands
+
+### Command Aliases
+
+Most commands have short aliases for quick access:
+
+| Command | Alias | Description |
+|---------|-------|-------------|
+| `list` | `l` | List tasks |
+| `add` | `a` | Add a task |
+| `show` | `s` | Show task details |
+| `edit` | `e` | Edit a task |
+| `done` | `d` | Complete task(s) |
+| `delete` | `rm` | Delete task(s) |
+| `today` | `t` | Today's agenda |
+| `quick` | `q` | Quick add with natural language |
+| `projects` | `p` | Manage projects |
+| `labels` | `lb` | Manage labels |
+| `filters` | `f` | Manage saved filters |
 
 ### Task Management
 
@@ -214,8 +250,8 @@ td comments download <attachment-url>
 
 ```bash
 td reminders --task <task-id>
-td reminders add --task <id> --at "2024-01-15 09:00"
-td reminders add --task <id> --relative 30  # 30 min before due
+td reminders add --task <id> --due "2025-01-15T09:00:00"
+td reminders add --task <id> --offset 30   # 30 min before due
 td reminders delete <id>
 ```
 
@@ -223,7 +259,7 @@ td reminders delete <id>
 
 ```bash
 td filters                        # List saved filters
-td filters add "Work Today" -q "today & #Work"
+td filters add "Work Today" --query "today & #Work"
 td filters show <id>
 td filters edit <id> --name "New Name"
 td filters delete <id>
@@ -237,6 +273,28 @@ td config edit                    # Open in $EDITOR
 td config set token "xxx"         # Set API token
 td config path                    # Print config file path
 ```
+
+#### Token Storage Options
+
+`td` supports three methods for storing your API token:
+
+| Method | Security | Setup |
+|--------|----------|-------|
+| **OS Keyring** | Most secure | Automatic on supported systems |
+| **Config file** | Moderate | `td config set token "xxx"` |
+| **Environment** | Varies | `export TODOIST_TOKEN="xxx"` |
+
+The keyring uses:
+- **macOS**: Keychain
+- **Windows**: Credential Manager
+- **Linux**: Secret Service API (requires libsecret/gnome-keyring)
+
+#### Config File Location
+
+| Platform | Path |
+|----------|------|
+| macOS/Linux | `~/.config/td/config.toml` |
+| Windows | `%APPDATA%\td\config.toml` |
 
 ### Shell Completions
 
@@ -346,6 +404,19 @@ td add "Task" -q                  # Only output the task ID
 td done <id> -q                   # No output on success
 ```
 
+## Global Flags
+
+These flags work with any command:
+
+| Flag | Description |
+|------|-------------|
+| `--sync` | Sync with Todoist before executing |
+| `--json` | Force JSON output |
+| `--quiet`, `-q` | Quiet mode (errors only) |
+| `--verbose`, `-v` | Show debug information |
+| `--no-color` | Disable colored output |
+| `--token <TOKEN>` | Override API token |
+
 ## Environment Variables
 
 | Variable | Description |
@@ -394,6 +465,10 @@ alias tdd="td done"
 alias tdq="td quick"
 alias tds="td sync && td today"
 ```
+
+## Contributing
+
+Contributions are welcome! Please see the [GitHub repository](https://github.com/luoandorder/todoist-rs) for issues and pull requests.
 
 ## License
 
