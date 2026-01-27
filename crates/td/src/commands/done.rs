@@ -94,12 +94,7 @@ pub async fn execute(ctx: &CommandContext, opts: &DoneOptions, token: &str) -> R
 
     let commands: Vec<SyncCommand> = resolved_items
         .iter()
-        .map(|(id, _)| {
-            SyncCommand::new(
-                command_type,
-                serde_json::json!({ "id": id }),
-            )
-        })
+        .map(|(id, _)| SyncCommand::new(command_type, serde_json::json!({ "id": id })))
         .collect();
 
     // Execute the commands via SyncManager
@@ -154,7 +149,10 @@ pub async fn execute(ctx: &CommandContext, opts: &DoneOptions, token: &str) -> R
             if result.success {
                 println!("Completed: {} ({})", result.content, id_prefix);
             } else if let Some(ref err) = result.error {
-                eprintln!("Failed to complete {} ({}): {}", result.content, id_prefix, err);
+                eprintln!(
+                    "Failed to complete {} ({}): {}",
+                    result.content, id_prefix, err
+                );
             }
         }
 
@@ -173,7 +171,6 @@ pub async fn execute(ctx: &CommandContext, opts: &DoneOptions, token: &str) -> R
 
     Ok(())
 }
-
 
 /// Formats done results as JSON.
 fn format_done_results_json(results: &[DoneResult]) -> Result<String> {

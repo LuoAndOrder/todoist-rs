@@ -138,7 +138,9 @@ async fn test_add_task_comment() {
         .expect("create_task_comment failed");
 
     // Verify comment exists in cache
-    let note = ctx.find_note(&comment_id).expect("Note should exist in cache");
+    let note = ctx
+        .find_note(&comment_id)
+        .expect("Note should exist in cache");
 
     assert_eq!(note.item_id, task_id, "Note should be for the task");
     assert_eq!(note.content, "This is a test comment");
@@ -187,8 +189,13 @@ async fn test_add_comment_with_formatting() {
         .expect("create_task_comment failed");
 
     // Verify formatted content preserved
-    let note = ctx.find_note(&comment_id).expect("Note should exist in cache");
-    assert_eq!(note.content, formatted_content, "Formatted content should be preserved");
+    let note = ctx
+        .find_note(&comment_id)
+        .expect("Note should exist in cache");
+    assert_eq!(
+        note.content, formatted_content,
+        "Formatted content should be preserved"
+    );
 
     // Clean up
     ctx.batch_delete_with_notes(&[&task_id], &[], &[&comment_id], &[])
@@ -386,7 +393,10 @@ async fn test_multiple_comments_on_task() {
     );
 
     // Verify different contents exist
-    let contents: Vec<&str> = comments_for_task.iter().map(|n| n.content.as_str()).collect();
+    let contents: Vec<&str> = comments_for_task
+        .iter()
+        .map(|n| n.content.as_str())
+        .collect();
     assert!(contents.contains(&"First comment"));
     assert!(contents.contains(&"Second comment"));
     assert!(contents.contains(&"Third comment"));
@@ -429,7 +439,9 @@ async fn test_add_project_comment() {
     // Check if project comments are available
     if !project_comments_available(&mut ctx, &project_id).await {
         eprintln!("Skipping test: project comments may require Todoist Pro");
-        ctx.delete_project(&project_id).await.expect("cleanup failed");
+        ctx.delete_project(&project_id)
+            .await
+            .expect("cleanup failed");
         return;
     }
 
@@ -444,7 +456,10 @@ async fn test_add_project_comment() {
         .find_project_note(&comment_id)
         .expect("Project note should exist in cache");
 
-    assert_eq!(note.project_id, project_id, "Note should be for the project");
+    assert_eq!(
+        note.project_id, project_id,
+        "Note should be for the project"
+    );
     assert_eq!(note.content, "This is a project comment");
     assert!(!note.is_deleted, "Note should not be deleted");
 
@@ -477,7 +492,9 @@ async fn test_update_project_comment() {
     // Check if project comments are available
     if !project_comments_available(&mut ctx, &project_id).await {
         eprintln!("Skipping test: project comments may require Todoist Pro");
-        ctx.delete_project(&project_id).await.expect("cleanup failed");
+        ctx.delete_project(&project_id)
+            .await
+            .expect("cleanup failed");
         return;
     }
 
@@ -488,7 +505,9 @@ async fn test_update_project_comment() {
         .expect("create_project_comment failed");
 
     // Verify initial content
-    let note = ctx.find_project_note(&comment_id).expect("Note should exist");
+    let note = ctx
+        .find_project_note(&comment_id)
+        .expect("Note should exist");
     assert_eq!(note.content, "Original project note");
 
     // Update the comment
@@ -537,7 +556,9 @@ async fn test_delete_project_comment() {
     // Check if project comments are available
     if !project_comments_available(&mut ctx, &project_id).await {
         eprintln!("Skipping test: project comments may require Todoist Pro");
-        ctx.delete_project(&project_id).await.expect("cleanup failed");
+        ctx.delete_project(&project_id)
+            .await
+            .expect("cleanup failed");
         return;
     }
 

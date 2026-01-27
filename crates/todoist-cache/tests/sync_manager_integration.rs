@@ -326,7 +326,9 @@ async fn test_reload_refreshes_cache_from_disk() {
     let store2 = CacheStore::with_path(cache_path.clone());
     let mut modified_cache = store2.load().expect("failed to load");
     modified_cache.items.clear();
-    store2.save(&modified_cache).expect("failed to save modified cache");
+    store2
+        .save(&modified_cache)
+        .expect("failed to save modified cache");
 
     // Manager's in-memory cache should still show 2 items
     assert_eq!(manager.cache().items.len(), 2);
@@ -740,7 +742,11 @@ async fn test_execute_commands_removes_item_on_delete() {
 
     // Initially 2 items in cache
     assert_eq!(manager.cache().items.len(), 2);
-    assert!(manager.cache().items.iter().any(|i| i.id == "item-to-delete"));
+    assert!(manager
+        .cache()
+        .items
+        .iter()
+        .any(|i| i.id == "item-to-delete"));
 
     // Execute item_delete command
     let cmd = SyncCommand::new("item_delete", serde_json::json!({"id": "item-to-delete"}));
@@ -751,7 +757,11 @@ async fn test_execute_commands_removes_item_on_delete() {
 
     // Verify deleted item was removed from cache
     assert_eq!(manager.cache().items.len(), 1);
-    assert!(!manager.cache().items.iter().any(|i| i.id == "item-to-delete"));
+    assert!(!manager
+        .cache()
+        .items
+        .iter()
+        .any(|i| i.id == "item-to-delete"));
     assert!(manager.cache().items.iter().any(|i| i.id == "item-to-keep"));
 
     // Verify sync_token was updated
@@ -1037,8 +1047,10 @@ async fn test_resolve_project_syncs_on_cache_miss_then_succeeds() {
     Mock::given(method("POST"))
         .and(path("/sync"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(mock_sync_response_with_project("proj-from-sync", "New Project")),
+            ResponseTemplate::new(200).set_body_json(mock_sync_response_with_project(
+                "proj-from-sync",
+                "New Project",
+            )),
         )
         .expect(1) // Exactly one sync call
         .mount(&mock_server)
@@ -1206,8 +1218,11 @@ async fn test_resolve_section_syncs_on_cache_miss_then_succeeds() {
     Mock::given(method("POST"))
         .and(path("/sync"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(mock_sync_response_with_section("sec-from-sync", "Done", "proj-1")),
+            ResponseTemplate::new(200).set_body_json(mock_sync_response_with_section(
+                "sec-from-sync",
+                "Done",
+                "proj-1",
+            )),
         )
         .expect(1)
         .mount(&mock_server)
@@ -1364,8 +1379,11 @@ async fn test_resolve_item_syncs_on_cache_miss_then_succeeds() {
     Mock::given(method("POST"))
         .and(path("/sync"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(mock_sync_response_with_item("item-from-sync", "New task", false)),
+            ResponseTemplate::new(200).set_body_json(mock_sync_response_with_item(
+                "item-from-sync",
+                "New task",
+                false,
+            )),
         )
         .expect(1)
         .mount(&mock_server)
@@ -1484,8 +1502,11 @@ async fn test_resolve_item_by_prefix_syncs_on_cache_miss_then_succeeds() {
     Mock::given(method("POST"))
         .and(path("/sync"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(mock_sync_response_with_item("xyz789abcdef", "Synced task", false)),
+            ResponseTemplate::new(200).set_body_json(mock_sync_response_with_item(
+                "xyz789abcdef",
+                "Synced task",
+                false,
+            )),
         )
         .expect(1)
         .mount(&mock_server)
@@ -1717,7 +1738,10 @@ async fn test_sync_falls_back_to_full_sync_on_invalid_token() {
     assert_eq!(manager.cache().items[0].id, "old-item");
 
     // Perform sync - should automatically fall back to full sync
-    let cache = manager.sync().await.expect("sync should recover via full sync");
+    let cache = manager
+        .sync()
+        .await
+        .expect("sync should recover via full sync");
 
     // Verify cache was replaced with fresh data from full sync
     assert_eq!(cache.sync_token, "new_sync_token_abc123");
@@ -1868,8 +1892,11 @@ async fn test_add_item_is_visible_immediately_without_sync() {
     Mock::given(method("POST"))
         .and(path("/sync"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(mock_item_add_response("item-abc123", "Buy groceries", "proj-1")),
+            ResponseTemplate::new(200).set_body_json(mock_item_add_response(
+                "item-abc123",
+                "Buy groceries",
+                "proj-1",
+            )),
         )
         .expect(1)
         .mount(&mock_server)
@@ -1900,11 +1927,13 @@ async fn test_add_item_is_visible_immediately_without_sync() {
     // This is the key assertion - no sync() call needed!
     assert_eq!(manager.cache().items.len(), 1, "item should be in cache");
     assert_eq!(
-        manager.cache().items[0].content, "Buy groceries",
+        manager.cache().items[0].content,
+        "Buy groceries",
         "item content should match"
     );
     assert_eq!(
-        manager.cache().items[0].id, "item-abc123",
+        manager.cache().items[0].id,
+        "item-abc123",
         "item should have real ID from response"
     );
 
@@ -2003,13 +2032,14 @@ async fn test_deleted_item_not_visible_without_sync() {
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
     // Before: cache has one item
-    assert_eq!(manager.cache().items.len(), 1, "should have one item before");
+    assert_eq!(
+        manager.cache().items.len(),
+        1,
+        "should have one item before"
+    );
 
     // Delete the item (simulates: td delete item-to-delete)
-    let cmd = SyncCommand::new(
-        "item_delete",
-        serde_json::json!({"id": "item-to-delete"}),
-    );
+    let cmd = SyncCommand::new("item_delete", serde_json::json!({"id": "item-to-delete"}));
     manager
         .execute_commands(vec![cmd])
         .await

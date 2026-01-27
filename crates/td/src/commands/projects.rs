@@ -144,7 +144,11 @@ pub struct ProjectAddResult {
 /// # Errors
 ///
 /// Returns an error if syncing fails, parent project lookup fails, or the API returns an error.
-pub async fn execute_add(ctx: &CommandContext, opts: &ProjectsAddOptions, token: &str) -> Result<()> {
+pub async fn execute_add(
+    ctx: &CommandContext,
+    opts: &ProjectsAddOptions,
+    token: &str,
+) -> Result<()> {
     // Initialize sync manager (loads cache from disk)
     let client = TodoistClient::new(token);
     let store = CacheStore::new()?;
@@ -157,8 +161,12 @@ pub async fn execute_add(ctx: &CommandContext, opts: &ProjectsAddOptions, token:
         let parent = cache
             .projects
             .iter()
-            .find(|p| !p.is_deleted && (p.name.to_lowercase() == parent_ref_lower || p.id == *parent_ref))
-            .ok_or_else(|| CommandError::Config(format!("Parent project not found: {parent_ref}")))?;
+            .find(|p| {
+                !p.is_deleted && (p.name.to_lowercase() == parent_ref_lower || p.id == *parent_ref)
+            })
+            .ok_or_else(|| {
+                CommandError::Config(format!("Parent project not found: {parent_ref}"))
+            })?;
         (Some(parent.id.clone()), Some(parent.name.clone()))
     } else {
         (None, None)
@@ -246,7 +254,11 @@ pub async fn execute_add(ctx: &CommandContext, opts: &ProjectsAddOptions, token:
                 println!("  Favorite: yes");
             }
         } else {
-            println!("Created: {} ({})", result.name, &result.id[..6.min(result.id.len())]);
+            println!(
+                "Created: {} ({})",
+                result.name,
+                &result.id[..6.min(result.id.len())]
+            );
         }
     }
 
@@ -255,10 +267,26 @@ pub async fn execute_add(ctx: &CommandContext, opts: &ProjectsAddOptions, token:
 
 /// Valid Todoist color names.
 const VALID_COLORS: &[&str] = &[
-    "berry_red", "red", "orange", "yellow", "olive_green", "lime_green",
-    "green", "mint_green", "teal", "sky_blue", "light_blue", "blue",
-    "grape", "violet", "lavender", "magenta", "salmon", "charcoal",
-    "grey", "taupe",
+    "berry_red",
+    "red",
+    "orange",
+    "yellow",
+    "olive_green",
+    "lime_green",
+    "green",
+    "mint_green",
+    "teal",
+    "sky_blue",
+    "light_blue",
+    "blue",
+    "grape",
+    "violet",
+    "lavender",
+    "magenta",
+    "salmon",
+    "charcoal",
+    "grey",
+    "taupe",
 ];
 
 /// Checks if a color name is valid.
@@ -308,7 +336,11 @@ pub struct ProjectsShowResult<'a> {
 /// # Errors
 ///
 /// Returns an error if syncing fails or if the project is not found.
-pub async fn execute_show(ctx: &CommandContext, opts: &ProjectsShowOptions, token: &str) -> Result<()> {
+pub async fn execute_show(
+    ctx: &CommandContext,
+    opts: &ProjectsShowOptions,
+    token: &str,
+) -> Result<()> {
     // Initialize sync manager
     let client = TodoistClient::new(token);
     let store = CacheStore::new()?;
@@ -352,11 +384,7 @@ pub async fn execute_show(ctx: &CommandContext, opts: &ProjectsShowOptions, toke
     let section_count = all_sections.len();
 
     // Only include sections if requested
-    let sections = if opts.sections {
-        all_sections
-    } else {
-        vec![]
-    };
+    let sections = if opts.sections { all_sections } else { vec![] };
 
     // Get tasks for this project if requested
     let tasks: Vec<&todoist_api_rs::sync::Item> = if opts.tasks {
@@ -409,7 +437,8 @@ fn find_project_by_id_or_prefix<'a>(cache: &'a Cache, id: &str) -> Result<&'a Pr
         1 => Ok(matches[0]),
         _ => {
             // Ambiguous prefix - provide helpful error message
-            let mut msg = format!("Ambiguous project ID \"{id}\"\n\nMultiple projects match this prefix:");
+            let mut msg =
+                format!("Ambiguous project ID \"{id}\"\n\nMultiple projects match this prefix:");
             for project in matches.iter().take(5) {
                 let prefix = &project.id[..6.min(project.id.len())];
                 msg.push_str(&format!("\n  {}  {}", prefix, project.name));
@@ -464,11 +493,19 @@ pub struct ProjectEditResult {
 /// # Errors
 ///
 /// Returns an error if syncing fails, project lookup fails, or the API returns an error.
-pub async fn execute_edit(ctx: &CommandContext, opts: &ProjectsEditOptions, token: &str) -> Result<()> {
+pub async fn execute_edit(
+    ctx: &CommandContext,
+    opts: &ProjectsEditOptions,
+    token: &str,
+) -> Result<()> {
     // Check if any options were provided
-    if opts.name.is_none() && opts.color.is_none() && opts.favorite.is_none() && opts.view_style.is_none() {
+    if opts.name.is_none()
+        && opts.color.is_none()
+        && opts.favorite.is_none()
+        && opts.view_style.is_none()
+    {
         return Err(CommandError::Config(
-            "No changes specified. Use --name, --color, --favorite, or --view-style.".to_string()
+            "No changes specified. Use --name, --color, --favorite, or --view-style.".to_string(),
         ));
     }
 
@@ -605,7 +642,11 @@ pub struct ProjectArchiveResult {
 /// # Errors
 ///
 /// Returns an error if syncing fails, project lookup fails, or the API returns an error.
-pub async fn execute_archive(ctx: &CommandContext, opts: &ProjectsArchiveOptions, token: &str) -> Result<()> {
+pub async fn execute_archive(
+    ctx: &CommandContext,
+    opts: &ProjectsArchiveOptions,
+    token: &str,
+) -> Result<()> {
     // Initialize sync manager (loads cache from disk)
     let client = TodoistClient::new(token);
     let store = CacheStore::new()?;
@@ -615,7 +656,12 @@ pub async fn execute_archive(ctx: &CommandContext, opts: &ProjectsArchiveOptions
     let (project_id, project_name, is_archived, is_inbox) = {
         let cache = manager.cache();
         let project = find_project_by_id_or_prefix(cache, &opts.project_id)?;
-        (project.id.clone(), project.name.clone(), project.is_archived, project.inbox_project)
+        (
+            project.id.clone(),
+            project.name.clone(),
+            project.is_archived,
+            project.inbox_project,
+        )
     };
 
     // Check if project is already archived
@@ -629,7 +675,7 @@ pub async fn execute_archive(ctx: &CommandContext, opts: &ProjectsArchiveOptions
     // Check if this is the inbox project
     if is_inbox {
         return Err(CommandError::Config(
-            "Cannot archive the Inbox project".to_string()
+            "Cannot archive the Inbox project".to_string(),
         ));
     }
 
@@ -642,7 +688,9 @@ pub async fn execute_archive(ctx: &CommandContext, opts: &ProjectsArchiveOptions
         );
         eprintln!("This will archive the project and all its descendants.");
         eprintln!("Use --force to skip this confirmation.");
-        return Err(CommandError::Config("Operation cancelled. Use --force to confirm.".to_string()));
+        return Err(CommandError::Config(
+            "Operation cancelled. Use --force to confirm.".to_string(),
+        ));
     }
 
     // Build the project_archive command arguments
@@ -722,7 +770,11 @@ pub struct ProjectUnarchiveResult {
 /// # Errors
 ///
 /// Returns an error if syncing fails, project lookup fails, or the API returns an error.
-pub async fn execute_unarchive(ctx: &CommandContext, opts: &ProjectsUnarchiveOptions, token: &str) -> Result<()> {
+pub async fn execute_unarchive(
+    ctx: &CommandContext,
+    opts: &ProjectsUnarchiveOptions,
+    token: &str,
+) -> Result<()> {
     // Initialize sync manager (loads cache from disk)
     let client = TodoistClient::new(token);
     let store = CacheStore::new()?;
@@ -732,7 +784,11 @@ pub async fn execute_unarchive(ctx: &CommandContext, opts: &ProjectsUnarchiveOpt
     let (project_id, project_name, is_archived) = {
         let cache = manager.cache();
         let project = find_project_by_id_or_prefix_include_archived(cache, &opts.project_id)?;
-        (project.id.clone(), project.name.clone(), project.is_archived)
+        (
+            project.id.clone(),
+            project.name.clone(),
+            project.is_archived,
+        )
     };
 
     // Check if project is not archived
@@ -822,7 +878,11 @@ pub struct ProjectDeleteResult {
 /// # Errors
 ///
 /// Returns an error if syncing fails, project lookup fails, or the API returns an error.
-pub async fn execute_delete(ctx: &CommandContext, opts: &ProjectsDeleteOptions, token: &str) -> Result<()> {
+pub async fn execute_delete(
+    ctx: &CommandContext,
+    opts: &ProjectsDeleteOptions,
+    token: &str,
+) -> Result<()> {
     // Initialize sync manager (loads cache from disk)
     let client = TodoistClient::new(token);
     let store = CacheStore::new()?;
@@ -833,13 +893,17 @@ pub async fn execute_delete(ctx: &CommandContext, opts: &ProjectsDeleteOptions, 
     let (project_id, project_name, is_inbox) = {
         let cache = manager.cache();
         let project = find_project_by_id_or_prefix_include_archived(cache, &opts.project_id)?;
-        (project.id.clone(), project.name.clone(), project.inbox_project)
+        (
+            project.id.clone(),
+            project.name.clone(),
+            project.inbox_project,
+        )
     };
 
     // Check if this is the inbox project
     if is_inbox {
         return Err(CommandError::Config(
-            "Cannot delete the Inbox project".to_string()
+            "Cannot delete the Inbox project".to_string(),
         ));
     }
 
@@ -852,7 +916,9 @@ pub async fn execute_delete(ctx: &CommandContext, opts: &ProjectsDeleteOptions, 
         );
         eprintln!("This will permanently delete the project and all its tasks.");
         eprintln!("Use --force to skip this confirmation.");
-        return Err(CommandError::Config("Operation cancelled. Use --force to confirm.".to_string()));
+        return Err(CommandError::Config(
+            "Operation cancelled. Use --force to confirm.".to_string(),
+        ));
     }
 
     // Build the project_delete command arguments
@@ -902,7 +968,10 @@ pub async fn execute_delete(ctx: &CommandContext, opts: &ProjectsDeleteOptions, 
 }
 
 /// Finds a project by full ID or unique prefix, including archived projects.
-fn find_project_by_id_or_prefix_include_archived<'a>(cache: &'a Cache, id: &str) -> Result<&'a Project> {
+fn find_project_by_id_or_prefix_include_archived<'a>(
+    cache: &'a Cache,
+    id: &str,
+) -> Result<&'a Project> {
     // First try exact match
     if let Some(project) = cache.projects.iter().find(|p| p.id == id && !p.is_deleted) {
         return Ok(project);
@@ -920,11 +989,19 @@ fn find_project_by_id_or_prefix_include_archived<'a>(cache: &'a Cache, id: &str)
         1 => Ok(matches[0]),
         _ => {
             // Ambiguous prefix - provide helpful error message
-            let mut msg = format!("Ambiguous project ID \"{id}\"\n\nMultiple projects match this prefix:");
+            let mut msg =
+                format!("Ambiguous project ID \"{id}\"\n\nMultiple projects match this prefix:");
             for project in matches.iter().take(5) {
                 let prefix = &project.id[..6.min(project.id.len())];
-                let archived_indicator = if project.is_archived { " [archived]" } else { "" };
-                msg.push_str(&format!("\n  {}  {}{}", prefix, project.name, archived_indicator));
+                let archived_indicator = if project.is_archived {
+                    " [archived]"
+                } else {
+                    ""
+                };
+                msg.push_str(&format!(
+                    "\n  {}  {}{}",
+                    prefix, project.name, archived_indicator
+                ));
             }
             if matches.len() > 5 {
                 msg.push_str(&format!("\n  ... and {} more", matches.len() - 5));

@@ -216,9 +216,7 @@ async fn test_delete_label() {
     );
 
     // Clean up
-    ctx.delete_task(&task_id)
-        .await
-        .expect("delete_task failed");
+    ctx.delete_task(&task_id).await.expect("delete_task failed");
 }
 
 // ============================================================================
@@ -620,15 +618,16 @@ async fn test_label_case_insensitivity() {
     // Verify task has the label (Todoist normalizes label names)
     let task = ctx.find_item(&task_id).expect("Task should exist in cache");
     // The label name should be normalized to match the created label
-    assert!(
-        task.labels.len() == 1,
-        "Task should have exactly 1 label"
-    );
+    assert!(task.labels.len() == 1, "Task should have exactly 1 label");
     // Case-insensitive comparison - either form should work
-    let has_label = task.labels.iter().any(|l| {
-        l.eq_ignore_ascii_case("e2e-test-CaseSensitive")
-    });
-    assert!(has_label, "Task should have the label (case-insensitive match)");
+    let has_label = task
+        .labels
+        .iter()
+        .any(|l| l.eq_ignore_ascii_case("e2e-test-CaseSensitive"));
+    assert!(
+        has_label,
+        "Task should have the label (case-insensitive match)"
+    );
 
     // Clean up
     ctx.batch_delete(&[&task_id], &[], &[], &[&label_id])
@@ -667,7 +666,10 @@ async fn test_add_label_via_item_update() {
 
     // Verify task has no labels initially (from cache)
     let task = ctx.find_item(&task_id).expect("Task should exist in cache");
-    assert!(task.labels.is_empty(), "Task should have no labels initially");
+    assert!(
+        task.labels.is_empty(),
+        "Task should have no labels initially"
+    );
 
     // Get current labels (empty) and append new one
     let mut labels = task.labels.clone();
@@ -687,7 +689,8 @@ async fn test_add_label_via_item_update() {
     // Verify label was added (from cache)
     let task = ctx.find_item(&task_id).expect("Task should exist in cache");
     assert!(
-        task.labels.contains(&"e2e-test-update-add-label".to_string()),
+        task.labels
+            .contains(&"e2e-test-update-add-label".to_string()),
         "Task should have the label after item_update"
     );
     assert_eq!(task.labels.len(), 1, "Task should have exactly 1 label");

@@ -585,7 +585,11 @@ mod tests {
         let tokens = Lexer::new("today & p1").tokenize();
         assert_eq!(
             tokens,
-            vec![FilterToken::Today, FilterToken::And, FilterToken::Priority(1)]
+            vec![
+                FilterToken::Today,
+                FilterToken::And,
+                FilterToken::Priority(1)
+            ]
         );
 
         let tokens = Lexer::new("today | overdue").tokenize();
@@ -643,49 +647,109 @@ mod tests {
     #[test]
     fn test_tokenize_specific_date_short_month() {
         let tokens = Lexer::new("Jan 15").tokenize();
-        assert_eq!(tokens, vec![FilterToken::SpecificDate { month: 1, day: 15 }]);
+        assert_eq!(
+            tokens,
+            vec![FilterToken::SpecificDate { month: 1, day: 15 }]
+        );
 
         let tokens = Lexer::new("Dec 25").tokenize();
-        assert_eq!(tokens, vec![FilterToken::SpecificDate { month: 12, day: 25 }]);
+        assert_eq!(
+            tokens,
+            vec![FilterToken::SpecificDate { month: 12, day: 25 }]
+        );
     }
 
     #[test]
     fn test_tokenize_specific_date_full_month() {
         let tokens = Lexer::new("January 15").tokenize();
-        assert_eq!(tokens, vec![FilterToken::SpecificDate { month: 1, day: 15 }]);
+        assert_eq!(
+            tokens,
+            vec![FilterToken::SpecificDate { month: 1, day: 15 }]
+        );
 
         let tokens = Lexer::new("December 25").tokenize();
-        assert_eq!(tokens, vec![FilterToken::SpecificDate { month: 12, day: 25 }]);
+        assert_eq!(
+            tokens,
+            vec![FilterToken::SpecificDate { month: 12, day: 25 }]
+        );
     }
 
     #[test]
     fn test_tokenize_specific_date_case_insensitive() {
         let tokens = Lexer::new("JAN 15").tokenize();
-        assert_eq!(tokens, vec![FilterToken::SpecificDate { month: 1, day: 15 }]);
+        assert_eq!(
+            tokens,
+            vec![FilterToken::SpecificDate { month: 1, day: 15 }]
+        );
 
         let tokens = Lexer::new("JANUARY 15").tokenize();
-        assert_eq!(tokens, vec![FilterToken::SpecificDate { month: 1, day: 15 }]);
+        assert_eq!(
+            tokens,
+            vec![FilterToken::SpecificDate { month: 1, day: 15 }]
+        );
 
         let tokens = Lexer::new("jan 15").tokenize();
-        assert_eq!(tokens, vec![FilterToken::SpecificDate { month: 1, day: 15 }]);
+        assert_eq!(
+            tokens,
+            vec![FilterToken::SpecificDate { month: 1, day: 15 }]
+        );
     }
 
     #[test]
     fn test_tokenize_specific_date_all_months() {
         // Test all months with short form
-        assert_eq!(Lexer::new("Jan 1").tokenize(), vec![FilterToken::SpecificDate { month: 1, day: 1 }]);
-        assert_eq!(Lexer::new("Feb 1").tokenize(), vec![FilterToken::SpecificDate { month: 2, day: 1 }]);
-        assert_eq!(Lexer::new("Mar 1").tokenize(), vec![FilterToken::SpecificDate { month: 3, day: 1 }]);
-        assert_eq!(Lexer::new("Apr 1").tokenize(), vec![FilterToken::SpecificDate { month: 4, day: 1 }]);
-        assert_eq!(Lexer::new("May 1").tokenize(), vec![FilterToken::SpecificDate { month: 5, day: 1 }]);
-        assert_eq!(Lexer::new("Jun 1").tokenize(), vec![FilterToken::SpecificDate { month: 6, day: 1 }]);
-        assert_eq!(Lexer::new("Jul 1").tokenize(), vec![FilterToken::SpecificDate { month: 7, day: 1 }]);
-        assert_eq!(Lexer::new("Aug 1").tokenize(), vec![FilterToken::SpecificDate { month: 8, day: 1 }]);
-        assert_eq!(Lexer::new("Sep 1").tokenize(), vec![FilterToken::SpecificDate { month: 9, day: 1 }]);
-        assert_eq!(Lexer::new("Sept 1").tokenize(), vec![FilterToken::SpecificDate { month: 9, day: 1 }]);
-        assert_eq!(Lexer::new("Oct 1").tokenize(), vec![FilterToken::SpecificDate { month: 10, day: 1 }]);
-        assert_eq!(Lexer::new("Nov 1").tokenize(), vec![FilterToken::SpecificDate { month: 11, day: 1 }]);
-        assert_eq!(Lexer::new("Dec 1").tokenize(), vec![FilterToken::SpecificDate { month: 12, day: 1 }]);
+        assert_eq!(
+            Lexer::new("Jan 1").tokenize(),
+            vec![FilterToken::SpecificDate { month: 1, day: 1 }]
+        );
+        assert_eq!(
+            Lexer::new("Feb 1").tokenize(),
+            vec![FilterToken::SpecificDate { month: 2, day: 1 }]
+        );
+        assert_eq!(
+            Lexer::new("Mar 1").tokenize(),
+            vec![FilterToken::SpecificDate { month: 3, day: 1 }]
+        );
+        assert_eq!(
+            Lexer::new("Apr 1").tokenize(),
+            vec![FilterToken::SpecificDate { month: 4, day: 1 }]
+        );
+        assert_eq!(
+            Lexer::new("May 1").tokenize(),
+            vec![FilterToken::SpecificDate { month: 5, day: 1 }]
+        );
+        assert_eq!(
+            Lexer::new("Jun 1").tokenize(),
+            vec![FilterToken::SpecificDate { month: 6, day: 1 }]
+        );
+        assert_eq!(
+            Lexer::new("Jul 1").tokenize(),
+            vec![FilterToken::SpecificDate { month: 7, day: 1 }]
+        );
+        assert_eq!(
+            Lexer::new("Aug 1").tokenize(),
+            vec![FilterToken::SpecificDate { month: 8, day: 1 }]
+        );
+        assert_eq!(
+            Lexer::new("Sep 1").tokenize(),
+            vec![FilterToken::SpecificDate { month: 9, day: 1 }]
+        );
+        assert_eq!(
+            Lexer::new("Sept 1").tokenize(),
+            vec![FilterToken::SpecificDate { month: 9, day: 1 }]
+        );
+        assert_eq!(
+            Lexer::new("Oct 1").tokenize(),
+            vec![FilterToken::SpecificDate { month: 10, day: 1 }]
+        );
+        assert_eq!(
+            Lexer::new("Nov 1").tokenize(),
+            vec![FilterToken::SpecificDate { month: 11, day: 1 }]
+        );
+        assert_eq!(
+            Lexer::new("Dec 1").tokenize(),
+            vec![FilterToken::SpecificDate { month: 12, day: 1 }]
+        );
     }
 
     #[test]

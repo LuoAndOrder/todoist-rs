@@ -31,9 +31,9 @@ pub use tasks::{
 
 // Projects
 pub use projects::{
-    format_archived_project, format_created_project, format_deleted_project,
-    format_edited_project, format_project_details_json, format_project_details_table,
-    format_projects_json, format_projects_table, format_unarchived_project,
+    format_archived_project, format_created_project, format_deleted_project, format_edited_project,
+    format_project_details_json, format_project_details_table, format_projects_json,
+    format_projects_table, format_unarchived_project,
 };
 
 // Labels
@@ -56,13 +56,11 @@ pub use comments::{
 
 // Reminders
 pub use reminders::{
-    format_created_reminder, format_deleted_reminder, format_reminders_json,
-    format_reminders_table,
+    format_created_reminder, format_deleted_reminder, format_reminders_json, format_reminders_table,
 };
 
 // Filters
 pub use filters::{
-    format_created_filter, format_deleted_filter, format_edited_filter,
-    format_filter_details_json, format_filter_details_table, format_filters_json,
-    format_filters_table,
+    format_created_filter, format_deleted_filter, format_edited_filter, format_filter_details_json,
+    format_filter_details_table, format_filters_json, format_filters_table,
 };

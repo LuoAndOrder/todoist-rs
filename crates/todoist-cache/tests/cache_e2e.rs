@@ -56,18 +56,30 @@ async fn test_e2e_full_sync_populates_cache() {
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
     // Cache should need full sync initially
-    assert!(manager.cache().needs_full_sync(), "Fresh cache should need full sync");
-    assert!(manager.cache().last_sync.is_none(), "Fresh cache should have no last_sync");
+    assert!(
+        manager.cache().needs_full_sync(),
+        "Fresh cache should need full sync"
+    );
+    assert!(
+        manager.cache().last_sync.is_none(),
+        "Fresh cache should have no last_sync"
+    );
 
     // Perform full sync
     let cache = manager.sync().await.expect("sync failed");
 
     // Verify cache was populated
-    assert!(!cache.needs_full_sync(), "Cache should no longer need full sync");
+    assert!(
+        !cache.needs_full_sync(),
+        "Cache should no longer need full sync"
+    );
     assert!(!cache.sync_token.is_empty(), "Should have sync token");
     assert_ne!(cache.sync_token, "*", "Sync token should not be '*'");
     assert!(cache.last_sync.is_some(), "Should have last_sync timestamp");
-    assert!(cache.full_sync_date_utc.is_some(), "Should have full_sync_date_utc");
+    assert!(
+        cache.full_sync_date_utc.is_some(),
+        "Should have full_sync_date_utc"
+    );
 
     // Should have at least the inbox project
     assert!(
@@ -88,7 +100,10 @@ async fn test_e2e_full_sync_populates_cache() {
 
     let store2 = CacheStore::with_path(cache_path);
     let loaded = store2.load().expect("failed to load persisted cache");
-    assert_eq!(loaded.sync_token, cache.sync_token, "Persisted cache should have same sync_token");
+    assert_eq!(
+        loaded.sync_token, cache.sync_token,
+        "Persisted cache should have same sync_token"
+    );
     assert_eq!(
         loaded.projects.len(),
         cache.projects.len(),
@@ -220,7 +235,8 @@ async fn test_e2e_cache_survives_restart() {
     {
         let client = TodoistClient::new(&token);
         let store = CacheStore::with_path(cache_path.clone());
-        let manager = SyncManager::new(client, store).expect("failed to create manager after restart");
+        let manager =
+            SyncManager::new(client, store).expect("failed to create manager after restart");
 
         // Should NOT need full sync - existing cache should be loaded
         assert!(
@@ -291,7 +307,10 @@ async fn test_e2e_cache_persistence_across_syncs() {
         .sync(SyncRequest::with_commands(vec![add_command]))
         .await
         .expect("item_add failed");
-    let real_id = add_response.real_id(&temp_id).expect("Should have mapping").clone();
+    let real_id = add_response
+        .real_id(&temp_id)
+        .expect("Should have mapping")
+        .clone();
 
     // Perform incremental sync
     manager.sync().await.expect("incremental sync failed");
@@ -316,7 +335,8 @@ async fn test_e2e_cache_persistence_across_syncs() {
 
     // Sync token should have changed from first sync
     assert_ne!(
-        manager2.cache().sync_token, sync_token_after_first,
+        manager2.cache().sync_token,
+        sync_token_after_first,
         "Sync token should have changed"
     );
 
@@ -348,7 +368,8 @@ async fn test_e2e_stale_cache_triggers_refresh() {
     // First, do a real sync to get valid data
     {
         let store = CacheStore::with_path(cache_path.clone());
-        let mut manager = SyncManager::new(client.clone(), store).expect("failed to create manager");
+        let mut manager =
+            SyncManager::new(client.clone(), store).expect("failed to create manager");
         manager.sync().await.expect("initial sync failed");
     }
 
@@ -397,7 +418,8 @@ async fn test_e2e_stale_cache_triggers_refresh() {
     // the cache is no longer stale.
     println!(
         "After stale refresh: sync_token={} (was {})",
-        manager.cache().sync_token, original_sync_token
+        manager.cache().sync_token,
+        original_sync_token
     );
 }
 
@@ -436,10 +458,7 @@ async fn test_e2e_fresh_cache_does_not_trigger_full_sync() {
 
     // The sync token may or may not change depending on whether there were changes
     // on the server, but the key point is we didn't need to do a full sync
-    assert!(
-        !cache.needs_full_sync(),
-        "Should still not need full sync"
-    );
+    assert!(!cache.needs_full_sync(), "Should still not need full sync");
 
     println!(
         "After second sync: token = {} (was {})",
@@ -475,8 +494,14 @@ async fn test_e2e_force_full_sync() {
     let cache = manager.full_sync().await.expect("full sync failed");
 
     // Should have a new sync token and full_sync_date_utc should be updated
-    assert!(!cache.needs_full_sync(), "Should still have valid sync token");
-    assert!(cache.full_sync_date_utc.is_some(), "Should have full_sync_date_utc");
+    assert!(
+        !cache.needs_full_sync(),
+        "Should still have valid sync token"
+    );
+    assert!(
+        cache.full_sync_date_utc.is_some(),
+        "Should have full_sync_date_utc"
+    );
 
     // Token may or may not be different, but full_sync_date_utc should be recent
     let full_sync_date = cache.full_sync_date_utc.unwrap();
@@ -744,10 +769,7 @@ async fn test_sync_picks_up_task_updated_externally() {
         .sync(SyncRequest::with_commands(vec![update_command]))
         .await
         .expect("external update failed");
-    assert!(
-        !update_response.has_errors(),
-        "item_update should succeed"
-    );
+    assert!(!update_response.has_errors(), "item_update should succeed");
     println!("Updated task externally");
 
     // The manager's cache should still have the old content
@@ -846,7 +868,12 @@ async fn test_sync_after_bulk_operations() {
     // Get real IDs
     let task_ids: Vec<String> = temp_ids
         .iter()
-        .map(|tid| add_response.real_id(tid).expect("Should have mapping").clone())
+        .map(|tid| {
+            add_response
+                .real_id(tid)
+                .expect("Should have mapping")
+                .clone()
+        })
         .collect();
     println!("Created {} tasks via bulk operation", task_ids.len());
 
@@ -856,7 +883,11 @@ async fn test_sync_after_bulk_operations() {
     // Verify all tasks are in cache
     let mut found_count = 0;
     for task_id in &task_ids {
-        if cache.items.iter().any(|i| i.id == *task_id && !i.is_deleted) {
+        if cache
+            .items
+            .iter()
+            .any(|i| i.id == *task_id && !i.is_deleted)
+        {
             found_count += 1;
         }
     }
@@ -922,20 +953,28 @@ async fn test_sync_token_survives_restart() {
     // Manager dropped here
 
     // Verify cache file exists
-    assert!(cache_path.exists(), "Cache file should exist after first sync");
+    assert!(
+        cache_path.exists(),
+        "Cache file should exist after first sync"
+    );
 
     // Second session: create new manager from same file
     {
         let client = TodoistClient::new(&token);
         let store = CacheStore::with_path(cache_path.clone());
-        let manager = SyncManager::new(client, store).expect("failed to create manager after restart");
+        let manager =
+            SyncManager::new(client, store).expect("failed to create manager after restart");
 
         // Verify token was preserved
         assert_eq!(
-            manager.cache().sync_token, sync_token_after_first_sync,
+            manager.cache().sync_token,
+            sync_token_after_first_sync,
             "Sync token should be preserved after restart"
         );
-        assert!(!manager.cache().needs_full_sync(), "Should not need full sync");
+        assert!(
+            !manager.cache().needs_full_sync(),
+            "Should not need full sync"
+        );
 
         println!(
             "Second session: loaded token = {}, {} items",
@@ -945,7 +984,10 @@ async fn test_sync_token_survives_restart() {
 
         // Perform incremental sync - should work with preserved token
         let mut manager = manager;
-        let cache = manager.sync().await.expect("incremental sync after restart failed");
+        let cache = manager
+            .sync()
+            .await
+            .expect("incremental sync after restart failed");
 
         // The sync should succeed (no full sync needed)
         assert!(!cache.needs_full_sync(), "Should still not need full sync");
@@ -1005,13 +1047,17 @@ async fn test_full_sync_after_invalid_token() {
 
         // Verify the corrupted token was loaded
         assert_eq!(
-            manager.cache().sync_token, "invalid_token_12345",
+            manager.cache().sync_token,
+            "invalid_token_12345",
             "Corrupted token should be loaded"
         );
 
         // Sync should recover via full sync
         // (The API will reject the invalid token, triggering fallback)
-        let cache = manager.sync().await.expect("sync with invalid token should recover");
+        let cache = manager
+            .sync()
+            .await
+            .expect("sync with invalid token should recover");
 
         // After recovery, should have a valid token again
         assert_ne!(

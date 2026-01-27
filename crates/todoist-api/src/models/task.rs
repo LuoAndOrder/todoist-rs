@@ -114,9 +114,9 @@ impl Task {
 
     /// Returns the due date as a NaiveDate if set.
     pub fn due_date(&self) -> Option<NaiveDate> {
-        self.due.as_ref().and_then(|d| {
-            NaiveDate::parse_from_str(&d.date, "%Y-%m-%d").ok()
-        })
+        self.due
+            .as_ref()
+            .and_then(|d| NaiveDate::parse_from_str(&d.date, "%Y-%m-%d").ok())
     }
 
     /// Returns true if this is a high priority task (priority 3 or 4).

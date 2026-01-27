@@ -126,7 +126,7 @@ impl Error {
                     2 // API error
                 }
             }
-            Error::Json(_) => 2, // API error (bad response)
+            Error::Json(_) => 2,     // API error (bad response)
             Error::Internal(_) => 2, // Treat as API error
         }
     }

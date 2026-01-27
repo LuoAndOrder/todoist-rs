@@ -7,8 +7,8 @@ mod dispatch;
 mod output;
 
 use cli::Cli;
-use commands::{CommandContext, CommandError};
 use commands::config::load_config;
+use commands::{CommandContext, CommandError};
 use dispatch::{AuthCommand, AuthDispatch, NoAuthCommand, NoAuthDispatch};
 
 #[tokio::main]

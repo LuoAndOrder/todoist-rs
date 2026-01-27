@@ -160,7 +160,6 @@ pub async fn execute(ctx: &CommandContext, opts: &ReopenOptions, token: &str) ->
     Ok(())
 }
 
-
 /// Formats reopen results as JSON.
 fn format_reopen_results_json(results: &[ReopenResult]) -> Result<String> {
     use serde::Serialize;

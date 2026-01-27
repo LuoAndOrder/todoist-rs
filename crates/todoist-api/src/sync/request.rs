@@ -326,8 +326,11 @@ mod tests {
 
     #[test]
     fn test_sync_command_with_temp_id() {
-        let cmd =
-            SyncCommand::with_temp_id("item_add", "temp-123", serde_json::json!({"content": "Test"}));
+        let cmd = SyncCommand::with_temp_id(
+            "item_add",
+            "temp-123",
+            serde_json::json!({"content": "Test"}),
+        );
         assert_eq!(cmd.command_type, "item_add");
         assert_eq!(cmd.temp_id, Some("temp-123".to_string()));
     }

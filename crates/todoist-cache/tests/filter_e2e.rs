@@ -189,7 +189,10 @@ async fn test_e2e_filter_priority_and_label_intersection() {
     let inbox_id = inbox.id.clone();
 
     // Create a label "urgent" if it doesn't exist
-    let urgent_label_exists = cache.labels.iter().any(|l| l.name.to_lowercase() == "urgent");
+    let urgent_label_exists = cache
+        .labels
+        .iter()
+        .any(|l| l.name.to_lowercase() == "urgent");
     let label_temp_id = uuid::Uuid::new_v4().to_string();
     if !urgent_label_exists {
         let add_label = SyncCommand::with_temp_id(
@@ -301,7 +304,8 @@ async fn test_e2e_filter_priority_and_label_intersection() {
     let cache = manager.sync().await.expect("sync failed");
 
     // Parse and evaluate "p1 & @urgent" filter
-    let filter = FilterParser::parse("p1 & @urgent").expect("Failed to parse 'p1 & @urgent' filter");
+    let filter =
+        FilterParser::parse("p1 & @urgent").expect("Failed to parse 'p1 & @urgent' filter");
     let context = FilterContext::new(&cache.projects, &cache.sections, &cache.labels);
     let evaluator = FilterEvaluator::new(&filter, &context);
 
@@ -411,7 +415,10 @@ async fn test_e2e_filter_project_matches() {
         .real_id(&project_temp_id)
         .expect("Should have project temp_id mapping")
         .clone();
-    println!("Created test project: name={}, id={}", project_name, project_id);
+    println!(
+        "Created test project: name={}, id={}",
+        project_name, project_id
+    );
 
     // Create items:
     // 1. Item in the test project (should match)
@@ -438,7 +445,10 @@ async fn test_e2e_filter_project_matches() {
     );
 
     let add_response = client
-        .sync(SyncRequest::with_commands(vec![add_in_project, add_in_inbox]))
+        .sync(SyncRequest::with_commands(vec![
+            add_in_project,
+            add_in_inbox,
+        ]))
         .await
         .expect("item_add failed");
 
@@ -463,8 +473,7 @@ async fn test_e2e_filter_project_matches() {
 
     // Parse and evaluate "#ProjectName" filter
     let filter_query = format!("#{}", project_name);
-    let filter =
-        FilterParser::parse(&filter_query).expect("Failed to parse project filter");
+    let filter = FilterParser::parse(&filter_query).expect("Failed to parse project filter");
     let context = FilterContext::new(&cache.projects, &cache.sections, &cache.labels);
     let evaluator = FilterEvaluator::new(&filter, &context);
 

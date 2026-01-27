@@ -102,9 +102,8 @@ fn resolve_task_id(cache: &Cache, task: &str) -> Result<String> {
         }
 
         if prefix_matches.len() > 1 {
-            let mut msg = format!(
-                "Ambiguous task ID \"{task}\"\n\nMultiple tasks match this prefix:"
-            );
+            let mut msg =
+                format!("Ambiguous task ID \"{task}\"\n\nMultiple tasks match this prefix:");
             for item in prefix_matches.iter().take(5) {
                 let prefix = &item.id[..6.min(item.id.len())];
                 msg.push_str(&format!("\n  {}  {}", prefix, item.content));
@@ -269,10 +268,7 @@ pub async fn execute_add(
         let output = format_created_reminder(&result)?;
         println!("{output}");
     } else if !ctx.quiet {
-        let task_display = result
-            .task_name
-            .as_deref()
-            .unwrap_or(&result.task_id);
+        let task_display = result.task_name.as_deref().unwrap_or(&result.task_id);
         if ctx.verbose {
             println!("Created reminder: {}", result.id);
             println!("  Task: {}", task_display);
@@ -292,10 +288,7 @@ pub async fn execute_add(
             } else {
                 "reminder".to_string()
             };
-            println!(
-                "Added {} ({}) to task: {}",
-                when, prefix, task_display
-            );
+            println!("Added {} ({}) to task: {}", when, prefix, task_display);
         }
     }
 
@@ -393,17 +386,17 @@ pub async fn execute_delete(
 
     // Confirm if not forced
     if !opts.force && !ctx.quiet {
-        let task_display = task_name
-            .as_deref()
-            .unwrap_or(&task_id);
-        let reminder_desc = format_reminder_description(reminder_type, reminder_offset, reminder_due.as_ref());
+        let task_display = task_name.as_deref().unwrap_or(&task_id);
+        let reminder_desc =
+            format_reminder_description(reminder_type, reminder_offset, reminder_due.as_ref());
         eprintln!(
             "Delete reminder '{}' for task '{}'?",
-            reminder_desc,
-            task_display
+            reminder_desc, task_display
         );
         eprintln!("Use --force to skip this confirmation.");
-        return Err(CommandError::Config("Operation cancelled. Use --force to confirm.".to_string()));
+        return Err(CommandError::Config(
+            "Operation cancelled. Use --force to confirm.".to_string(),
+        ));
     }
 
     // Build the reminder_delete command arguments
@@ -475,10 +468,15 @@ fn find_reminder_by_id_or_prefix<'a>(cache: &'a Cache, id: &str) -> Result<&'a R
         1 => Ok(matches[0]),
         _ => {
             // Ambiguous prefix - provide helpful error message
-            let mut msg = format!("Ambiguous reminder ID \"{id}\"\n\nMultiple reminders match this prefix:");
+            let mut msg =
+                format!("Ambiguous reminder ID \"{id}\"\n\nMultiple reminders match this prefix:");
             for reminder in matches.iter().take(5) {
                 let prefix = &reminder.id[..6.min(reminder.id.len())];
-                let desc = format_reminder_description(reminder.reminder_type, reminder.minute_offset, reminder.due.as_ref());
+                let desc = format_reminder_description(
+                    reminder.reminder_type,
+                    reminder.minute_offset,
+                    reminder.due.as_ref(),
+                );
                 msg.push_str(&format!("\n  {}  {}", prefix, desc));
             }
             if matches.len() > 5 {
@@ -491,7 +489,11 @@ fn find_reminder_by_id_or_prefix<'a>(cache: &'a Cache, id: &str) -> Result<&'a R
 }
 
 /// Formats a reminder description for display.
-fn format_reminder_description(reminder_type: ReminderType, minute_offset: Option<i32>, due: Option<&todoist_api_rs::sync::Due>) -> String {
+fn format_reminder_description(
+    reminder_type: ReminderType,
+    minute_offset: Option<i32>,
+    due: Option<&todoist_api_rs::sync::Due>,
+) -> String {
     match reminder_type {
         ReminderType::Relative => {
             if let Some(offset) = minute_offset {

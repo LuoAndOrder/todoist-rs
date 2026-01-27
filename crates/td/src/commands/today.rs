@@ -81,7 +81,9 @@ fn categorize_tasks<'a>(cache: &'a Cache, opts: &TodayOptions) -> TodayResult<'a
     let mut upcoming: Vec<&Item> = Vec::new();
 
     // Calculate upcoming cutoff date if needed
-    let upcoming_cutoff = opts.include_upcoming.map(|days| local_today + chrono::Duration::days(days as i64));
+    let upcoming_cutoff = opts
+        .include_upcoming
+        .map(|days| local_today + chrono::Duration::days(days as i64));
 
     for item in &cache.items {
         // Skip deleted and completed items
@@ -189,9 +191,21 @@ fn format_today_json(
     }
 
     let output = TodayOutput {
-        overdue: result.overdue.iter().map(|i| to_task_output(i, cache)).collect(),
-        today: result.today.iter().map(|i| to_task_output(i, cache)).collect(),
-        upcoming: result.upcoming.iter().map(|i| to_task_output(i, cache)).collect(),
+        overdue: result
+            .overdue
+            .iter()
+            .map(|i| to_task_output(i, cache))
+            .collect(),
+        today: result
+            .today
+            .iter()
+            .map(|i| to_task_output(i, cache))
+            .collect(),
+        upcoming: result
+            .upcoming
+            .iter()
+            .map(|i| to_task_output(i, cache))
+            .collect(),
         total_count: result.overdue.len() + result.today.len() + result.upcoming.len(),
     };
 

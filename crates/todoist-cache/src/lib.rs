@@ -242,7 +242,12 @@ impl Cache {
                 .collect();
         } else {
             // Incremental sync: merge changes
-            Self::merge_resources(&mut self.items, &response.items, |i| &i.id, |i| i.is_deleted);
+            Self::merge_resources(
+                &mut self.items,
+                &response.items,
+                |i| &i.id,
+                |i| i.is_deleted,
+            );
             Self::merge_resources(
                 &mut self.projects,
                 &response.projects,
@@ -261,7 +266,12 @@ impl Cache {
                 |s| &s.id,
                 |s| s.is_deleted,
             );
-            Self::merge_resources(&mut self.notes, &response.notes, |n| &n.id, |n| n.is_deleted);
+            Self::merge_resources(
+                &mut self.notes,
+                &response.notes,
+                |n| &n.id,
+                |n| n.is_deleted,
+            );
             Self::merge_resources(
                 &mut self.project_notes,
                 &response.project_notes,
@@ -316,7 +326,12 @@ impl Cache {
         // Merge resources using incremental logic (mutations never do full sync)
         // Even if the response has full_sync: true, we treat it as incremental
         // because we're only applying the affected resources from a mutation
-        Self::merge_resources(&mut self.items, &response.items, |i| &i.id, |i| i.is_deleted);
+        Self::merge_resources(
+            &mut self.items,
+            &response.items,
+            |i| &i.id,
+            |i| i.is_deleted,
+        );
         Self::merge_resources(
             &mut self.projects,
             &response.projects,
@@ -335,7 +350,12 @@ impl Cache {
             |s| &s.id,
             |s| s.is_deleted,
         );
-        Self::merge_resources(&mut self.notes, &response.notes, |n| &n.id, |n| n.is_deleted);
+        Self::merge_resources(
+            &mut self.notes,
+            &response.notes,
+            |n| &n.id,
+            |n| n.is_deleted,
+        );
         Self::merge_resources(
             &mut self.project_notes,
             &response.project_notes,
@@ -665,8 +685,8 @@ mod tests {
     // Helper functions for creating test resources
     mod test_helpers {
         use super::*;
-        use todoist_api_rs::sync::SyncResponse;
         use std::collections::HashMap;
+        use todoist_api_rs::sync::SyncResponse;
 
         pub fn make_item(id: &str, content: &str, is_deleted: bool) -> Item {
             Item {
@@ -1198,7 +1218,12 @@ mod tests {
 
         assert_eq!(cache.sections.len(), 2);
         assert_eq!(
-            cache.sections.iter().find(|s| s.id == "sec-1").unwrap().name,
+            cache
+                .sections
+                .iter()
+                .find(|s| s.id == "sec-1")
+                .unwrap()
+                .name,
             "Updated Section"
         );
     }
@@ -1235,7 +1260,12 @@ mod tests {
 
         assert_eq!(cache.notes.len(), 2);
         assert_eq!(
-            cache.notes.iter().find(|n| n.id == "note-1").unwrap().content,
+            cache
+                .notes
+                .iter()
+                .find(|n| n.id == "note-1")
+                .unwrap()
+                .content,
             "Updated comment"
         );
     }
@@ -1302,7 +1332,12 @@ mod tests {
 
         assert_eq!(cache.filters.len(), 2);
         assert_eq!(
-            cache.filters.iter().find(|f| f.id == "filter-1").unwrap().name,
+            cache
+                .filters
+                .iter()
+                .find(|f| f.id == "filter-1")
+                .unwrap()
+                .name,
             "Today's Tasks"
         );
     }
@@ -1395,7 +1430,10 @@ mod tests {
         cache.apply_sync_response(&response);
 
         assert_eq!(cache.items.len(), 3);
-        assert!(cache.items.iter().any(|i| i.id == "item-1" && i.content == "Updated Task 1"));
+        assert!(cache
+            .items
+            .iter()
+            .any(|i| i.id == "item-1" && i.content == "Updated Task 1"));
         assert!(!cache.items.iter().any(|i| i.id == "item-2"));
         assert!(cache.items.iter().any(|i| i.id == "item-3"));
         assert!(cache.items.iter().any(|i| i.id == "item-4"));
@@ -1469,7 +1507,10 @@ mod tests {
 
         assert_eq!(cache.items.len(), 2);
         assert!(cache.items.iter().any(|i| i.id == "item-1"));
-        assert!(cache.items.iter().any(|i| i.id == "item-2" && i.content == "New task from mutation"));
+        assert!(cache
+            .items
+            .iter()
+            .any(|i| i.id == "item-2" && i.content == "New task from mutation"));
     }
 
     #[test]
@@ -1691,7 +1732,7 @@ mod tests {
         let mut response = make_sync_response(false, "new_token");
         // Add new item, delete existing item, add new project
         response.items = vec![
-            make_item("item-1", "Task 1", true),     // delete
+            make_item("item-1", "Task 1", true),      // delete
             make_item("item-3", "New Task 3", false), // add
         ];
         response.projects = vec![make_project("proj-2", "Project 2", false)]; // add

@@ -98,7 +98,11 @@ fn test_load_or_default_with_existing_file() {
 #[test]
 fn test_save_creates_parent_directories() {
     let temp_dir = tempdir().expect("failed to create temp dir");
-    let cache_path = temp_dir.path().join("nested").join("deep").join("cache.json");
+    let cache_path = temp_dir
+        .path()
+        .join("nested")
+        .join("deep")
+        .join("cache.json");
 
     let store = CacheStore::with_path(cache_path.clone());
 
@@ -106,7 +110,10 @@ fn test_save_creates_parent_directories() {
     store.save(&cache).expect("save should create directories");
 
     assert!(cache_path.exists(), "cache file should exist");
-    assert!(cache_path.parent().unwrap().exists(), "parent dir should exist");
+    assert!(
+        cache_path.parent().unwrap().exists(),
+        "parent dir should exist"
+    );
 }
 
 #[test]
@@ -116,7 +123,10 @@ fn test_exists_returns_false_for_missing_file() {
 
     let store = CacheStore::with_path(cache_path);
 
-    assert!(!store.exists(), "exists should return false for missing file");
+    assert!(
+        !store.exists(),
+        "exists should return false for missing file"
+    );
 }
 
 #[test]
@@ -157,7 +167,9 @@ fn test_delete_nonexistent_file_succeeds() {
     let store = CacheStore::with_path(cache_path);
 
     // Should not error when deleting a file that doesn't exist
-    store.delete().expect("delete should succeed for missing file");
+    store
+        .delete()
+        .expect("delete should succeed for missing file");
 }
 
 #[test]

@@ -517,7 +517,8 @@ async fn test_uncomplete_task() {
     assert!(task.checked, "Task should be completed");
 
     // Uncomplete task
-    let uncomplete_command = SyncCommand::new("item_uncomplete", serde_json::json!({"id": task_id}));
+    let uncomplete_command =
+        SyncCommand::new("item_uncomplete", serde_json::json!({"id": task_id}));
     let response = ctx.execute(vec![uncomplete_command]).await.unwrap();
     assert!(!response.has_errors(), "item_uncomplete should succeed");
 

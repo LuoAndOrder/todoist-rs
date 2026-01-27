@@ -69,12 +69,17 @@ pub async fn execute(ctx: &CommandContext, opts: &SyncOptions, token: &str) -> R
 
     // Build summary
     let summary = SyncSummary {
-        full_sync: opts.full || cache.full_sync_date_utc.is_some_and(|d| {
-            // Check if this sync updated the full_sync_date to "now"
-            let now = Utc::now();
-            (now - d).num_seconds().abs() < 5
-        }),
-        tasks: cache.items.iter().filter(|i| !i.is_deleted && !i.checked).count(),
+        full_sync: opts.full
+            || cache.full_sync_date_utc.is_some_and(|d| {
+                // Check if this sync updated the full_sync_date to "now"
+                let now = Utc::now();
+                (now - d).num_seconds().abs() < 5
+            }),
+        tasks: cache
+            .items
+            .iter()
+            .filter(|i| !i.is_deleted && !i.checked)
+            .count(),
         projects: cache.projects.iter().filter(|p| !p.is_deleted).count(),
         labels: cache.labels.iter().filter(|l| !l.is_deleted).count(),
         sections: cache.sections.iter().filter(|s| !s.is_deleted).count(),
@@ -120,7 +125,11 @@ fn format_sync_json(summary: &SyncSummary) -> std::result::Result<String, serde_
 
     let output = SyncOutput {
         status: "success",
-        sync_type: if summary.full_sync { "full" } else { "incremental" },
+        sync_type: if summary.full_sync {
+            "full"
+        } else {
+            "incremental"
+        },
         summary: SummaryOutput {
             tasks: summary.tasks,
             projects: summary.projects,
@@ -142,7 +151,11 @@ fn format_sync_table(summary: &SyncSummary, use_colors: bool) -> String {
     let mut output = String::new();
 
     // Header
-    let sync_type = if summary.full_sync { "Full" } else { "Incremental" };
+    let sync_type = if summary.full_sync {
+        "Full"
+    } else {
+        "Incremental"
+    };
     let header = format!("{} sync completed", sync_type);
     if use_colors {
         output.push_str(&format!("{}\n\n", header.green().bold()));

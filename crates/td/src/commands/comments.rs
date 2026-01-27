@@ -183,9 +183,8 @@ fn resolve_task_id(cache: &Cache, task: &str) -> Result<String> {
         }
 
         if prefix_matches.len() > 1 {
-            let mut msg = format!(
-                "Ambiguous task ID \"{task}\"\n\nMultiple tasks match this prefix:"
-            );
+            let mut msg =
+                format!("Ambiguous task ID \"{task}\"\n\nMultiple tasks match this prefix:");
             for item in prefix_matches.iter().take(5) {
                 let prefix = &item.id[..6.min(item.id.len())];
                 msg.push_str(&format!("\n  {}  {}", prefix, item.content));
@@ -239,7 +238,9 @@ fn resolve_project_id(cache: &Cache, project: &str) -> Result<String> {
             "Ambiguous project: '{project}'. Multiple projects match."
         )))
     } else {
-        Err(CommandError::Config(format!("Project not found: {project}")))
+        Err(CommandError::Config(format!(
+            "Project not found: {project}"
+        )))
     }
 }
 
@@ -387,11 +388,12 @@ pub async fn execute_add(
         let output = crate::output::format_created_comment(&result)?;
         println!("{output}");
     } else if !ctx.quiet {
-        let parent_type = if result.is_task_comment { "task" } else { "project" };
-        let parent_display = result
-            .parent_name
-            .as_deref()
-            .unwrap_or(&result.parent_id);
+        let parent_type = if result.is_task_comment {
+            "task"
+        } else {
+            "project"
+        };
+        let parent_display = result.parent_name.as_deref().unwrap_or(&result.parent_id);
         if ctx.verbose {
             println!("Created comment: {}", result.id);
             println!("  On {}: {}", parent_type, parent_display);
@@ -525,7 +527,10 @@ pub async fn execute_edit(
             } else {
                 result.content.clone()
             };
-            println!("Updated comment ({}) on {}: {}", prefix, parent_display, content_display);
+            println!(
+                "Updated comment ({}) on {}: {}",
+                prefix, parent_display, content_display
+            );
         }
     }
 
@@ -748,8 +753,9 @@ fn resolve_comment(
         }
 
         if total_matches > 1 {
-            let mut msg =
-                format!("Ambiguous comment ID \"{comment_id}\"\n\nMultiple comments match this prefix:");
+            let mut msg = format!(
+                "Ambiguous comment ID \"{comment_id}\"\n\nMultiple comments match this prefix:"
+            );
             for note in task_note_matches.iter().take(TASK_MATCHES_PREVIEW) {
                 let prefix = &note.id[..ID_DISPLAY_LENGTH.min(note.id.len())];
                 let content_preview = if note.content.len() > CONTENT_PREVIEW_LENGTH {
@@ -785,11 +791,7 @@ fn resolve_comment(
 }
 
 /// Filters comments based on task_id or project_id.
-fn filter_comments(
-    cache: &Cache,
-    task_id: Option<&str>,
-    project_id: Option<&str>,
-) -> Vec<Comment> {
+fn filter_comments(cache: &Cache, task_id: Option<&str>, project_id: Option<&str>) -> Vec<Comment> {
     let mut comments = Vec::new();
 
     // Get task comments if filtering by task

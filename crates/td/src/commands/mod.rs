@@ -94,7 +94,12 @@ pub fn confirm_bulk_operation(
         .with_prompt(format!("Continue with {} {} tasks?", action, items.len()))
         .default(false)
         .interact()
-        .map_err(|e| CommandError::Io(std::io::Error::other(format!("Failed to read input: {}", e))))?;
+        .map_err(|e| {
+            CommandError::Io(std::io::Error::other(format!(
+                "Failed to read input: {}",
+                e
+            )))
+        })?;
 
     if confirmed {
         Ok(ConfirmResult::Confirmed)
@@ -200,7 +205,11 @@ mod tests {
 
     #[test]
     fn test_confirm_bulk_force_and_quiet_skips_confirmation() {
-        let items = vec![("abc123", "Task 1"), ("def456", "Task 2"), ("ghi789", "Task 3")];
+        let items = vec![
+            ("abc123", "Task 1"),
+            ("def456", "Task 2"),
+            ("ghi789", "Task 3"),
+        ];
         let result = confirm_bulk_operation("complete", &items, true, true).unwrap();
         assert_eq!(result, ConfirmResult::Confirmed);
     }

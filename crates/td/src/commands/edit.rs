@@ -217,7 +217,10 @@ pub async fn execute(ctx: &CommandContext, opts: &EditOptions, token: &str) -> R
                 });
                 println!("{}", serde_json::to_string_pretty(&output)?);
             } else {
-                println!("No changes specified for task {}", &task_id[..6.min(task_id.len())]);
+                println!(
+                    "No changes specified for task {}",
+                    &task_id[..6.min(task_id.len())]
+                );
             }
         }
         return Ok(());
@@ -258,11 +261,7 @@ pub async fn execute(ctx: &CommandContext, opts: &EditOptions, token: &str) -> R
     } else if !ctx.quiet {
         let content_display = result.content.as_deref().unwrap_or("(unknown)");
         if ctx.verbose {
-            println!(
-                "Updated task: {} ({})",
-                content_display,
-                result.id
-            );
+            println!("Updated task: {} ({})", content_display, result.id);
             println!("  Changed: {}", result.updated_fields.join(", "));
         } else {
             println!(
@@ -275,7 +274,6 @@ pub async fn execute(ctx: &CommandContext, opts: &EditOptions, token: &str) -> R
 
     Ok(())
 }
-
 
 #[cfg(test)]
 mod tests {

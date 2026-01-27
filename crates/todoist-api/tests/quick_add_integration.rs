@@ -83,7 +83,9 @@ async fn test_quick_add_with_nlp_parsing() {
         .await;
 
     let client = TodoistClient::with_base_url("test-token", mock_server.uri());
-    let request = QuickAddRequest::new("Buy groceries tomorrow at 3pm #Shopping p2 @errands @shopping").unwrap();
+    let request =
+        QuickAddRequest::new("Buy groceries tomorrow at 3pm #Shopping p2 @errands @shopping")
+            .unwrap();
     let response = client.quick_add(request).await.unwrap();
 
     assert_eq!(response.id, "task-456");
@@ -122,7 +124,9 @@ async fn test_quick_add_with_note() {
         .and(path("/tasks/quick"))
         .and(header("Authorization", "Bearer test-token"))
         .and(header("Content-Type", "application/json"))
-        .and(body_json_string(r#"{"text":"Call mom","note":"Ask about dinner plans"}"#))
+        .and(body_json_string(
+            r#"{"text":"Call mom","note":"Ask about dinner plans"}"#,
+        ))
         .respond_with(ResponseTemplate::new(200).set_body_json(response_json))
         .expect(1)
         .mount(&mock_server)

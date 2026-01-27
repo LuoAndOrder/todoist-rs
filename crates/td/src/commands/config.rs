@@ -126,9 +126,7 @@ fn get_config_dir() -> Result<PathBuf> {
 
     BaseDirs::new()
         .map(|dirs| dirs.home_dir().join(".config").join("td"))
-        .ok_or_else(|| {
-            CommandError::Config("Could not determine config directory".to_string())
-        })
+        .ok_or_else(|| CommandError::Config("Could not determine config directory".to_string()))
 }
 
 /// Gets the config file path.
@@ -186,8 +184,9 @@ fn save_config(config: &Config) -> Result<()> {
 
     // Ensure directory exists
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| CommandError::Config(format!("Failed to create config directory: {}", e)))?;
+        fs::create_dir_all(parent).map_err(|e| {
+            CommandError::Config(format!("Failed to create config directory: {}", e))
+        })?;
     }
 
     let content = toml::to_string_pretty(config)
@@ -260,8 +259,9 @@ pub async fn execute_edit(ctx: &CommandContext) -> Result<()> {
 
     // Ensure directory exists
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| CommandError::Config(format!("Failed to create config directory: {}", e)))?;
+        fs::create_dir_all(parent).map_err(|e| {
+            CommandError::Config(format!("Failed to create config directory: {}", e))
+        })?;
     }
 
     // Create default config if it doesn't exist
@@ -373,8 +373,9 @@ pub fn execute_set(ctx: &CommandContext, opts: &ConfigSetOptions) -> Result<()> 
 
     // Ensure directory exists
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| CommandError::Config(format!("Failed to create config directory: {}", e)))?;
+        fs::create_dir_all(parent).map_err(|e| {
+            CommandError::Config(format!("Failed to create config directory: {}", e))
+        })?;
     }
 
     save_config(&config)?;

@@ -63,7 +63,8 @@ pub async fn run_setup(ctx: &CommandContext) -> Result<String> {
     // Check if we're in a terminal
     if !io::stdin().is_terminal() {
         return Err(CommandError::Config(
-            "No API token configured. Set TODOIST_TOKEN environment variable or run interactively.".to_string()
+            "No API token configured. Set TODOIST_TOKEN environment variable or run interactively."
+                .to_string(),
         ));
     }
 
@@ -80,7 +81,10 @@ pub async fn run_setup(ctx: &CommandContext) -> Result<String> {
         println!();
         println!("You can get your API token from:");
         if ctx.use_colors {
-            println!("  {}", "https://todoist.com/app/settings/integrations/developer".cyan());
+            println!(
+                "  {}",
+                "https://todoist.com/app/settings/integrations/developer".cyan()
+            );
         } else {
             println!("  https://todoist.com/app/settings/integrations/developer");
         }
@@ -126,7 +130,11 @@ pub async fn run_setup(ctx: &CommandContext) -> Result<String> {
                 println!();
 
                 // Show summary
-                let tasks = cache.items.iter().filter(|i| !i.is_deleted && !i.checked).count();
+                let tasks = cache
+                    .items
+                    .iter()
+                    .filter(|i| !i.is_deleted && !i.checked)
+                    .count();
                 let projects = cache.projects.iter().filter(|p| !p.is_deleted).count();
                 println!("Synced {} tasks in {} projects.", tasks, projects);
                 println!();
@@ -232,8 +240,9 @@ fn save_setup_config(token: &str, storage: TokenStorage) -> Result<()> {
 
     // Ensure directory exists
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| CommandError::Config(format!("Failed to create config directory: {}", e)))?;
+        fs::create_dir_all(parent).map_err(|e| {
+            CommandError::Config(format!("Failed to create config directory: {}", e))
+        })?;
     }
 
     // If using keyring, store the token there
@@ -263,8 +272,9 @@ fn save_setup_config(token: &str, storage: TokenStorage) -> Result<()> {
     {
         use std::os::unix::fs::PermissionsExt;
         let permissions = fs::Permissions::from_mode(0o600);
-        fs::set_permissions(&path, permissions)
-            .map_err(|e| CommandError::Config(format!("Failed to set config permissions: {}", e)))?;
+        fs::set_permissions(&path, permissions).map_err(|e| {
+            CommandError::Config(format!("Failed to set config permissions: {}", e))
+        })?;
     }
 
     Ok(())

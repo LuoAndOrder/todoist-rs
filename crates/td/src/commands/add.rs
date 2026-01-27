@@ -181,7 +181,11 @@ pub async fn execute(ctx: &CommandContext, opts: &AddOptions, token: &str) -> Re
                 println!("  Labels: {}", opts.labels.join(", "));
             }
         } else {
-            println!("Created: {} ({})", result.content, &result.id[..6.min(result.id.len())]);
+            println!(
+                "Created: {} ({})",
+                result.content,
+                &result.id[..6.min(result.id.len())]
+            );
         }
     }
 

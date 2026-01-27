@@ -83,7 +83,11 @@ async fn test_create_project_with_color() {
         .find_project(&project_id)
         .expect("Project should exist in cache");
     assert_eq!(project.name, "E2E_Test_ColoredProject");
-    assert_eq!(project.color, Some("red".to_string()), "Color should be red");
+    assert_eq!(
+        project.color,
+        Some("red".to_string()),
+        "Color should be red"
+    );
 
     // Clean up
     ctx.delete_project(&project_id)
@@ -118,7 +122,11 @@ async fn test_create_project_with_view_style() {
         .find_project(&project_id)
         .expect("Project should exist in cache");
     assert_eq!(project.name, "E2E_Test_BoardProject");
-    assert_eq!(project.view_style, Some("board".to_string()), "View style should be board");
+    assert_eq!(
+        project.view_style,
+        Some("board".to_string()),
+        "View style should be board"
+    );
 
     // Clean up
     ctx.delete_project(&project_id)
@@ -210,7 +218,11 @@ async fn test_update_project_color() {
     let project = ctx
         .find_project(&project_id)
         .expect("Project should exist in cache");
-    assert_eq!(project.color, Some("blue".to_string()), "Color should be blue");
+    assert_eq!(
+        project.color,
+        Some("blue".to_string()),
+        "Color should be blue"
+    );
 
     // Clean up
     ctx.delete_project(&project_id)
@@ -431,9 +443,14 @@ async fn test_create_nested_subprojects() {
     );
 
     // Clean up (delete in reverse hierarchy order)
-    ctx.batch_delete(&[], &[&project_c_id, &project_b_id, &project_a_id], &[], &[])
-        .await
-        .expect("cleanup failed");
+    ctx.batch_delete(
+        &[],
+        &[&project_c_id, &project_b_id, &project_a_id],
+        &[],
+        &[],
+    )
+    .await
+    .expect("cleanup failed");
 }
 
 #[tokio::test]
@@ -595,14 +612,8 @@ async fn test_reorder_projects() {
         p1.child_order, p2.child_order, p3.child_order
     );
 
-    assert!(
-        p3.child_order < p1.child_order,
-        "p3 should be before p1"
-    );
-    assert!(
-        p1.child_order < p2.child_order,
-        "p1 should be before p2"
-    );
+    assert!(p3.child_order < p1.child_order, "p3 should be before p1");
+    assert!(p1.child_order < p2.child_order, "p1 should be before p2");
 
     // Clean up
     ctx.batch_delete(&[], &[&project1_id, &project2_id, &project3_id], &[], &[])
@@ -633,13 +644,14 @@ async fn test_archive_project() {
 
     // Verify project is not archived initially (from cache)
     let project = ctx.find_project(&project_id).unwrap();
-    assert!(!project.is_archived, "Project should not be archived initially");
+    assert!(
+        !project.is_archived,
+        "Project should not be archived initially"
+    );
 
     // Archive project
-    let archive_command = SyncCommand::new(
-        "project_archive",
-        serde_json::json!({"id": project_id}),
-    );
+    let archive_command =
+        SyncCommand::new("project_archive", serde_json::json!({"id": project_id}));
     let response = ctx.execute(vec![archive_command]).await.unwrap();
     assert!(!response.has_errors(), "project_archive should succeed");
 
@@ -655,10 +667,8 @@ async fn test_archive_project() {
     println!("Task after archive: {:?}", task.map(|t| &t.content));
 
     // Clean up: unarchive first, then delete
-    let unarchive_command = SyncCommand::new(
-        "project_unarchive",
-        serde_json::json!({"id": project_id}),
-    );
+    let unarchive_command =
+        SyncCommand::new("project_unarchive", serde_json::json!({"id": project_id}));
     ctx.execute(vec![unarchive_command]).await.unwrap();
 
     ctx.batch_delete(&[&task_id], &[&project_id], &[], &[])
@@ -679,10 +689,8 @@ async fn test_unarchive_project() {
         .await
         .expect("create_project failed");
 
-    let archive_command = SyncCommand::new(
-        "project_archive",
-        serde_json::json!({"id": project_id}),
-    );
+    let archive_command =
+        SyncCommand::new("project_archive", serde_json::json!({"id": project_id}));
     let response = ctx.execute(vec![archive_command]).await.unwrap();
     assert!(!response.has_errors());
 
@@ -691,10 +699,8 @@ async fn test_unarchive_project() {
     assert!(project.is_archived, "Project should be archived");
 
     // Unarchive project
-    let unarchive_command = SyncCommand::new(
-        "project_unarchive",
-        serde_json::json!({"id": project_id}),
-    );
+    let unarchive_command =
+        SyncCommand::new("project_unarchive", serde_json::json!({"id": project_id}));
     let response = ctx.execute(vec![unarchive_command]).await.unwrap();
     assert!(!response.has_errors(), "project_unarchive should succeed");
 
@@ -741,18 +747,14 @@ async fn test_archived_project_excluded_from_filters() {
     // Count tasks due today before archive
     let tasks_today_before: Vec<_> = ctx
         .items()
-        .filter(|i| {
-            i.due.as_ref().map(|d| d.date == today).unwrap_or(false) && !i.checked
-        })
+        .filter(|i| i.due.as_ref().map(|d| d.date == today).unwrap_or(false) && !i.checked)
         .collect();
     let count_before = tasks_today_before.len();
     println!("Tasks due today before archive: {}", count_before);
 
     // Archive project
-    let archive_command = SyncCommand::new(
-        "project_archive",
-        serde_json::json!({"id": project_id}),
-    );
+    let archive_command =
+        SyncCommand::new("project_archive", serde_json::json!({"id": project_id}));
     let response = ctx.execute(vec![archive_command]).await.unwrap();
     assert!(!response.has_errors(), "project_archive should succeed");
 
@@ -773,7 +775,10 @@ async fn test_archived_project_excluded_from_filters() {
         })
         .collect();
     let count_after = tasks_today_after.len();
-    println!("Tasks due today after archive (excluding archived projects): {}", count_after);
+    println!(
+        "Tasks due today after archive (excluding archived projects): {}",
+        count_after
+    );
 
     // The task in archived project should be excluded
     // Note: This tests our local filtering logic, not the API's filter command
@@ -783,10 +788,8 @@ async fn test_archived_project_excluded_from_filters() {
     );
 
     // Clean up: unarchive first
-    let unarchive_command = SyncCommand::new(
-        "project_unarchive",
-        serde_json::json!({"id": project_id}),
-    );
+    let unarchive_command =
+        SyncCommand::new("project_unarchive", serde_json::json!({"id": project_id}));
     ctx.execute(vec![unarchive_command]).await.unwrap();
 
     ctx.batch_delete(&[&task_id], &[&project_id], &[], &[])
@@ -861,9 +864,15 @@ async fn test_create_multiple_sections() {
         .expect("create_section failed");
 
     // Verify all sections exist (from cache)
-    let s1 = ctx.find_section(&section1_id).expect("Section 1 should exist");
-    let s2 = ctx.find_section(&section2_id).expect("Section 2 should exist");
-    let s3 = ctx.find_section(&section3_id).expect("Section 3 should exist");
+    let s1 = ctx
+        .find_section(&section1_id)
+        .expect("Section 1 should exist");
+    let s2 = ctx
+        .find_section(&section2_id)
+        .expect("Section 2 should exist");
+    let s3 = ctx
+        .find_section(&section3_id)
+        .expect("Section 3 should exist");
 
     assert_eq!(s1.name, "E2E_Test_ToDo");
     assert_eq!(s2.name, "E2E_Test_InProgress");
@@ -881,9 +890,14 @@ async fn test_create_multiple_sections() {
     );
 
     // Clean up
-    ctx.batch_delete(&[], &[&project_id], &[&section1_id, &section2_id, &section3_id], &[])
-        .await
-        .expect("cleanup failed");
+    ctx.batch_delete(
+        &[],
+        &[&project_id],
+        &[&section1_id, &section2_id, &section3_id],
+        &[],
+    )
+    .await
+    .expect("cleanup failed");
 }
 
 #[tokio::test]
@@ -1039,8 +1053,11 @@ async fn test_delete_section_with_tasks() {
 
     // Tasks should still exist (either at project root or deleted)
     let tasks_exist = task1.is_some() && task2.is_some();
-    let tasks_moved = task1.map_or(true, |t| t.section_id.is_none() || t.section_id.as_ref() != Some(&section_id))
-        && task2.map_or(true, |t| t.section_id.is_none() || t.section_id.as_ref() != Some(&section_id));
+    let tasks_moved = task1.map_or(true, |t| {
+        t.section_id.is_none() || t.section_id.as_ref() != Some(&section_id)
+    }) && task2.map_or(true, |t| {
+        t.section_id.is_none() || t.section_id.as_ref() != Some(&section_id)
+    });
 
     assert!(
         tasks_exist || tasks_moved,
@@ -1128,9 +1145,14 @@ async fn test_reorder_sections() {
     );
 
     // Clean up
-    ctx.batch_delete(&[], &[&project_id], &[&section1_id, &section2_id, &section3_id], &[])
-        .await
-        .expect("cleanup failed");
+    ctx.batch_delete(
+        &[],
+        &[&project_id],
+        &[&section1_id, &section2_id, &section3_id],
+        &[],
+    )
+    .await
+    .expect("cleanup failed");
 }
 
 #[tokio::test]
@@ -1210,13 +1232,14 @@ async fn test_archive_section() {
 
     // Verify section is not archived initially (from cache)
     let section = ctx.find_section(&section_id).expect("Section should exist");
-    assert!(!section.is_archived, "Section should not be archived initially");
+    assert!(
+        !section.is_archived,
+        "Section should not be archived initially"
+    );
 
     // Archive section
-    let archive_command = SyncCommand::new(
-        "section_archive",
-        serde_json::json!({"id": section_id}),
-    );
+    let archive_command =
+        SyncCommand::new("section_archive", serde_json::json!({"id": section_id}));
     let response = ctx.execute(vec![archive_command]).await.unwrap();
     assert!(!response.has_errors(), "section_archive should succeed");
 
@@ -1227,10 +1250,8 @@ async fn test_archive_section() {
     assert!(section.is_archived, "Section should be archived");
 
     // Clean up: unarchive first, then delete
-    let unarchive_command = SyncCommand::new(
-        "section_unarchive",
-        serde_json::json!({"id": section_id}),
-    );
+    let unarchive_command =
+        SyncCommand::new("section_unarchive", serde_json::json!({"id": section_id}));
     ctx.execute(vec![unarchive_command]).await.unwrap();
 
     ctx.batch_delete(&[&task_id], &[&project_id], &[&section_id], &[])
@@ -1256,10 +1277,8 @@ async fn test_unarchive_section() {
         .expect("create_section failed");
 
     // Archive section
-    let archive_command = SyncCommand::new(
-        "section_archive",
-        serde_json::json!({"id": section_id}),
-    );
+    let archive_command =
+        SyncCommand::new("section_archive", serde_json::json!({"id": section_id}));
     let response = ctx.execute(vec![archive_command]).await.unwrap();
     assert!(!response.has_errors());
 
@@ -1268,10 +1287,8 @@ async fn test_unarchive_section() {
     assert!(section.is_archived, "Section should be archived");
 
     // Unarchive section
-    let unarchive_command = SyncCommand::new(
-        "section_unarchive",
-        serde_json::json!({"id": section_id}),
-    );
+    let unarchive_command =
+        SyncCommand::new("section_unarchive", serde_json::json!({"id": section_id}));
     let response = ctx.execute(vec![unarchive_command]).await.unwrap();
     assert!(!response.has_errors(), "section_unarchive should succeed");
 

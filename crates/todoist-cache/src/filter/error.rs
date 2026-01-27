@@ -65,7 +65,10 @@ pub enum FilterError {
 /// Formats a list of lexer errors for display.
 fn format_lexer_errors(errors: &[LexerError]) -> String {
     if errors.len() == 1 {
-        format!("'{}' at position {}", errors[0].character, errors[0].position)
+        format!(
+            "'{}' at position {}",
+            errors[0].character, errors[0].position
+        )
     } else {
         errors
             .iter()

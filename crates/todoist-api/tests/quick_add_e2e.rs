@@ -40,7 +40,6 @@ fn tomorrow_date_string() -> String {
         .to_string()
 }
 
-
 // =============================================================================
 // 8.1 Plain Text (No NLP Markers)
 // =============================================================================
@@ -728,8 +727,9 @@ async fn test_quick_add_with_description() {
 
     let note_content = "Detailed description for testing";
 
-    let request =
-        QuickAddRequest::new("E2E Quick Add - Task with note").unwrap().with_note(note_content);
+    let request = QuickAddRequest::new("E2E Quick Add - Task with note")
+        .unwrap()
+        .with_note(note_content);
     let response = ctx
         .client()
         .quick_add(request)
@@ -794,7 +794,11 @@ async fn test_quick_add_due_with_time() {
     // We verify it's today by checking the date portion starts with today's date
     let today = today_date_string();
     assert!(
-        due.date.starts_with(&today) || due.datetime.as_ref().map_or(false, |dt| dt.starts_with(&today)),
+        due.date.starts_with(&today)
+            || due
+                .datetime
+                .as_ref()
+                .map_or(false, |dt| dt.starts_with(&today)),
         "Should be due today ({}), got date: {}, datetime: {:?}",
         today,
         due.date,

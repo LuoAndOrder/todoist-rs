@@ -179,8 +179,8 @@ impl TestContext {
     /// Use this to get the latest state from the server when you need to
     /// verify changes made outside of the test context.
     pub async fn refresh(&mut self) -> Result<SyncResponse, todoist_api_rs::error::Error> {
-        let request = SyncRequest::incremental(&self.sync_token)
-            .with_resource_types(vec!["all".to_string()]);
+        let request =
+            SyncRequest::incremental(&self.sync_token).with_resource_types(vec!["all".to_string()]);
 
         let response = self.client.sync(request).await?;
 
@@ -368,12 +368,9 @@ impl TestContext {
             )));
         }
 
-        response
-            .real_id(&temp_id)
-            .cloned()
-            .ok_or_else(|| {
-                todoist_api_rs::error::Error::Internal("No temp_id mapping returned".to_string())
-            })
+        response.real_id(&temp_id).cloned().ok_or_else(|| {
+            todoist_api_rs::error::Error::Internal("No temp_id mapping returned".to_string())
+        })
     }
 
     /// Creates a project and returns its real ID.
@@ -382,11 +379,8 @@ impl TestContext {
         name: &str,
     ) -> Result<String, todoist_api_rs::error::Error> {
         let temp_id = uuid::Uuid::new_v4().to_string();
-        let command = SyncCommand::with_temp_id(
-            "project_add",
-            &temp_id,
-            serde_json::json!({ "name": name }),
-        );
+        let command =
+            SyncCommand::with_temp_id("project_add", &temp_id, serde_json::json!({ "name": name }));
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
@@ -436,11 +430,8 @@ impl TestContext {
         name: &str,
     ) -> Result<String, todoist_api_rs::error::Error> {
         let temp_id = uuid::Uuid::new_v4().to_string();
-        let command = SyncCommand::with_temp_id(
-            "label_add",
-            &temp_id,
-            serde_json::json!({ "name": name }),
-        );
+        let command =
+            SyncCommand::with_temp_id("label_add", &temp_id, serde_json::json!({ "name": name }));
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
@@ -507,7 +498,10 @@ impl TestContext {
     }
 
     /// Deletes a label.
-    pub async fn delete_label(&mut self, label_id: &str) -> Result<(), todoist_api_rs::error::Error> {
+    pub async fn delete_label(
+        &mut self,
+        label_id: &str,
+    ) -> Result<(), todoist_api_rs::error::Error> {
         let command = SyncCommand::new("label_delete", serde_json::json!({"id": label_id}));
         let response = self.execute(vec![command]).await?;
 
@@ -901,10 +895,19 @@ mod tests {
         match ctx {
             Ok(ctx) => {
                 // Verify basic state
-                assert!(!ctx.inbox_id().is_empty(), "inbox_id should not be empty after initialization");
-                assert!(!ctx.sync_token().is_empty(), "sync_token should not be empty after initialization");
+                assert!(
+                    !ctx.inbox_id().is_empty(),
+                    "inbox_id should not be empty after initialization"
+                );
+                assert!(
+                    !ctx.sync_token().is_empty(),
+                    "sync_token should not be empty after initialization"
+                );
                 // Should have at least the inbox project
-                assert!(ctx.projects().count() >= 1, "should have at least the inbox project");
+                assert!(
+                    ctx.projects().count() >= 1,
+                    "should have at least the inbox project"
+                );
             }
             Err(e) => {
                 eprintln!("Skipping test: {}", e);
@@ -931,7 +934,10 @@ mod tests {
 
         // Find it in cache (no API call)
         let task = ctx.find_item(&task_id).expect("Task should be in cache");
-        assert_eq!(task.content, "TestContext - test task", "task content should match what was created");
+        assert_eq!(
+            task.content, "TestContext - test task",
+            "task content should match what was created"
+        );
         assert_eq!(task.project_id, inbox_id, "task should be in inbox project");
 
         // Cleanup
@@ -972,8 +978,14 @@ mod tests {
             })
             .collect();
 
-        let response = ctx.execute(commands).await.expect("Batch create should work");
-        assert!(!response.has_errors(), "batch create should not have errors");
+        let response = ctx
+            .execute(commands)
+            .await
+            .expect("Batch create should work");
+        assert!(
+            !response.has_errors(),
+            "batch create should not have errors"
+        );
 
         // Get real IDs
         let task_ids: Vec<String> = temp_ids
@@ -984,7 +996,12 @@ mod tests {
         // Verify all tasks in cache
         for (i, task_id) in task_ids.iter().enumerate() {
             let task = ctx.find_item(task_id).expect("Task should be in cache");
-            assert_eq!(task.content, format!("TestContext - batch task {}", i), "task {} content should match", i);
+            assert_eq!(
+                task.content,
+                format!("TestContext - batch task {}", i),
+                "task {} content should match",
+                i
+            );
         }
 
         // Batch delete

@@ -511,9 +511,7 @@ async fn test_reminder_on_recurring_task() {
             reminders_for_task.len()
         );
     } else {
-        eprintln!(
-            "Note: No reminders after completing recurring task - behavior may vary by plan"
-        );
+        eprintln!("Note: No reminders after completing recurring task - behavior may vary by plan");
     }
 
     // Clean up - collect any reminder IDs that exist

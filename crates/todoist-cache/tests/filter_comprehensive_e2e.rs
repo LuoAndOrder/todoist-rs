@@ -192,11 +192,8 @@ impl FilterTestContext {
     /// Create a project
     async fn create_project(&mut self, name: &str) -> Result<String, Box<dyn std::error::Error>> {
         let temp_id = uuid::Uuid::new_v4().to_string();
-        let command = SyncCommand::with_temp_id(
-            "project_add",
-            &temp_id,
-            serde_json::json!({ "name": name }),
-        );
+        let command =
+            SyncCommand::with_temp_id("project_add", &temp_id, serde_json::json!({ "name": name }));
         let response = self.execute(vec![command]).await?;
         response
             .real_id(&temp_id)
@@ -245,11 +242,8 @@ impl FilterTestContext {
     /// Create a label
     async fn create_label(&mut self, name: &str) -> Result<String, Box<dyn std::error::Error>> {
         let temp_id = uuid::Uuid::new_v4().to_string();
-        let command = SyncCommand::with_temp_id(
-            "label_add",
-            &temp_id,
-            serde_json::json!({ "name": name }),
-        );
+        let command =
+            SyncCommand::with_temp_id("label_add", &temp_id, serde_json::json!({ "name": name }));
         let response = self.execute(vec![command]).await?;
         response
             .real_id(&temp_id)
@@ -638,14 +632,9 @@ async fn test_filter_7_days() {
     );
 
     // Cleanup
-    ctx.batch_delete(
-        &[&task_today, &task_5_days, &task_10_days],
-        &[],
-        &[],
-        &[],
-    )
-    .await
-    .expect("cleanup");
+    ctx.batch_delete(&[&task_today, &task_5_days, &task_10_days], &[], &[], &[])
+        .await
+        .expect("cleanup");
 }
 
 // ============================================================================
@@ -1306,14 +1295,9 @@ async fn test_filter_inbox() {
     );
 
     // Cleanup
-    ctx.batch_delete(
-        &[&task_in_inbox, &task_in_project],
-        &[&project],
-        &[],
-        &[],
-    )
-    .await
-    .expect("cleanup");
+    ctx.batch_delete(&[&task_in_inbox, &task_in_project], &[&project], &[], &[])
+        .await
+        .expect("cleanup");
 }
 
 // ============================================================================
@@ -1555,7 +1539,12 @@ async fn test_filter_and_precedence() {
 
     // Cleanup
     ctx.batch_delete(
-        &[&task_today, &task_p1_urgent, &task_p1_only, &task_urgent_only],
+        &[
+            &task_today,
+            &task_p1_urgent,
+            &task_p1_only,
+            &task_urgent_only,
+        ],
         &[],
         &[],
         &[&label_urgent],
@@ -1752,14 +1741,9 @@ async fn test_filter_negation_project() {
     );
 
     // Cleanup
-    ctx.batch_delete(
-        &[&task_in_project, &task_in_inbox],
-        &[&project],
-        &[],
-        &[],
-    )
-    .await
-    .expect("cleanup");
+    ctx.batch_delete(&[&task_in_project, &task_in_inbox], &[&project], &[], &[])
+        .await
+        .expect("cleanup");
 }
 
 #[tokio::test]

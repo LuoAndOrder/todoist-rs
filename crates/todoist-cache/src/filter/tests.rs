@@ -7,65 +7,141 @@ use super::*;
 #[test]
 fn test_parse_today() {
     let filter = FilterParser::parse("today").unwrap();
-    assert_eq!(filter, Filter::Today, "parsing 'today' should produce Filter::Today");
+    assert_eq!(
+        filter,
+        Filter::Today,
+        "parsing 'today' should produce Filter::Today"
+    );
 }
 
 #[test]
 fn test_parse_today_case_insensitive() {
-    assert_eq!(FilterParser::parse("TODAY").unwrap(), Filter::Today, "'TODAY' should be case-insensitive");
-    assert_eq!(FilterParser::parse("Today").unwrap(), Filter::Today, "'Today' should be case-insensitive");
-    assert_eq!(FilterParser::parse("ToDAy").unwrap(), Filter::Today, "'ToDAy' should be case-insensitive");
+    assert_eq!(
+        FilterParser::parse("TODAY").unwrap(),
+        Filter::Today,
+        "'TODAY' should be case-insensitive"
+    );
+    assert_eq!(
+        FilterParser::parse("Today").unwrap(),
+        Filter::Today,
+        "'Today' should be case-insensitive"
+    );
+    assert_eq!(
+        FilterParser::parse("ToDAy").unwrap(),
+        Filter::Today,
+        "'ToDAy' should be case-insensitive"
+    );
 }
 
 #[test]
 fn test_parse_today_with_whitespace() {
-    assert_eq!(FilterParser::parse("  today  ").unwrap(), Filter::Today, "leading/trailing spaces should be trimmed");
-    assert_eq!(FilterParser::parse("\ttoday\n").unwrap(), Filter::Today, "tabs and newlines should be trimmed");
+    assert_eq!(
+        FilterParser::parse("  today  ").unwrap(),
+        Filter::Today,
+        "leading/trailing spaces should be trimmed"
+    );
+    assert_eq!(
+        FilterParser::parse("\ttoday\n").unwrap(),
+        Filter::Today,
+        "tabs and newlines should be trimmed"
+    );
 }
 
 #[test]
 fn test_parse_tomorrow() {
     let filter = FilterParser::parse("tomorrow").unwrap();
-    assert_eq!(filter, Filter::Tomorrow, "parsing 'tomorrow' should produce Filter::Tomorrow");
+    assert_eq!(
+        filter,
+        Filter::Tomorrow,
+        "parsing 'tomorrow' should produce Filter::Tomorrow"
+    );
 }
 
 #[test]
 fn test_parse_tomorrow_case_insensitive() {
-    assert_eq!(FilterParser::parse("TOMORROW").unwrap(), Filter::Tomorrow, "'TOMORROW' should be case-insensitive");
-    assert_eq!(FilterParser::parse("Tomorrow").unwrap(), Filter::Tomorrow, "'Tomorrow' should be case-insensitive");
+    assert_eq!(
+        FilterParser::parse("TOMORROW").unwrap(),
+        Filter::Tomorrow,
+        "'TOMORROW' should be case-insensitive"
+    );
+    assert_eq!(
+        FilterParser::parse("Tomorrow").unwrap(),
+        Filter::Tomorrow,
+        "'Tomorrow' should be case-insensitive"
+    );
 }
 
 #[test]
 fn test_parse_overdue() {
     let filter = FilterParser::parse("overdue").unwrap();
-    assert_eq!(filter, Filter::Overdue, "parsing 'overdue' should produce Filter::Overdue");
+    assert_eq!(
+        filter,
+        Filter::Overdue,
+        "parsing 'overdue' should produce Filter::Overdue"
+    );
 }
 
 #[test]
 fn test_parse_overdue_case_insensitive() {
-    assert_eq!(FilterParser::parse("OVERDUE").unwrap(), Filter::Overdue, "'OVERDUE' should be case-insensitive");
-    assert_eq!(FilterParser::parse("Overdue").unwrap(), Filter::Overdue, "'Overdue' should be case-insensitive");
-    assert_eq!(FilterParser::parse("OverDue").unwrap(), Filter::Overdue, "'OverDue' should be case-insensitive");
+    assert_eq!(
+        FilterParser::parse("OVERDUE").unwrap(),
+        Filter::Overdue,
+        "'OVERDUE' should be case-insensitive"
+    );
+    assert_eq!(
+        FilterParser::parse("Overdue").unwrap(),
+        Filter::Overdue,
+        "'Overdue' should be case-insensitive"
+    );
+    assert_eq!(
+        FilterParser::parse("OverDue").unwrap(),
+        Filter::Overdue,
+        "'OverDue' should be case-insensitive"
+    );
 }
 
 #[test]
 fn test_parse_no_date() {
     let filter = FilterParser::parse("no date").unwrap();
-    assert_eq!(filter, Filter::NoDate, "parsing 'no date' should produce Filter::NoDate");
+    assert_eq!(
+        filter,
+        Filter::NoDate,
+        "parsing 'no date' should produce Filter::NoDate"
+    );
 }
 
 #[test]
 fn test_parse_no_date_case_insensitive() {
-    assert_eq!(FilterParser::parse("NO DATE").unwrap(), Filter::NoDate, "'NO DATE' should be case-insensitive");
-    assert_eq!(FilterParser::parse("No Date").unwrap(), Filter::NoDate, "'No Date' should be case-insensitive");
-    assert_eq!(FilterParser::parse("no DATE").unwrap(), Filter::NoDate, "'no DATE' should be case-insensitive");
+    assert_eq!(
+        FilterParser::parse("NO DATE").unwrap(),
+        Filter::NoDate,
+        "'NO DATE' should be case-insensitive"
+    );
+    assert_eq!(
+        FilterParser::parse("No Date").unwrap(),
+        Filter::NoDate,
+        "'No Date' should be case-insensitive"
+    );
+    assert_eq!(
+        FilterParser::parse("no DATE").unwrap(),
+        Filter::NoDate,
+        "'no DATE' should be case-insensitive"
+    );
 }
 
 #[test]
 fn test_parse_no_date_with_extra_whitespace() {
     // Multiple spaces between "no" and "date"
-    assert_eq!(FilterParser::parse("no   date").unwrap(), Filter::NoDate, "multiple spaces between 'no' and 'date' should be allowed");
-    assert_eq!(FilterParser::parse("no\tdate").unwrap(), Filter::NoDate, "tab between 'no' and 'date' should be allowed");
+    assert_eq!(
+        FilterParser::parse("no   date").unwrap(),
+        Filter::NoDate,
+        "multiple spaces between 'no' and 'date' should be allowed"
+    );
+    assert_eq!(
+        FilterParser::parse("no\tdate").unwrap(),
+        Filter::NoDate,
+        "tab between 'no' and 'date' should be allowed"
+    );
 }
 
 // ==================== No Labels Tests ====================
@@ -73,21 +149,45 @@ fn test_parse_no_date_with_extra_whitespace() {
 #[test]
 fn test_parse_no_labels() {
     let filter = FilterParser::parse("no labels").unwrap();
-    assert_eq!(filter, Filter::NoLabels, "parsing 'no labels' should produce Filter::NoLabels");
+    assert_eq!(
+        filter,
+        Filter::NoLabels,
+        "parsing 'no labels' should produce Filter::NoLabels"
+    );
 }
 
 #[test]
 fn test_parse_no_labels_case_insensitive() {
-    assert_eq!(FilterParser::parse("NO LABELS").unwrap(), Filter::NoLabels, "'NO LABELS' should be case-insensitive");
-    assert_eq!(FilterParser::parse("No Labels").unwrap(), Filter::NoLabels, "'No Labels' should be case-insensitive");
-    assert_eq!(FilterParser::parse("no LABELS").unwrap(), Filter::NoLabels, "'no LABELS' should be case-insensitive");
+    assert_eq!(
+        FilterParser::parse("NO LABELS").unwrap(),
+        Filter::NoLabels,
+        "'NO LABELS' should be case-insensitive"
+    );
+    assert_eq!(
+        FilterParser::parse("No Labels").unwrap(),
+        Filter::NoLabels,
+        "'No Labels' should be case-insensitive"
+    );
+    assert_eq!(
+        FilterParser::parse("no LABELS").unwrap(),
+        Filter::NoLabels,
+        "'no LABELS' should be case-insensitive"
+    );
 }
 
 #[test]
 fn test_parse_no_labels_with_extra_whitespace() {
     // Multiple spaces between "no" and "labels"
-    assert_eq!(FilterParser::parse("no   labels").unwrap(), Filter::NoLabels, "multiple spaces between 'no' and 'labels' should be allowed");
-    assert_eq!(FilterParser::parse("no\tlabels").unwrap(), Filter::NoLabels, "tab between 'no' and 'labels' should be allowed");
+    assert_eq!(
+        FilterParser::parse("no   labels").unwrap(),
+        Filter::NoLabels,
+        "multiple spaces between 'no' and 'labels' should be allowed"
+    );
+    assert_eq!(
+        FilterParser::parse("no\tlabels").unwrap(),
+        Filter::NoLabels,
+        "tab between 'no' and 'labels' should be allowed"
+    );
 }
 
 #[test]
@@ -145,19 +245,58 @@ fn test_parse_specific_date_case_insensitive() {
 
 #[test]
 fn test_parse_specific_date_all_months() {
-    assert_eq!(FilterParser::parse("Jan 1").unwrap(), Filter::SpecificDate { month: 1, day: 1 });
-    assert_eq!(FilterParser::parse("Feb 1").unwrap(), Filter::SpecificDate { month: 2, day: 1 });
-    assert_eq!(FilterParser::parse("Mar 1").unwrap(), Filter::SpecificDate { month: 3, day: 1 });
-    assert_eq!(FilterParser::parse("Apr 1").unwrap(), Filter::SpecificDate { month: 4, day: 1 });
-    assert_eq!(FilterParser::parse("May 1").unwrap(), Filter::SpecificDate { month: 5, day: 1 });
-    assert_eq!(FilterParser::parse("Jun 1").unwrap(), Filter::SpecificDate { month: 6, day: 1 });
-    assert_eq!(FilterParser::parse("Jul 1").unwrap(), Filter::SpecificDate { month: 7, day: 1 });
-    assert_eq!(FilterParser::parse("Aug 1").unwrap(), Filter::SpecificDate { month: 8, day: 1 });
-    assert_eq!(FilterParser::parse("Sep 1").unwrap(), Filter::SpecificDate { month: 9, day: 1 });
-    assert_eq!(FilterParser::parse("Sept 1").unwrap(), Filter::SpecificDate { month: 9, day: 1 });
-    assert_eq!(FilterParser::parse("Oct 1").unwrap(), Filter::SpecificDate { month: 10, day: 1 });
-    assert_eq!(FilterParser::parse("Nov 1").unwrap(), Filter::SpecificDate { month: 11, day: 1 });
-    assert_eq!(FilterParser::parse("Dec 1").unwrap(), Filter::SpecificDate { month: 12, day: 1 });
+    assert_eq!(
+        FilterParser::parse("Jan 1").unwrap(),
+        Filter::SpecificDate { month: 1, day: 1 }
+    );
+    assert_eq!(
+        FilterParser::parse("Feb 1").unwrap(),
+        Filter::SpecificDate { month: 2, day: 1 }
+    );
+    assert_eq!(
+        FilterParser::parse("Mar 1").unwrap(),
+        Filter::SpecificDate { month: 3, day: 1 }
+    );
+    assert_eq!(
+        FilterParser::parse("Apr 1").unwrap(),
+        Filter::SpecificDate { month: 4, day: 1 }
+    );
+    assert_eq!(
+        FilterParser::parse("May 1").unwrap(),
+        Filter::SpecificDate { month: 5, day: 1 }
+    );
+    assert_eq!(
+        FilterParser::parse("Jun 1").unwrap(),
+        Filter::SpecificDate { month: 6, day: 1 }
+    );
+    assert_eq!(
+        FilterParser::parse("Jul 1").unwrap(),
+        Filter::SpecificDate { month: 7, day: 1 }
+    );
+    assert_eq!(
+        FilterParser::parse("Aug 1").unwrap(),
+        Filter::SpecificDate { month: 8, day: 1 }
+    );
+    assert_eq!(
+        FilterParser::parse("Sep 1").unwrap(),
+        Filter::SpecificDate { month: 9, day: 1 }
+    );
+    assert_eq!(
+        FilterParser::parse("Sept 1").unwrap(),
+        Filter::SpecificDate { month: 9, day: 1 }
+    );
+    assert_eq!(
+        FilterParser::parse("Oct 1").unwrap(),
+        Filter::SpecificDate { month: 10, day: 1 }
+    );
+    assert_eq!(
+        FilterParser::parse("Nov 1").unwrap(),
+        Filter::SpecificDate { month: 11, day: 1 }
+    );
+    assert_eq!(
+        FilterParser::parse("Dec 1").unwrap(),
+        Filter::SpecificDate { month: 12, day: 1 }
+    );
 }
 
 #[test]
@@ -165,7 +304,10 @@ fn test_parse_specific_date_with_operators() {
     let filter = FilterParser::parse("Jan 15 & p1").unwrap();
     assert_eq!(
         filter,
-        Filter::and(Filter::SpecificDate { month: 1, day: 15 }, Filter::Priority1)
+        Filter::and(
+            Filter::SpecificDate { month: 1, day: 15 },
+            Filter::Priority1
+        )
     );
 }
 
@@ -189,33 +331,65 @@ fn test_parse_specific_date_in_complex_expression() {
 #[test]
 fn test_parse_priority_1() {
     let filter = FilterParser::parse("p1").unwrap();
-    assert_eq!(filter, Filter::Priority1, "parsing 'p1' should produce Filter::Priority1");
+    assert_eq!(
+        filter,
+        Filter::Priority1,
+        "parsing 'p1' should produce Filter::Priority1"
+    );
 }
 
 #[test]
 fn test_parse_priority_2() {
     let filter = FilterParser::parse("p2").unwrap();
-    assert_eq!(filter, Filter::Priority2, "parsing 'p2' should produce Filter::Priority2");
+    assert_eq!(
+        filter,
+        Filter::Priority2,
+        "parsing 'p2' should produce Filter::Priority2"
+    );
 }
 
 #[test]
 fn test_parse_priority_3() {
     let filter = FilterParser::parse("p3").unwrap();
-    assert_eq!(filter, Filter::Priority3, "parsing 'p3' should produce Filter::Priority3");
+    assert_eq!(
+        filter,
+        Filter::Priority3,
+        "parsing 'p3' should produce Filter::Priority3"
+    );
 }
 
 #[test]
 fn test_parse_priority_4() {
     let filter = FilterParser::parse("p4").unwrap();
-    assert_eq!(filter, Filter::Priority4, "parsing 'p4' should produce Filter::Priority4");
+    assert_eq!(
+        filter,
+        Filter::Priority4,
+        "parsing 'p4' should produce Filter::Priority4"
+    );
 }
 
 #[test]
 fn test_parse_priority_case_insensitive() {
-    assert_eq!(FilterParser::parse("P1").unwrap(), Filter::Priority1, "'P1' should be case-insensitive");
-    assert_eq!(FilterParser::parse("P2").unwrap(), Filter::Priority2, "'P2' should be case-insensitive");
-    assert_eq!(FilterParser::parse("P3").unwrap(), Filter::Priority3, "'P3' should be case-insensitive");
-    assert_eq!(FilterParser::parse("P4").unwrap(), Filter::Priority4, "'P4' should be case-insensitive");
+    assert_eq!(
+        FilterParser::parse("P1").unwrap(),
+        Filter::Priority1,
+        "'P1' should be case-insensitive"
+    );
+    assert_eq!(
+        FilterParser::parse("P2").unwrap(),
+        Filter::Priority2,
+        "'P2' should be case-insensitive"
+    );
+    assert_eq!(
+        FilterParser::parse("P3").unwrap(),
+        Filter::Priority3,
+        "'P3' should be case-insensitive"
+    );
+    assert_eq!(
+        FilterParser::parse("P4").unwrap(),
+        Filter::Priority4,
+        "'P4' should be case-insensitive"
+    );
 }
 
 // ==================== Label Tests ====================
@@ -274,25 +448,41 @@ fn test_parse_section() {
 #[test]
 fn test_parse_and() {
     let filter = FilterParser::parse("today & p1").unwrap();
-    assert_eq!(filter, Filter::and(Filter::Today, Filter::Priority1), "'&' operator should combine filters with AND");
+    assert_eq!(
+        filter,
+        Filter::and(Filter::Today, Filter::Priority1),
+        "'&' operator should combine filters with AND"
+    );
 }
 
 #[test]
 fn test_parse_or() {
     let filter = FilterParser::parse("today | overdue").unwrap();
-    assert_eq!(filter, Filter::or(Filter::Today, Filter::Overdue), "'|' operator should combine filters with OR");
+    assert_eq!(
+        filter,
+        Filter::or(Filter::Today, Filter::Overdue),
+        "'|' operator should combine filters with OR"
+    );
 }
 
 #[test]
 fn test_parse_not() {
     let filter = FilterParser::parse("!no date").unwrap();
-    assert_eq!(filter, Filter::negate(Filter::NoDate), "'!' operator should negate the filter");
+    assert_eq!(
+        filter,
+        Filter::negate(Filter::NoDate),
+        "'!' operator should negate the filter"
+    );
 }
 
 #[test]
 fn test_parse_double_not() {
     let filter = FilterParser::parse("!!today").unwrap();
-    assert_eq!(filter, Filter::negate(Filter::negate(Filter::Today)), "double negation should create nested Not filters");
+    assert_eq!(
+        filter,
+        Filter::negate(Filter::negate(Filter::Today)),
+        "double negation should create nested Not filters"
+    );
 }
 
 // ==================== Operator Precedence Tests ====================
@@ -305,7 +495,10 @@ fn test_and_has_higher_precedence_than_or() {
         Filter::Today,
         Filter::and(Filter::Tomorrow, Filter::Priority1),
     );
-    assert_eq!(filter, expected, "AND should bind tighter than OR: 'today | tomorrow & p1' = 'today | (tomorrow & p1)'");
+    assert_eq!(
+        filter, expected,
+        "AND should bind tighter than OR: 'today | tomorrow & p1' = 'today | (tomorrow & p1)'"
+    );
 }
 
 #[test]
@@ -313,7 +506,10 @@ fn test_not_has_highest_precedence() {
     // "!today & p1" should be parsed as "(!today) & p1"
     let filter = FilterParser::parse("!today & p1").unwrap();
     let expected = Filter::and(Filter::negate(Filter::Today), Filter::Priority1);
-    assert_eq!(filter, expected, "NOT should bind tightest: '!today & p1' = '(!today) & p1'");
+    assert_eq!(
+        filter, expected,
+        "NOT should bind tightest: '!today & p1' = '(!today) & p1'"
+    );
 }
 
 #[test]
@@ -324,7 +520,10 @@ fn test_parentheses_override_precedence() {
         Filter::or(Filter::Today, Filter::Tomorrow),
         Filter::Priority1,
     );
-    assert_eq!(filter, expected, "parentheses should override default precedence");
+    assert_eq!(
+        filter, expected,
+        "parentheses should override default precedence"
+    );
 }
 
 // ==================== Complex Expression Tests ====================
@@ -340,7 +539,10 @@ fn test_parse_complex_expression() {
         ),
         Filter::Label("urgent".to_string()),
     );
-    assert_eq!(filter, expected, "complex expression with multiple operators should parse correctly");
+    assert_eq!(
+        filter, expected,
+        "complex expression with multiple operators should parse correctly"
+    );
 }
 
 #[test]
@@ -354,7 +556,10 @@ fn test_parse_nested_parentheses() {
         ),
         Filter::Overdue,
     );
-    assert_eq!(filter, expected, "nested parentheses should parse correctly");
+    assert_eq!(
+        filter, expected,
+        "nested parentheses should parse correctly"
+    );
 }
 
 #[test]
@@ -368,18 +573,21 @@ fn test_parse_multiple_and() {
         ),
         Filter::Project("Work".to_string()),
     );
-    assert_eq!(filter, expected, "chained AND operators should be left-associative");
+    assert_eq!(
+        filter, expected,
+        "chained AND operators should be left-associative"
+    );
 }
 
 #[test]
 fn test_parse_multiple_or() {
     // "today | tomorrow | overdue"
     let filter = FilterParser::parse("today | tomorrow | overdue").unwrap();
-    let expected = Filter::or(
-        Filter::or(Filter::Today, Filter::Tomorrow),
-        Filter::Overdue,
+    let expected = Filter::or(Filter::or(Filter::Today, Filter::Tomorrow), Filter::Overdue);
+    assert_eq!(
+        filter, expected,
+        "chained OR operators should be left-associative"
     );
-    assert_eq!(filter, expected, "chained OR operators should be left-associative");
 }
 
 // ==================== Error Tests ====================
@@ -469,7 +677,10 @@ fn test_error_nested_unclosed_parenthesis() {
     // The ( at position 8 is unclosed
     match result {
         Err(FilterError::UnclosedParenthesis { position }) => {
-            assert_eq!(position, 8, "unclosed parenthesis at position 8 (after 'today & ')");
+            assert_eq!(
+                position, 8,
+                "unclosed parenthesis at position 8 (after 'today & ')"
+            );
         }
         other => panic!("Expected UnclosedParenthesis error, got {:?}", other),
     }
@@ -499,7 +710,11 @@ fn test_filter_and_helper() {
     match filter {
         Filter::And(left, right) => {
             assert_eq!(*left, Filter::Today, "left operand of AND should be Today");
-            assert_eq!(*right, Filter::Priority1, "right operand of AND should be Priority1");
+            assert_eq!(
+                *right,
+                Filter::Priority1,
+                "right operand of AND should be Priority1"
+            );
         }
         _ => panic!("Expected And filter"),
     }
@@ -511,7 +726,11 @@ fn test_filter_or_helper() {
     match filter {
         Filter::Or(left, right) => {
             assert_eq!(*left, Filter::Today, "left operand of OR should be Today");
-            assert_eq!(*right, Filter::Overdue, "right operand of OR should be Overdue");
+            assert_eq!(
+                *right,
+                Filter::Overdue,
+                "right operand of OR should be Overdue"
+            );
         }
         _ => panic!("Expected Or filter"),
     }
@@ -522,7 +741,11 @@ fn test_filter_not_helper() {
     let filter = Filter::negate(Filter::NoDate);
     match filter {
         Filter::Not(inner) => {
-            assert_eq!(*inner, Filter::NoDate, "inner filter of NOT should be NoDate");
+            assert_eq!(
+                *inner,
+                Filter::NoDate,
+                "inner filter of NOT should be NoDate"
+            );
         }
         _ => panic!("Expected Not filter"),
     }
@@ -541,7 +764,10 @@ fn test_filter_clone() {
 fn test_filter_debug() {
     let filter = Filter::Today;
     let debug_str = format!("{:?}", filter);
-    assert!(debug_str.contains("Today"), "Debug output should contain 'Today'");
+    assert!(
+        debug_str.contains("Today"),
+        "Debug output should contain 'Today'"
+    );
 }
 
 #[test]
@@ -569,9 +795,16 @@ fn test_error_unknown_character() {
     let result = FilterParser::parse("today $ p1");
     match result {
         Err(FilterError::UnknownCharacters { errors }) => {
-            assert_eq!(errors.len(), 1, "should report exactly one unknown character");
+            assert_eq!(
+                errors.len(),
+                1,
+                "should report exactly one unknown character"
+            );
             assert_eq!(errors[0].character, '$', "unknown character should be '$'");
-            assert_eq!(errors[0].position, 6, "position should be 6 (after 'today ')");
+            assert_eq!(
+                errors[0].position, 6,
+                "position should be 6 (after 'today ')"
+            );
         }
         other => panic!("Expected UnknownCharacters error, got {:?}", other),
     }
@@ -583,10 +816,19 @@ fn test_error_multiple_unknown_characters() {
     match result {
         Err(FilterError::UnknownCharacters { errors }) => {
             assert_eq!(errors.len(), 2, "should report two unknown characters");
-            assert_eq!(errors[0].character, '$', "first unknown character should be '$'");
+            assert_eq!(
+                errors[0].character, '$',
+                "first unknown character should be '$'"
+            );
             assert_eq!(errors[0].position, 0, "first error position should be 0");
-            assert_eq!(errors[1].character, '%', "second unknown character should be '%'");
-            assert_eq!(errors[1].position, 7, "second error position should be 7 (after '$today ')");
+            assert_eq!(
+                errors[1].character, '%',
+                "second unknown character should be '%'"
+            );
+            assert_eq!(
+                errors[1].position, 7,
+                "second error position should be 7 (after '$today ')"
+            );
         }
         other => panic!("Expected UnknownCharacters error, got {:?}", other),
     }
@@ -602,8 +844,14 @@ fn test_error_unknown_character_display() {
         }],
     };
     let msg = format!("{}", err);
-    assert!(msg.contains("'$'"), "error message should contain the character");
-    assert!(msg.contains("position 6"), "error message should contain the position");
+    assert!(
+        msg.contains("'$'"),
+        "error message should contain the character"
+    );
+    assert!(
+        msg.contains("position 6"),
+        "error message should contain the position"
+    );
 }
 
 #[test]
@@ -612,9 +860,19 @@ fn test_error_unknown_character_unicode() {
     let result = FilterParser::parse("today 🎉 p1");
     match result {
         Err(FilterError::UnknownCharacters { errors }) => {
-            assert_eq!(errors.len(), 1, "should report exactly one unknown character");
-            assert_eq!(errors[0].character, '🎉', "unknown character should be emoji");
-            assert_eq!(errors[0].position, 6, "position should be 6 (byte offset after 'today ')");
+            assert_eq!(
+                errors.len(),
+                1,
+                "should report exactly one unknown character"
+            );
+            assert_eq!(
+                errors[0].character, '🎉',
+                "unknown character should be emoji"
+            );
+            assert_eq!(
+                errors[0].position, 6,
+                "position should be 6 (byte offset after 'today ')"
+            );
         }
         other => panic!("Expected UnknownCharacters error, got {:?}", other),
     }

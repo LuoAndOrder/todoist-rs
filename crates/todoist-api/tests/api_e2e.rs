@@ -147,7 +147,10 @@ async fn test_sync_full_sync() {
     match response {
         Ok(sync_response) => {
             assert!(sync_response.full_sync, "Should be a full sync");
-            assert!(!sync_response.sync_token.is_empty(), "Should have a sync token");
+            assert!(
+                !sync_response.sync_token.is_empty(),
+                "Should have a sync token"
+            );
             println!(
                 "Full sync: {} projects, {} items, {} labels",
                 sync_response.projects.len(),
@@ -235,7 +238,10 @@ async fn test_sync_create_and_complete_item() {
         .real_id(&temp_id)
         .expect("Should have temp_id mapping")
         .clone();
-    println!("Created item with temp_id {} -> real_id {}", temp_id, real_id);
+    println!(
+        "Created item with temp_id {} -> real_id {}",
+        temp_id, real_id
+    );
 
     // Complete the item
     let close_command = SyncCommand::new("item_close", serde_json::json!({"id": real_id}));
@@ -274,8 +280,7 @@ async fn test_sync_specific_resource_types() {
     let client = TodoistClient::new(token);
 
     // Request only projects
-    let request =
-        SyncRequest::full_sync().with_resource_types(vec!["projects".to_string()]);
+    let request = SyncRequest::full_sync().with_resource_types(vec!["projects".to_string()]);
     let response = client.sync(request).await.unwrap();
 
     // Should have projects
@@ -355,11 +360,11 @@ async fn test_quick_add_with_nlp() {
 
             // The content should have "tomorrow" and "p2" parsed out
             // Priority should be 3 (p2 in UI = priority 3 in API)
-            assert_eq!(
-                task.priority, 3,
-                "Priority p2 should map to API priority 3"
+            assert_eq!(task.priority, 3, "Priority p2 should map to API priority 3");
+            assert!(
+                task.has_due_date(),
+                "Should have due date parsed from 'tomorrow'"
             );
-            assert!(task.has_due_date(), "Should have due date parsed from 'tomorrow'");
 
             if let Some(due) = &task.due {
                 println!("Due date: {}", due.date);

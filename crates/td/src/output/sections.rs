@@ -88,9 +88,7 @@ pub fn format_sections_table(sections: &[&Section], cache: &Cache, use_colors: b
 
         let name = if section.is_archived {
             if use_colors {
-                format!("{} [archived]", section.name)
-                    .dimmed()
-                    .to_string()
+                format!("{} [archived]", section.name).dimmed().to_string()
             } else {
                 format!("{} [archived]", section.name)
             }

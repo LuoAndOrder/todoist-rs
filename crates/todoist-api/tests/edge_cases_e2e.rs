@@ -49,9 +49,7 @@ async fn test_unicode_in_task_content() {
         .expect("Should create task with unicode content");
 
     // Verify from cache
-    let task = ctx
-        .find_item(&task_id)
-        .expect("Task should be in cache");
+    let task = ctx.find_item(&task_id).expect("Task should be in cache");
     assert_eq!(
         task.content, unicode_content,
         "Unicode content should be preserved exactly"
@@ -86,10 +84,7 @@ async fn test_unicode_in_project_name() {
         return;
     };
 
-    let unicode_name = format!(
-        "E2E_Edge_工作_Projects_🏢_{}",
-        uuid::Uuid::new_v4()
-    );
+    let unicode_name = format!("E2E_Edge_工作_Projects_🏢_{}", uuid::Uuid::new_v4());
 
     let project_id = ctx
         .create_project(&unicode_name)
@@ -143,9 +138,7 @@ async fn test_unicode_in_label_name() {
         .expect("Should create label with unicode name");
 
     // Verify label exists
-    let label = ctx
-        .find_label(&label_id)
-        .expect("Label should be in cache");
+    let label = ctx.find_label(&label_id).expect("Label should be in cache");
     assert_eq!(
         label.name, unicode_label,
         "Unicode label name should be preserved"
@@ -163,9 +156,7 @@ async fn test_unicode_in_label_name() {
         .expect("Should create task with unicode label");
 
     // Verify task has the label
-    let task = ctx
-        .find_item(&task_id)
-        .expect("Task should be in cache");
+    let task = ctx.find_item(&task_id).expect("Task should be in cache");
     assert!(
         task.labels.iter().any(|l| l == &unicode_label),
         "Task should have unicode label '{}', got: {:?}",
@@ -203,9 +194,7 @@ async fn test_special_characters_in_content() {
         .expect("Should create task with special characters");
 
     // Verify from cache
-    let task = ctx
-        .find_item(&task_id)
-        .expect("Task should be in cache");
+    let task = ctx.find_item(&task_id).expect("Task should be in cache");
     assert_eq!(
         task.content, special_content,
         "Special characters should be preserved"
@@ -275,17 +264,19 @@ async fn test_emoji_in_all_fields() {
     let project = ctx
         .find_project(&project_id)
         .expect("Project should be in cache");
-    assert_eq!(project.name, project_name, "Project emoji should be preserved");
+    assert_eq!(
+        project.name, project_name,
+        "Project emoji should be preserved"
+    );
 
-    let label = ctx
-        .find_label(&label_id)
-        .expect("Label should be in cache");
+    let label = ctx.find_label(&label_id).expect("Label should be in cache");
     assert_eq!(label.name, label_name, "Label emoji should be preserved");
 
-    let task = ctx
-        .find_item(&task_id)
-        .expect("Task should be in cache");
-    assert_eq!(task.content, task_content, "Task content emoji should be preserved");
+    let task = ctx.find_item(&task_id).expect("Task should be in cache");
+    assert_eq!(
+        task.content, task_content,
+        "Task content emoji should be preserved"
+    );
     assert_eq!(
         task.description.as_str(),
         task_description,
@@ -299,8 +290,13 @@ async fn test_emoji_in_all_fields() {
     // Refresh to verify from API
     ctx.refresh().await.expect("Refresh should work");
 
-    let task = ctx.find_item(&task_id).expect("Task should exist after refresh");
-    assert_eq!(task.content, task_content, "Task content emoji preserved after sync");
+    let task = ctx
+        .find_item(&task_id)
+        .expect("Task should exist after refresh");
+    assert_eq!(
+        task.content, task_content,
+        "Task content emoji preserved after sync"
+    );
     assert_eq!(
         task.description.as_str(),
         task_description,
@@ -333,7 +329,9 @@ async fn test_very_long_task_content() {
 
     // Create content with 2000+ characters
     let prefix = "E2E Edge - Long content: ";
-    let body: String = (0..2000).map(|i| char::from(b'a' + (i % 26) as u8)).collect();
+    let body: String = (0..2000)
+        .map(|i| char::from(b'a' + (i % 26) as u8))
+        .collect();
     let long_content = format!("{}{}", prefix, body);
 
     let inbox_id = ctx.inbox_id().to_string();
@@ -344,9 +342,7 @@ async fn test_very_long_task_content() {
         .expect("Should create task with long content");
 
     // Verify content
-    let task = ctx
-        .find_item(&task_id)
-        .expect("Task should be in cache");
+    let task = ctx.find_item(&task_id).expect("Task should be in cache");
 
     // Document behavior - API may truncate or preserve
     eprintln!(
@@ -382,7 +378,9 @@ async fn test_very_long_description() {
 
     // Create description with 5000+ characters
     let prefix = "Long description: ";
-    let body: String = (0..5000).map(|i| char::from(b'A' + (i % 26) as u8)).collect();
+    let body: String = (0..5000)
+        .map(|i| char::from(b'A' + (i % 26) as u8))
+        .collect();
     let long_description = format!("{}{}", prefix, body);
 
     let inbox_id = ctx.inbox_id().to_string();
@@ -397,9 +395,7 @@ async fn test_very_long_description() {
         .expect("Should create task with long description");
 
     // Verify description
-    let task = ctx
-        .find_item(&task_id)
-        .expect("Task should be in cache");
+    let task = ctx.find_item(&task_id).expect("Task should be in cache");
 
     let desc = &task.description;
     if !desc.is_empty() {
@@ -450,9 +446,7 @@ async fn test_empty_project() {
     ctx.refresh().await.expect("Refresh should work");
 
     // Verify project exists
-    let project = ctx
-        .find_project(&project_id)
-        .expect("Project should exist");
+    let project = ctx.find_project(&project_id).expect("Project should exist");
     assert_eq!(project.name, project_name);
 
     // Find all tasks in this project (should be empty)
@@ -564,7 +558,9 @@ async fn test_deeply_nested_subtasks() {
     // Refresh and verify from API
     ctx.refresh().await.expect("Refresh should work");
 
-    let task_e = ctx.find_item(&task_e_id).expect("Task E should exist after refresh");
+    let task_e = ctx
+        .find_item(&task_e_id)
+        .expect("Task E should exist after refresh");
     assert_eq!(
         task_e.parent_id.as_deref(),
         Some(task_d_id.as_str()),
@@ -676,32 +672,33 @@ async fn test_deeply_nested_projects() {
     ctx.refresh().await.expect("Refresh should work");
 
     // Verify all 5 projects exist
-    let project_a = ctx.find_project(&project_a_id).expect("Project A should exist");
-    let project_b = ctx.find_project(&project_b_id).expect("Project B should exist");
-    let project_c = ctx.find_project(&project_c_id).expect("Project C should exist");
-    let project_d = ctx.find_project(&project_d_id).expect("Project D should exist");
-    let project_e = ctx.find_project(&project_e_id).expect("Project E should exist");
+    let project_a = ctx
+        .find_project(&project_a_id)
+        .expect("Project A should exist");
+    let project_b = ctx
+        .find_project(&project_b_id)
+        .expect("Project B should exist");
+    let project_c = ctx
+        .find_project(&project_c_id)
+        .expect("Project C should exist");
+    let project_d = ctx
+        .find_project(&project_d_id)
+        .expect("Project D should exist");
+    let project_e = ctx
+        .find_project(&project_e_id)
+        .expect("Project E should exist");
 
     // Verify A is root
-    assert!(project_a.parent_id.is_none(), "A should be root (no parent)");
+    assert!(
+        project_a.parent_id.is_none(),
+        "A should be root (no parent)"
+    );
 
     // Verify hierarchy exists (each non-root project has a parent)
-    assert!(
-        project_b.parent_id.is_some(),
-        "B should have a parent"
-    );
-    assert!(
-        project_c.parent_id.is_some(),
-        "C should have a parent"
-    );
-    assert!(
-        project_d.parent_id.is_some(),
-        "D should have a parent"
-    );
-    assert!(
-        project_e.parent_id.is_some(),
-        "E should have a parent"
-    );
+    assert!(project_b.parent_id.is_some(), "B should have a parent");
+    assert!(project_c.parent_id.is_some(), "C should have a parent");
+    assert!(project_d.parent_id.is_some(), "D should have a parent");
+    assert!(project_e.parent_id.is_some(), "E should have a parent");
 
     // Document the hierarchy for debugging
     eprintln!(
@@ -714,9 +711,10 @@ async fn test_deeply_nested_projects() {
     );
 
     // Verify the chain by checking each project's parent exists in our set
-    let project_ids: std::collections::HashSet<_> = [
-        &project_a_id, &project_b_id, &project_c_id, &project_d_id
-    ].into_iter().collect();
+    let project_ids: std::collections::HashSet<_> =
+        [&project_a_id, &project_b_id, &project_c_id, &project_d_id]
+            .into_iter()
+            .collect();
 
     // B, C, D, E should all have parents that are in our created set
     if let Some(ref parent) = project_b.parent_id {
@@ -748,7 +746,13 @@ async fn test_deeply_nested_projects() {
     // Cleanup - delete from deepest to root
     ctx.batch_delete(
         &[],
-        &[&project_e_id, &project_d_id, &project_c_id, &project_b_id, &project_a_id],
+        &[
+            &project_e_id,
+            &project_d_id,
+            &project_c_id,
+            &project_b_id,
+            &project_a_id,
+        ],
         &[],
         &[],
     )
@@ -799,9 +803,7 @@ async fn test_task_with_many_labels() {
         .expect("Should create task with many labels");
 
     // Verify all labels attached
-    let task = ctx
-        .find_item(&task_id)
-        .expect("Task should be in cache");
+    let task = ctx.find_item(&task_id).expect("Task should be in cache");
 
     eprintln!(
         "Many labels test: sent {} labels, task has {} labels",
@@ -937,10 +939,7 @@ async fn test_rapid_create_delete() {
             }),
         ),
         // Delete references the temp_id which will be resolved by the API
-        SyncCommand::new(
-            "item_delete",
-            serde_json::json!({"id": temp_id}),
-        ),
+        SyncCommand::new("item_delete", serde_json::json!({"id": temp_id})),
     ];
 
     let response = ctx.execute(commands).await.expect("Batch should succeed");
@@ -1020,9 +1019,7 @@ async fn test_rapid_update_cycle() {
     }
 
     // Verify final state
-    let task = ctx
-        .find_item(&task_id)
-        .expect("Task should be in cache");
+    let task = ctx.find_item(&task_id).expect("Task should be in cache");
     assert_eq!(
         task.content,
         format!("E2E Edge - Rapid update {}", update_count),

@@ -220,11 +220,8 @@ impl WorkflowTestContext {
     /// Create a project
     async fn create_project(&mut self, name: &str) -> Result<String, Box<dyn std::error::Error>> {
         let temp_id = uuid::Uuid::new_v4().to_string();
-        let command = SyncCommand::with_temp_id(
-            "project_add",
-            &temp_id,
-            serde_json::json!({ "name": name }),
-        );
+        let command =
+            SyncCommand::with_temp_id("project_add", &temp_id, serde_json::json!({ "name": name }));
         let response = self.execute(vec![command]).await?;
         response
             .real_id(&temp_id)
@@ -254,11 +251,8 @@ impl WorkflowTestContext {
     /// Create a label
     async fn create_label(&mut self, name: &str) -> Result<String, Box<dyn std::error::Error>> {
         let temp_id = uuid::Uuid::new_v4().to_string();
-        let command = SyncCommand::with_temp_id(
-            "label_add",
-            &temp_id,
-            serde_json::json!({ "name": name }),
-        );
+        let command =
+            SyncCommand::with_temp_id("label_add", &temp_id, serde_json::json!({ "name": name }));
         let response = self.execute(vec![command]).await?;
         response
             .real_id(&temp_id)
@@ -666,22 +660,31 @@ async fn test_workflow_task_triage() {
     // Verify urgent tasks have urgent label
     let urgent_task = ctx.find_item(&task_ids[0]).expect("Task should exist");
     assert!(
-        urgent_task.labels.contains(&"e2e_workflow_urgent".to_string()),
+        urgent_task
+            .labels
+            .contains(&"e2e_workflow_urgent".to_string()),
         "Urgent task should have urgent label"
     );
 
     // Verify feature task has feature label
     let feature_task = ctx.find_item(&task_ids[1]).expect("Task should exist");
     assert!(
-        feature_task.labels.contains(&"e2e_workflow_feature".to_string()),
+        feature_task
+            .labels
+            .contains(&"e2e_workflow_feature".to_string()),
         "Feature task should have feature label"
     );
 
     // Step 6: Cleanup
     let task_refs: Vec<&str> = task_ids.iter().map(|s| s.as_str()).collect();
-    ctx.batch_delete(&task_refs, &[&project_id], &[], &[&label_urgent, &label_feature])
-        .await
-        .expect("cleanup");
+    ctx.batch_delete(
+        &task_refs,
+        &[&project_id],
+        &[],
+        &[&label_urgent, &label_feature],
+    )
+    .await
+    .expect("cleanup");
 
     println!("Task triage workflow completed successfully");
 }
@@ -813,10 +816,7 @@ async fn test_workflow_search_and_update() {
         p4_task_ids.push(task_id);
     }
 
-    println!(
-        "Created tasks: 1 p1, 1 p2, {} p4",
-        p4_task_ids.len()
-    );
+    println!("Created tasks: 1 p1, 1 p2, {} p4", p4_task_ids.len());
 
     // Step 2: Filter for p4 tasks (our created ones)
     let p4_items: Vec<_> = ctx
@@ -907,11 +907,12 @@ async fn test_workflow_project_migration() {
 
     // Step 3: Move all tasks from A to B
     for task_id in &task_ids {
-        ctx.move_task(task_id, &project_b)
-            .await
-            .expect("move task");
+        ctx.move_task(task_id, &project_b).await.expect("move task");
     }
-    println!("Moved all {} tasks from Project A to Project B", task_ids.len());
+    println!(
+        "Moved all {} tasks from Project A to Project B",
+        task_ids.len()
+    );
 
     // Step 4: Verify A empty, B has all tasks
     let tasks_in_a_after = ctx.items_in_project(&project_a);
@@ -990,7 +991,10 @@ async fn test_workflow_recurring_task_cycle() {
 
         // Recurring tasks stay unchecked after item_close, with advanced due date
         if let Some(task) = task_after_first {
-            assert!(!task.checked, "Recurring task should be unchecked after completion");
+            assert!(
+                !task.checked,
+                "Recurring task should be unchecked after completion"
+            );
             let new_due = task.due.as_ref().expect("Task should still have due date");
             assert!(new_due.is_recurring, "Task should still be recurring");
             assert_ne!(
@@ -1000,14 +1004,18 @@ async fn test_workflow_recurring_task_cycle() {
             println!("Due date advanced to: {}", new_due.date);
             Some(new_due.date.clone())
         } else {
-            println!("Note: Recurring task behavior may vary - task completed differently than expected");
+            println!(
+                "Note: Recurring task behavior may vary - task completed differently than expected"
+            );
             None
         }
     };
 
     // Step 4: Complete again (only if first completion succeeded)
     if let Some(second_due) = second_due_date {
-        ctx.complete_task(&task_id).await.expect("complete task again");
+        ctx.complete_task(&task_id)
+            .await
+            .expect("complete task again");
         println!("Completed recurring task second time");
 
         // Step 5: Verify pattern continues
@@ -1102,10 +1110,7 @@ async fn test_workflow_label_cleanup() {
     // After label rename, tasks still reference labels by name from cache
     // We need to verify via the label lookup
     let label_by_new_name = ctx.find_label_by_name(&new_label_name);
-    assert!(
-        label_by_new_name.is_some(),
-        "Should find label by new name"
-    );
+    assert!(label_by_new_name.is_some(), "Should find label by new name");
     assert!(
         ctx.find_label_by_name(&old_label_name).is_none()
             || ctx

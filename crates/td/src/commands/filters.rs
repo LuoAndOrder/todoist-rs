@@ -9,9 +9,8 @@ use todoist_cache_rs::{Cache, CacheStore, SyncManager};
 
 use super::{CommandContext, CommandError, Result};
 use crate::output::{
-    format_created_filter, format_deleted_filter, format_edited_filter,
-    format_filter_details_json, format_filter_details_table, format_filters_json,
-    format_filters_table,
+    format_created_filter, format_deleted_filter, format_edited_filter, format_filter_details_json,
+    format_filter_details_table, format_filters_json, format_filters_table,
 };
 
 /// Options for the filters list command.
@@ -68,11 +67,7 @@ pub async fn execute(ctx: &CommandContext, opts: &FiltersListOptions, token: &st
 
 /// Filters filters (excludes deleted).
 fn filter_filters(cache: &Cache) -> Vec<&Filter> {
-    let mut filters: Vec<&Filter> = cache
-        .filters
-        .iter()
-        .filter(|f| !f.is_deleted)
-        .collect();
+    let mut filters: Vec<&Filter> = cache.filters.iter().filter(|f| !f.is_deleted).collect();
 
     // Sort by item_order for consistent display
     filters.sort_by_key(|f| f.item_order);
@@ -132,7 +127,11 @@ pub struct FilterAddResult {
 /// # Errors
 ///
 /// Returns an error if the API returns an error.
-pub async fn execute_add(ctx: &CommandContext, opts: &FiltersAddOptions, token: &str) -> Result<()> {
+pub async fn execute_add(
+    ctx: &CommandContext,
+    opts: &FiltersAddOptions,
+    token: &str,
+) -> Result<()> {
     // Validate color if provided
     if let Some(ref color) = opts.color {
         if !is_valid_color(color) {
@@ -214,7 +213,11 @@ pub async fn execute_add(ctx: &CommandContext, opts: &FiltersAddOptions, token: 
                 println!("  Favorite: yes");
             }
         } else {
-            println!("Created: {} ({})", result.name, &result.id[..6.min(result.id.len())]);
+            println!(
+                "Created: {} ({})",
+                result.name,
+                &result.id[..6.min(result.id.len())]
+            );
         }
     }
 
@@ -223,10 +226,26 @@ pub async fn execute_add(ctx: &CommandContext, opts: &FiltersAddOptions, token: 
 
 /// Valid Todoist color names.
 const VALID_COLORS: &[&str] = &[
-    "berry_red", "red", "orange", "yellow", "olive_green", "lime_green",
-    "green", "mint_green", "teal", "sky_blue", "light_blue", "blue",
-    "grape", "violet", "lavender", "magenta", "salmon", "charcoal",
-    "grey", "taupe",
+    "berry_red",
+    "red",
+    "orange",
+    "yellow",
+    "olive_green",
+    "lime_green",
+    "green",
+    "mint_green",
+    "teal",
+    "sky_blue",
+    "light_blue",
+    "blue",
+    "grape",
+    "violet",
+    "lavender",
+    "magenta",
+    "salmon",
+    "charcoal",
+    "grey",
+    "taupe",
 ];
 
 /// Checks if a color name is valid.
@@ -263,7 +282,11 @@ pub struct FilterShowResult {
 /// # Errors
 ///
 /// Returns an error if syncing fails or filter lookup fails.
-pub async fn execute_show(ctx: &CommandContext, opts: &FiltersShowOptions, token: &str) -> Result<()> {
+pub async fn execute_show(
+    ctx: &CommandContext,
+    opts: &FiltersShowOptions,
+    token: &str,
+) -> Result<()> {
     // Initialize sync manager to resolve filter ID
     let client = TodoistClient::new(token);
     let store = CacheStore::new()?;
@@ -339,11 +362,19 @@ pub struct FilterEditResult {
 /// # Errors
 ///
 /// Returns an error if filter lookup fails or the API returns an error.
-pub async fn execute_edit(ctx: &CommandContext, opts: &FiltersEditOptions, token: &str) -> Result<()> {
+pub async fn execute_edit(
+    ctx: &CommandContext,
+    opts: &FiltersEditOptions,
+    token: &str,
+) -> Result<()> {
     // Check if any options were provided
-    if opts.name.is_none() && opts.query.is_none() && opts.color.is_none() && opts.favorite.is_none() {
+    if opts.name.is_none()
+        && opts.query.is_none()
+        && opts.color.is_none()
+        && opts.favorite.is_none()
+    {
         return Err(CommandError::Config(
-            "No changes specified. Use --name, --query, --color, or --favorite.".to_string()
+            "No changes specified. Use --name, --query, --color, or --favorite.".to_string(),
         ));
     }
 
@@ -457,7 +488,8 @@ fn find_filter_by_id_or_prefix<'a>(cache: &'a Cache, id: &str) -> Result<&'a Fil
         1 => Ok(matches[0]),
         _ => {
             // Ambiguous prefix - provide helpful error message
-            let mut msg = format!("Ambiguous filter ID \"{id}\"\n\nMultiple filters match this prefix:");
+            let mut msg =
+                format!("Ambiguous filter ID \"{id}\"\n\nMultiple filters match this prefix:");
             for filter in matches.iter().take(5) {
                 let prefix = &filter.id[..6.min(filter.id.len())];
                 msg.push_str(&format!("\n  {}  {}", prefix, filter.name));
@@ -504,7 +536,11 @@ pub struct FilterDeleteResult {
 /// # Errors
 ///
 /// Returns an error if filter lookup fails or the API returns an error.
-pub async fn execute_delete(ctx: &CommandContext, opts: &FiltersDeleteOptions, token: &str) -> Result<()> {
+pub async fn execute_delete(
+    ctx: &CommandContext,
+    opts: &FiltersDeleteOptions,
+    token: &str,
+) -> Result<()> {
     // Initialize sync manager (loads cache from disk)
     let client = TodoistClient::new(token);
     let store = CacheStore::new()?;
@@ -525,7 +561,9 @@ pub async fn execute_delete(ctx: &CommandContext, opts: &FiltersDeleteOptions, t
             &filter_id[..6.min(filter_id.len())]
         );
         eprintln!("Use --force to skip this confirmation.");
-        return Err(CommandError::Config("Operation cancelled. Use --force to confirm.".to_string()));
+        return Err(CommandError::Config(
+            "Operation cancelled. Use --force to confirm.".to_string(),
+        ));
     }
 
     // Build the filter_delete command arguments
@@ -587,9 +625,7 @@ mod tests {
 
     #[test]
     fn test_filters_list_options_with_values() {
-        let opts = FiltersListOptions {
-            limit: Some(10),
-        };
+        let opts = FiltersListOptions { limit: Some(10) };
 
         assert_eq!(opts.limit, Some(10));
     }

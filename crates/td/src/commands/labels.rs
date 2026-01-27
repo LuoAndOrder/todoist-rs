@@ -64,11 +64,7 @@ pub async fn execute(ctx: &CommandContext, opts: &LabelsListOptions, token: &str
 
 /// Filters labels (excludes deleted).
 fn filter_labels(cache: &Cache) -> Vec<&Label> {
-    let mut labels: Vec<&Label> = cache
-        .labels
-        .iter()
-        .filter(|l| !l.is_deleted)
-        .collect();
+    let mut labels: Vec<&Label> = cache.labels.iter().filter(|l| !l.is_deleted).collect();
 
     // Sort by item_order for consistent display
     labels.sort_by_key(|l| l.item_order);
@@ -203,7 +199,11 @@ pub async fn execute_add(ctx: &CommandContext, opts: &LabelsAddOptions, token: &
                 println!("  Favorite: yes");
             }
         } else {
-            println!("Created: @{} ({})", result.name, &result.id[..6.min(result.id.len())]);
+            println!(
+                "Created: @{} ({})",
+                result.name,
+                &result.id[..6.min(result.id.len())]
+            );
         }
     }
 
@@ -212,10 +212,26 @@ pub async fn execute_add(ctx: &CommandContext, opts: &LabelsAddOptions, token: &
 
 /// Valid Todoist color names.
 const VALID_COLORS: &[&str] = &[
-    "berry_red", "red", "orange", "yellow", "olive_green", "lime_green",
-    "green", "mint_green", "teal", "sky_blue", "light_blue", "blue",
-    "grape", "violet", "lavender", "magenta", "salmon", "charcoal",
-    "grey", "taupe",
+    "berry_red",
+    "red",
+    "orange",
+    "yellow",
+    "olive_green",
+    "lime_green",
+    "green",
+    "mint_green",
+    "teal",
+    "sky_blue",
+    "light_blue",
+    "blue",
+    "grape",
+    "violet",
+    "lavender",
+    "magenta",
+    "salmon",
+    "charcoal",
+    "grey",
+    "taupe",
 ];
 
 /// Checks if a color name is valid.
@@ -262,11 +278,15 @@ pub struct LabelEditResult {
 /// # Errors
 ///
 /// Returns an error if label lookup fails or the API returns an error.
-pub async fn execute_edit(ctx: &CommandContext, opts: &LabelsEditOptions, token: &str) -> Result<()> {
+pub async fn execute_edit(
+    ctx: &CommandContext,
+    opts: &LabelsEditOptions,
+    token: &str,
+) -> Result<()> {
     // Check if any options were provided
     if opts.name.is_none() && opts.color.is_none() && opts.favorite.is_none() {
         return Err(CommandError::Config(
-            "No changes specified. Use --name, --color, or --favorite.".to_string()
+            "No changes specified. Use --name, --color, or --favorite.".to_string(),
         ));
     }
 
@@ -375,7 +395,8 @@ fn find_label_by_id_or_prefix<'a>(cache: &'a Cache, id: &str) -> Result<&'a Labe
         1 => Ok(matches[0]),
         _ => {
             // Ambiguous prefix - provide helpful error message
-            let mut msg = format!("Ambiguous label ID \"{id}\"\n\nMultiple labels match this prefix:");
+            let mut msg =
+                format!("Ambiguous label ID \"{id}\"\n\nMultiple labels match this prefix:");
             for label in matches.iter().take(5) {
                 let prefix = &label.id[..6.min(label.id.len())];
                 msg.push_str(&format!("\n  {}  @{}", prefix, label.name));
@@ -422,7 +443,11 @@ pub struct LabelDeleteResult {
 /// # Errors
 ///
 /// Returns an error if label lookup fails or the API returns an error.
-pub async fn execute_delete(ctx: &CommandContext, opts: &LabelsDeleteOptions, token: &str) -> Result<()> {
+pub async fn execute_delete(
+    ctx: &CommandContext,
+    opts: &LabelsDeleteOptions,
+    token: &str,
+) -> Result<()> {
     // Initialize sync manager (loads cache from disk)
     let client = TodoistClient::new(token);
     let store = CacheStore::new()?;
@@ -444,7 +469,9 @@ pub async fn execute_delete(ctx: &CommandContext, opts: &LabelsDeleteOptions, to
         );
         eprintln!("This will remove the label from all tasks.");
         eprintln!("Use --force to skip this confirmation.");
-        return Err(CommandError::Config("Operation cancelled. Use --force to confirm.".to_string()));
+        return Err(CommandError::Config(
+            "Operation cancelled. Use --force to confirm.".to_string(),
+        ));
     }
 
     // Build the label_delete command arguments
@@ -506,9 +533,7 @@ mod tests {
 
     #[test]
     fn test_labels_list_options_with_values() {
-        let opts = LabelsListOptions {
-            limit: Some(10),
-        };
+        let opts = LabelsListOptions { limit: Some(10) };
 
         assert_eq!(opts.limit, Some(10));
     }

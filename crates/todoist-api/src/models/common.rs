@@ -327,9 +327,18 @@ mod tests {
 
     #[test]
     fn test_reminder_type_serialize() {
-        assert_eq!(serde_json::to_string(&ReminderType::Relative).unwrap(), "\"relative\"");
-        assert_eq!(serde_json::to_string(&ReminderType::Absolute).unwrap(), "\"absolute\"");
-        assert_eq!(serde_json::to_string(&ReminderType::Location).unwrap(), "\"location\"");
+        assert_eq!(
+            serde_json::to_string(&ReminderType::Relative).unwrap(),
+            "\"relative\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ReminderType::Absolute).unwrap(),
+            "\"absolute\""
+        );
+        assert_eq!(
+            serde_json::to_string(&ReminderType::Location).unwrap(),
+            "\"location\""
+        );
     }
 
     #[test]
@@ -352,8 +361,14 @@ mod tests {
 
     #[test]
     fn test_location_trigger_serialize() {
-        assert_eq!(serde_json::to_string(&LocationTrigger::OnEnter).unwrap(), "\"on_enter\"");
-        assert_eq!(serde_json::to_string(&LocationTrigger::OnLeave).unwrap(), "\"on_leave\"");
+        assert_eq!(
+            serde_json::to_string(&LocationTrigger::OnEnter).unwrap(),
+            "\"on_enter\""
+        );
+        assert_eq!(
+            serde_json::to_string(&LocationTrigger::OnLeave).unwrap(),
+            "\"on_leave\""
+        );
     }
 
     #[test]

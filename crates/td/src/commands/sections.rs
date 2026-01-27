@@ -74,7 +74,11 @@ pub async fn execute(ctx: &CommandContext, opts: &SectionsListOptions, token: &s
 /// Resolves a project name or ID to a project ID.
 fn resolve_project_id(cache: &Cache, project: &str) -> Result<String> {
     // First try exact ID match
-    if let Some(p) = cache.projects.iter().find(|p| p.id == project && !p.is_deleted) {
+    if let Some(p) = cache
+        .projects
+        .iter()
+        .find(|p| p.id == project && !p.is_deleted)
+    {
         return Ok(p.id.clone());
     }
 
@@ -105,7 +109,9 @@ fn resolve_project_id(cache: &Cache, project: &str) -> Result<String> {
             "Ambiguous project: '{project}'. Multiple projects match."
         )))
     } else {
-        Err(CommandError::Config(format!("Project not found: {project}")))
+        Err(CommandError::Config(format!(
+            "Project not found: {project}"
+        )))
     }
 }
 
@@ -176,7 +182,11 @@ pub struct SectionAddResult {
 /// # Errors
 ///
 /// Returns an error if the API returns an error.
-pub async fn execute_add(ctx: &CommandContext, opts: &SectionsAddOptions, token: &str) -> Result<()> {
+pub async fn execute_add(
+    ctx: &CommandContext,
+    opts: &SectionsAddOptions,
+    token: &str,
+) -> Result<()> {
     // Initialize sync manager (loads cache from disk)
     let client = TodoistClient::new(token);
     let store = CacheStore::new()?;
@@ -294,11 +304,15 @@ pub struct SectionEditResult {
 /// # Errors
 ///
 /// Returns an error if section lookup fails or the API returns an error.
-pub async fn execute_edit(ctx: &CommandContext, opts: &SectionsEditOptions, token: &str) -> Result<()> {
+pub async fn execute_edit(
+    ctx: &CommandContext,
+    opts: &SectionsEditOptions,
+    token: &str,
+) -> Result<()> {
     // Check if any options were provided
     if opts.name.is_none() {
         return Err(CommandError::Config(
-            "No changes specified. Use --name to change the section name.".to_string()
+            "No changes specified. Use --name to change the section name.".to_string(),
         ));
     }
 
@@ -388,7 +402,8 @@ fn find_section_by_id_or_prefix<'a>(cache: &'a Cache, id: &str) -> Result<&'a Se
         1 => Ok(matches[0]),
         _ => {
             // Ambiguous prefix - provide helpful error message
-            let mut msg = format!("Ambiguous section ID \"{id}\"\n\nMultiple sections match this prefix:");
+            let mut msg =
+                format!("Ambiguous section ID \"{id}\"\n\nMultiple sections match this prefix:");
             for section in matches.iter().take(5) {
                 let prefix = &section.id[..6.min(section.id.len())];
                 msg.push_str(&format!("\n  {}  {}", prefix, section.name));
@@ -435,7 +450,11 @@ pub struct SectionDeleteResult {
 /// # Errors
 ///
 /// Returns an error if section lookup fails or the API returns an error.
-pub async fn execute_delete(ctx: &CommandContext, opts: &SectionsDeleteOptions, token: &str) -> Result<()> {
+pub async fn execute_delete(
+    ctx: &CommandContext,
+    opts: &SectionsDeleteOptions,
+    token: &str,
+) -> Result<()> {
     // Initialize sync manager (loads cache from disk)
     let client = TodoistClient::new(token);
     let store = CacheStore::new()?;
@@ -457,7 +476,9 @@ pub async fn execute_delete(ctx: &CommandContext, opts: &SectionsDeleteOptions, 
         );
         eprintln!("This will also delete all tasks in this section.");
         eprintln!("Use --force to skip this confirmation.");
-        return Err(CommandError::Config("Operation cancelled. Use --force to confirm.".to_string()));
+        return Err(CommandError::Config(
+            "Operation cancelled. Use --force to confirm.".to_string(),
+        ));
     }
 
     // Build the section_delete command arguments
@@ -661,7 +682,11 @@ mod tests {
             items: vec![],
             projects: vec![make_test_project("project-1", "Test Project")],
             labels: vec![],
-            sections: vec![make_test_section("section-123-abc", "Groceries", "project-1")],
+            sections: vec![make_test_section(
+                "section-123-abc",
+                "Groceries",
+                "project-1",
+            )],
             notes: vec![],
             project_notes: vec![],
             reminders: vec![],

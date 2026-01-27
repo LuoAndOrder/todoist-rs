@@ -96,9 +96,10 @@ pub async fn execute(ctx: &CommandContext, opts: &DeleteOptions, token: &str) ->
 
     for (id, content) in &resolved_items {
         // Check sync_status for this command
-        let has_error = response.errors().iter().any(|(_, err)| {
-            err.error.contains(id)
-        });
+        let has_error = response
+            .errors()
+            .iter()
+            .any(|(_, err)| err.error.contains(id));
 
         if has_error {
             let error_msg = response
@@ -157,7 +158,6 @@ pub async fn execute(ctx: &CommandContext, opts: &DeleteOptions, token: &str) ->
 
     Ok(())
 }
-
 
 /// Formats delete results as JSON.
 fn format_delete_results_json(results: &[DeleteResult]) -> Result<String> {

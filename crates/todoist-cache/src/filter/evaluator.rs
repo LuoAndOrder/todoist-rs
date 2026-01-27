@@ -272,9 +272,8 @@ impl<'a> FilterEvaluator<'a> {
             return false;
         };
 
-        self.parse_due_date(&due.date).is_some_and(|due_date| {
-            due_date.month() == month && due_date.day() == day
-        })
+        self.parse_due_date(&due.date)
+            .is_some_and(|due_date| due_date.month() == month && due_date.day() == day)
     }
 
     /// Parses a date string in YYYY-MM-DD format.
@@ -285,9 +284,7 @@ impl<'a> FilterEvaluator<'a> {
     /// Checks if the item has the specified label (case-insensitive).
     fn has_label(&self, item: &Item, label_name: &str) -> bool {
         let label_lower = label_name.to_lowercase();
-        item.labels
-            .iter()
-            .any(|l| l.to_lowercase() == label_lower)
+        item.labels.iter().any(|l| l.to_lowercase() == label_lower)
     }
 
     /// Checks if the item has no labels.
@@ -916,10 +913,7 @@ mod tests {
 
     #[test]
     fn test_filter_no_labels_no_match_multiple_labels() {
-        let labels = vec![
-            make_label("l1", "urgent"),
-            make_label("l2", "work"),
-        ];
+        let labels = vec![make_label("l1", "urgent"), make_label("l2", "work")];
         let context = FilterContext::new(&[], &[], &labels);
         let filter = Filter::NoLabels;
         let evaluator = FilterEvaluator::new(&filter, &context);

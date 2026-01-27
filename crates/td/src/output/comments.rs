@@ -4,7 +4,9 @@ use owo_colors::OwoColorize;
 use serde::Serialize;
 use todoist_cache_rs::Cache;
 
-use crate::commands::comments::{Comment, CommentAddResult, CommentDeleteResult, CommentEditResult};
+use crate::commands::comments::{
+    Comment, CommentAddResult, CommentDeleteResult, CommentEditResult,
+};
 
 use super::helpers::{format_datetime, truncate_id, truncate_str};
 
@@ -193,10 +195,7 @@ pub fn format_comments_table(
     // Comments
     for comment in comments {
         let id_prefix = truncate_id(comment.id());
-        let posted = comment
-            .posted_at()
-            .map(format_datetime)
-            .unwrap_or_default();
+        let posted = comment.posted_at().map(format_datetime).unwrap_or_default();
         let posted_display = truncate_str(&posted, 20);
 
         // Truncate content to first line and max 50 chars for table view

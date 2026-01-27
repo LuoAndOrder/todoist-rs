@@ -70,9 +70,7 @@ pub struct ArchivedProjectOutput<'a> {
 }
 
 /// Formats an archived project as JSON.
-pub fn format_archived_project(
-    result: &ProjectArchiveResult,
-) -> Result<String, serde_json::Error> {
+pub fn format_archived_project(result: &ProjectArchiveResult) -> Result<String, serde_json::Error> {
     let output = ArchivedProjectOutput {
         id: &result.id,
         name: &result.name,
@@ -313,7 +311,14 @@ fn format_projects_tree(projects: &[&Project], cache: &Cache, use_colors: bool) 
         }
     }
 
-    print_tree(&mut output, None, &children_map, &task_counts, 0, use_colors);
+    print_tree(
+        &mut output,
+        None,
+        &children_map,
+        &task_counts,
+        0,
+        use_colors,
+    );
 
     output
 }

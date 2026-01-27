@@ -131,9 +131,9 @@ const USERNAME: &str = "api_token";
 pub fn store_token(token: &str) -> Result<()> {
     let entry = Entry::new(SERVICE, USERNAME)
         .map_err(|e| CommandError::Config(format!("Keyring error: {}", platform_hint(&e))))?;
-    entry
-        .set_password(token)
-        .map_err(|e| CommandError::Config(format!("Failed to store token: {}", platform_hint(&e))))?;
+    entry.set_password(token).map_err(|e| {
+        CommandError::Config(format!("Failed to store token: {}", platform_hint(&e)))
+    })?;
     Ok(())
 }
 

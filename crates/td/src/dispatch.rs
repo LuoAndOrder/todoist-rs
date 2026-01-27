@@ -294,7 +294,9 @@ impl<'a> AuthDispatch<'a> {
             }) => Some(Self::ConfigEdit),
             Some(Commands::Projects { command }) => Some(Self::Projects(command)),
             Some(Commands::Labels { command }) => Some(Self::Labels(command)),
-            Some(Commands::Sections { project, command }) => Some(Self::Sections { project, command }),
+            Some(Commands::Sections { project, command }) => {
+                Some(Self::Sections { project, command })
+            }
             Some(Commands::Comments {
                 task,
                 project,
@@ -481,7 +483,9 @@ impl AuthCommand for AuthDispatch<'_> {
                 project,
                 command,
             } => dispatch_comments(ctx, task, project, command, token).await,
-            Self::Reminders { task, command } => dispatch_reminders(ctx, task, command, token).await,
+            Self::Reminders { task, command } => {
+                dispatch_reminders(ctx, task, command, token).await
+            }
             Self::Filters(command) => dispatch_filters(ctx, command, token).await,
         }
     }
@@ -493,7 +497,11 @@ async fn dispatch_projects(
     token: &str,
 ) -> Result<()> {
     match command {
-        Some(ProjectsCommands::List { tree, archived, limit }) => {
+        Some(ProjectsCommands::List {
+            tree,
+            archived,
+            limit,
+        }) => {
             let opts = commands::projects::ProjectsListOptions {
                 tree: *tree,
                 archived: *archived,
@@ -634,7 +642,10 @@ async fn dispatch_sections(
             };
             commands::sections::execute(ctx, &opts, token).await
         }
-        Some(SectionsCommands::Add { name, project: proj }) => {
+        Some(SectionsCommands::Add {
+            name,
+            project: proj,
+        }) => {
             let opts = commands::sections::SectionsAddOptions {
                 name: name.clone(),
                 project: proj.clone(),

@@ -152,7 +152,8 @@ fn find_item_by_id_or_prefix<'a>(cache: &'a Cache, id: &str) -> Result<&'a Item>
         1 => Ok(matches[0]),
         _ => {
             // Ambiguous prefix - provide helpful error message
-            let mut msg = format!("Ambiguous task ID \"{id}\"\n\nMultiple tasks match this prefix:");
+            let mut msg =
+                format!("Ambiguous task ID \"{id}\"\n\nMultiple tasks match this prefix:");
             for item in matches.iter().take(5) {
                 let prefix = &item.id[..6.min(item.id.len())];
                 msg.push_str(&format!("\n  {}  {}", prefix, item.content));

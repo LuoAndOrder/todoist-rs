@@ -25,13 +25,26 @@ pub use crate::error::{ApiError, Error, Result};
 
 // Sync API types
 pub use crate::sync::{
-    // Request
-    SyncCommand, SyncRequest,
-    // Response
-    CommandError, CommandResult, SyncResponse,
     // Data models
-    Collaborator, CollaboratorState, FileAttachment, Filter, Item, Label, Note, Project,
-    ProjectNote, Reminder, Section, User,
+    Collaborator,
+    CollaboratorState,
+    // Response
+    CommandError,
+    CommandResult,
+    FileAttachment,
+    Filter,
+    Item,
+    Label,
+    Note,
+    Project,
+    ProjectNote,
+    Reminder,
+    Section,
+    // Request
+    SyncCommand,
+    SyncRequest,
+    SyncResponse,
+    User,
 };
 
 // Quick Add types

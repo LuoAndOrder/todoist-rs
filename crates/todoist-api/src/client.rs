@@ -276,7 +276,10 @@ impl TodoistClient {
                 .send()
                 .await?;
 
-            match self.handle_response_with_retry(response, attempt, max_retries).await {
+            match self
+                .handle_response_with_retry(response, attempt, max_retries)
+                .await
+            {
                 Ok(RetryDecision::Success(value)) => return Ok(value),
                 Ok(RetryDecision::Retry { retry_after }) => {
                     let backoff = self.calculate_backoff(attempt, retry_after);
@@ -315,7 +318,10 @@ impl TodoistClient {
                 .send()
                 .await?;
 
-            match self.handle_response_with_retry(response, attempt, max_retries).await {
+            match self
+                .handle_response_with_retry(response, attempt, max_retries)
+                .await
+            {
                 Ok(RetryDecision::Success(value)) => return Ok(value),
                 Ok(RetryDecision::Retry { retry_after }) => {
                     let backoff = self.calculate_backoff(attempt, retry_after);
@@ -347,7 +353,10 @@ impl TodoistClient {
                 .send()
                 .await?;
 
-            match self.handle_response_with_retry(response, attempt, max_retries).await {
+            match self
+                .handle_response_with_retry(response, attempt, max_retries)
+                .await
+            {
                 Ok(RetryDecision::Success(value)) => return Ok(value),
                 Ok(RetryDecision::Retry { retry_after }) => {
                     let backoff = self.calculate_backoff(attempt, retry_after);
@@ -379,7 +388,10 @@ impl TodoistClient {
                 .send()
                 .await?;
 
-            match self.handle_empty_response_with_retry(response, attempt, max_retries).await {
+            match self
+                .handle_empty_response_with_retry(response, attempt, max_retries)
+                .await
+            {
                 Ok(RetryDecision::Success(())) => return Ok(()),
                 Ok(RetryDecision::Retry { retry_after }) => {
                     let backoff = self.calculate_backoff(attempt, retry_after);
@@ -433,7 +445,10 @@ impl TodoistClient {
                 .send()
                 .await?;
 
-            match self.handle_response_with_retry(response, attempt, max_retries).await {
+            match self
+                .handle_response_with_retry(response, attempt, max_retries)
+                .await
+            {
                 Ok(RetryDecision::Success(value)) => return Ok(value),
                 Ok(RetryDecision::Retry { retry_after }) => {
                     let backoff = self.calculate_backoff(attempt, retry_after);
@@ -483,7 +498,10 @@ impl TodoistClient {
                 .send()
                 .await?;
 
-            match self.handle_response_with_retry(response, attempt, max_retries).await {
+            match self
+                .handle_response_with_retry(response, attempt, max_retries)
+                .await
+            {
                 Ok(RetryDecision::Success(value)) => return Ok(value),
                 Ok(RetryDecision::Retry { retry_after }) => {
                     let backoff = self.calculate_backoff(attempt, retry_after);
@@ -589,7 +607,10 @@ impl TodoistClient {
             _ => ApiError::Http {
                 status: status_code,
                 message: if message.is_empty() {
-                    status.canonical_reason().unwrap_or("Unknown error").to_string()
+                    status
+                        .canonical_reason()
+                        .unwrap_or("Unknown error")
+                        .to_string()
                 } else {
                     message
                 },
@@ -662,7 +683,10 @@ mod tests {
     fn test_todoist_client_is_debug() {
         let client = TodoistClient::new("test-token");
         let debug_str = format!("{:?}", client);
-        assert!(!debug_str.contains("test-token"), "Token should be redacted in debug output");
+        assert!(
+            !debug_str.contains("test-token"),
+            "Token should be redacted in debug output"
+        );
     }
 
     // Test: TodoistClient should use the default base URL
@@ -740,8 +764,14 @@ mod tests {
         assert_eq!(client.token(), "test-token");
         assert_eq!(client.base_url(), BASE_URL);
         assert_eq!(client.max_retries(), DEFAULT_MAX_RETRIES);
-        assert_eq!(client.initial_backoff(), Duration::from_secs(DEFAULT_INITIAL_BACKOFF_SECS));
-        assert_eq!(client.max_backoff(), Duration::from_secs(DEFAULT_MAX_BACKOFF_SECS));
+        assert_eq!(
+            client.initial_backoff(),
+            Duration::from_secs(DEFAULT_INITIAL_BACKOFF_SECS)
+        );
+        assert_eq!(
+            client.max_backoff(),
+            Duration::from_secs(DEFAULT_MAX_BACKOFF_SECS)
+        );
     }
 
     // Test: TodoistClientBuilder allows customizing max_retries
@@ -794,9 +824,7 @@ mod tests {
     // Test: TodoistClient::builder() returns a builder
     #[test]
     fn test_client_builder_method() {
-        let client = TodoistClient::builder("test-token")
-            .max_retries(10)
-            .build();
+        let client = TodoistClient::builder("test-token").max_retries(10).build();
 
         assert_eq!(client.max_retries(), 10);
     }
@@ -1251,12 +1279,14 @@ mod wiremock_tests {
         // We'll create a client with a short timeout for testing
         Mock::given(method("GET"))
             .and(path("/tasks/slow"))
-            .respond_with(ResponseTemplate::new(200)
-                .set_body_json(serde_json::json!({
-                    "id": "123",
-                    "content": "Test task"
-                }))
-                .set_delay(Duration::from_secs(5))) // Delay longer than our test timeout
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({
+                        "id": "123",
+                        "content": "Test task"
+                    }))
+                    .set_delay(Duration::from_secs(5)),
+            ) // Delay longer than our test timeout
             .mount(&mock_server)
             .await;
 
@@ -1272,7 +1302,11 @@ mod wiremock_tests {
         assert!(result.is_err(), "Expected timeout error");
         match result {
             Err(Error::Http(req_err)) => {
-                assert!(req_err.is_timeout(), "Expected timeout error, got: {:?}", req_err);
+                assert!(
+                    req_err.is_timeout(),
+                    "Expected timeout error, got: {:?}",
+                    req_err
+                );
             }
             Err(e) => panic!("Expected HTTP timeout error, got: {:?}", e),
             Ok(_) => panic!("Expected error, got success"),

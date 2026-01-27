@@ -286,9 +286,7 @@ impl SyncManager {
             }
             Err(e) if e.is_invalid_sync_token() => {
                 // Sync token rejected - fall back to full sync
-                eprintln!(
-                    "Warning: Sync token invalid, performing full sync to recover."
-                );
+                eprintln!("Warning: Sync token invalid, performing full sync to recover.");
 
                 // Reset sync token to force full sync
                 self.cache.sync_token = "*".to_string();
@@ -395,8 +393,8 @@ impl SyncManager {
         // Request all resource types along with commands so the API returns
         // affected resources (items, projects, etc.) in the response.
         // Without resource_types, the API only returns sync_status and temp_id_mapping.
-        let request = SyncRequest::with_commands(commands)
-            .with_resource_types(vec!["all".to_string()]);
+        let request =
+            SyncRequest::with_commands(commands).with_resource_types(vec!["all".to_string()]);
         let response = self.client.sync(request).await?;
 
         // Apply the mutation response to update cache with affected resources
@@ -491,9 +489,10 @@ impl SyncManager {
     /// - The ID matches exactly
     fn find_project_in_cache(&self, name_or_id: &str) -> Option<&todoist_api_rs::sync::Project> {
         let name_lower = name_or_id.to_lowercase();
-        self.cache.projects.iter().find(|p| {
-            !p.is_deleted && (p.name.to_lowercase() == name_lower || p.id == name_or_id)
-        })
+        self.cache
+            .projects
+            .iter()
+            .find(|p| !p.is_deleted && (p.name.to_lowercase() == name_lower || p.id == name_or_id))
     }
 
     /// Resolves a section by name or ID, with auto-sync fallback.
@@ -553,24 +552,25 @@ impl SyncManager {
         self.sync().await?;
 
         // Try again after sync
-        self.find_section_in_cache(name_or_id, project_id).ok_or_else(|| {
-            // Find similar section names for suggestion (within same project if specified)
-            let suggestion = find_similar_name(
-                name_or_id,
-                self.cache
-                    .sections
-                    .iter()
-                    .filter(|s| {
-                        !s.is_deleted && project_id.is_none_or(|pid| s.project_id == pid)
-                    })
-                    .map(|s| s.name.as_str()),
-            );
-            SyncError::NotFound {
-                resource_type: "Section",
-                identifier: name_or_id.to_string(),
-                suggestion,
-            }
-        })
+        self.find_section_in_cache(name_or_id, project_id)
+            .ok_or_else(|| {
+                // Find similar section names for suggestion (within same project if specified)
+                let suggestion = find_similar_name(
+                    name_or_id,
+                    self.cache
+                        .sections
+                        .iter()
+                        .filter(|s| {
+                            !s.is_deleted && project_id.is_none_or(|pid| s.project_id == pid)
+                        })
+                        .map(|s| s.name.as_str()),
+                );
+                SyncError::NotFound {
+                    resource_type: "Section",
+                    identifier: name_or_id.to_string(),
+                    suggestion,
+                }
+            })
     }
 
     /// Helper to find a section in the cache by name or ID.
@@ -679,9 +679,10 @@ impl SyncManager {
     /// - The ID matches exactly
     fn find_label_in_cache(&self, name_or_id: &str) -> Option<&todoist_api_rs::sync::Label> {
         let name_lower = name_or_id.to_lowercase();
-        self.cache.labels.iter().find(|l| {
-            !l.is_deleted && (l.name.to_lowercase() == name_lower || l.id == name_or_id)
-        })
+        self.cache
+            .labels
+            .iter()
+            .find(|l| !l.is_deleted && (l.name.to_lowercase() == name_lower || l.id == name_or_id))
     }
 
     /// Resolves an item (task) by ID, with auto-sync fallback.
@@ -734,11 +735,12 @@ impl SyncManager {
         self.sync().await?;
 
         // Try again after sync
-        self.find_item_in_cache(id).ok_or_else(|| SyncError::NotFound {
-            resource_type: "Item",
-            identifier: id.to_string(),
-            suggestion: None, // Items are looked up by ID, no name suggestions
-        })
+        self.find_item_in_cache(id)
+            .ok_or_else(|| SyncError::NotFound {
+                resource_type: "Item",
+                identifier: id.to_string(),
+                suggestion: None, // Items are looked up by ID, no name suggestions
+            })
     }
 
     /// Helper to find an item in the cache by ID.

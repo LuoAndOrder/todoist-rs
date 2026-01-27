@@ -449,7 +449,10 @@ mod tests {
         assert!(response.labels.contains(&"shopping".to_string()));
         assert!(response.labels.contains(&"urgent".to_string()));
 
-        assert_eq!(response.resolved_project_name, Some("Shopping List".to_string()));
+        assert_eq!(
+            response.resolved_project_name,
+            Some("Shopping List".to_string())
+        );
     }
 
     #[test]
