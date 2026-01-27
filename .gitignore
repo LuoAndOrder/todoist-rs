@@ -31,3 +31,9 @@ Thumbs.db
 *.so
 *.dylib
 *.dll
+
+# Agents
+.agent/
+.ralph/
+PROMPT.md
+ralph.yml
