@@ -6,6 +6,37 @@ use serde::{Deserialize, Serialize};
 ///
 /// The Sync API uses `application/x-www-form-urlencoded` format, where
 /// `resource_types` and `commands` are JSON-encoded strings.
+///
+/// # Examples
+///
+/// ## Full sync to fetch all data
+///
+/// ```
+/// use todoist_api::sync::SyncRequest;
+///
+/// let request = SyncRequest::full_sync();
+/// assert_eq!(request.sync_token, "*");
+/// assert_eq!(request.resource_types, vec!["all"]);
+/// ```
+///
+/// ## Incremental sync with stored token
+///
+/// ```
+/// use todoist_api::sync::SyncRequest;
+///
+/// let request = SyncRequest::incremental("abc123token");
+/// assert_eq!(request.sync_token, "abc123token");
+/// ```
+///
+/// ## Fetch specific resource types
+///
+/// ```
+/// use todoist_api::sync::SyncRequest;
+///
+/// let request = SyncRequest::full_sync()
+///     .with_resource_types(vec!["items".to_string(), "projects".to_string()]);
+/// assert_eq!(request.resource_types, vec!["items", "projects"]);
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct SyncRequest {
     /// Sync token for incremental sync. Use "*" for a full sync.
@@ -105,6 +136,34 @@ impl SyncRequest {
 /// Commands are write operations that modify resources in Todoist.
 /// Each command has a UUID for idempotency and optional temp_id for
 /// creating resources that can be referenced by other commands.
+///
+/// # Examples
+///
+/// ## Create a simple command
+///
+/// ```
+/// use todoist_api::sync::SyncCommand;
+/// use serde_json::json;
+///
+/// let cmd = SyncCommand::new("item_close", json!({"id": "task-123"}));
+/// assert_eq!(cmd.command_type, "item_close");
+/// assert!(cmd.temp_id.is_none());
+/// ```
+///
+/// ## Create a command with temp_id for new resources
+///
+/// ```
+/// use todoist_api::sync::SyncCommand;
+/// use serde_json::json;
+///
+/// // When creating a new item, use temp_id so you can reference it in subsequent commands
+/// let cmd = SyncCommand::with_temp_id(
+///     "item_add",
+///     "temp-task-1",
+///     json!({"content": "Buy groceries", "project_id": "inbox"})
+/// );
+/// assert_eq!(cmd.temp_id, Some("temp-task-1".to_string()));
+/// ```
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SyncCommand {
     /// The type of command (e.g., "item_add", "project_update").

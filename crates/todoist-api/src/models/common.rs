@@ -11,6 +11,38 @@ use serde::{Deserialize, Serialize};
 /// This struct is used by both the REST API and Sync API to represent when
 /// a task is due. It supports both date-only and datetime values, as well as
 /// recurring schedules.
+///
+/// # Examples
+///
+/// ## Create a date-only due date
+///
+/// ```
+/// use todoist_api::models::Due;
+///
+/// let due = Due::from_date("2026-01-25");
+/// assert_eq!(due.date, "2026-01-25");
+/// assert!(!due.has_time());
+/// ```
+///
+/// ## Create a due date with time
+///
+/// ```
+/// use todoist_api::models::Due;
+///
+/// let due = Due::from_datetime("2026-01-25", "2026-01-25T15:00:00Z");
+/// assert!(due.has_time());
+/// assert_eq!(due.datetime, Some("2026-01-25T15:00:00Z".to_string()));
+/// ```
+///
+/// ## Parse the date as NaiveDate
+///
+/// ```
+/// use todoist_api::models::Due;
+///
+/// let due = Due::from_date("2026-01-25");
+/// let date = due.as_naive_date().unwrap();
+/// assert_eq!(date.to_string(), "2026-01-25");
+/// ```
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Due {
     /// The date in YYYY-MM-DD format (always present).
@@ -88,6 +120,27 @@ pub struct Deadline {
 }
 
 /// Estimated duration for completing a task.
+///
+/// # Examples
+///
+/// ## Create a duration in minutes
+///
+/// ```
+/// use todoist_api::models::Duration;
+///
+/// let duration = Duration::minutes(30);
+/// assert_eq!(duration.amount, 30);
+/// assert_eq!(duration.as_minutes(), 30);
+/// ```
+///
+/// ## Create a duration in days
+///
+/// ```
+/// use todoist_api::models::Duration;
+///
+/// let duration = Duration::days(2);
+/// assert_eq!(duration.as_minutes(), 2 * 24 * 60); // 2880 minutes
+/// ```
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Duration {
     /// The amount of time (positive integer).

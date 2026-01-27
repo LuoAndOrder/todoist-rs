@@ -10,6 +10,45 @@ pub use crate::models::{Deadline, Due, Duration, DurationUnit, LocationTrigger, 
 /// Response from the Sync API endpoint.
 ///
 /// Contains all requested resources and metadata about the sync operation.
+///
+/// # Examples
+///
+/// ## Check for command errors
+///
+/// ```
+/// use todoist_api::sync::SyncResponse;
+///
+/// let json = r#"{
+///     "sync_token": "new-token",
+///     "full_sync": false,
+///     "sync_status": {
+///         "cmd-1": "ok",
+///         "cmd-2": {"error_code": 15, "error": "Invalid temporary id"}
+///     }
+/// }"#;
+///
+/// let response: SyncResponse = serde_json::from_str(json).unwrap();
+/// assert!(response.has_errors());
+/// let errors = response.errors();
+/// assert_eq!(errors.len(), 1);
+/// ```
+///
+/// ## Look up real IDs from temp IDs
+///
+/// ```
+/// use todoist_api::sync::SyncResponse;
+///
+/// let json = r#"{
+///     "sync_token": "token",
+///     "full_sync": false,
+///     "temp_id_mapping": {
+///         "temp-123": "real-id-456"
+///     }
+/// }"#;
+///
+/// let response: SyncResponse = serde_json::from_str(json).unwrap();
+/// assert_eq!(response.real_id("temp-123"), Some(&"real-id-456".to_string()));
+/// ```
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SyncResponse {
     /// New sync token for subsequent incremental syncs.
@@ -111,6 +150,23 @@ pub struct SyncResponse {
 }
 
 /// Result of a command execution.
+///
+/// # Examples
+///
+/// ```
+/// use todoist_api::sync::CommandResult;
+///
+/// // Success case
+/// let ok: CommandResult = serde_json::from_str(r#""ok""#).unwrap();
+/// assert!(ok.is_ok());
+///
+/// // Error case
+/// let err: CommandResult = serde_json::from_str(
+///     r#"{"error_code": 15, "error": "Invalid id"}"#
+/// ).unwrap();
+/// assert!(!err.is_ok());
+/// assert_eq!(err.error().unwrap().error_code, 15);
+/// ```
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum CommandResult {
