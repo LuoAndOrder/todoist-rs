@@ -14,7 +14,7 @@
 
 mod comments;
 mod filters;
-mod helpers;
+pub mod helpers;
 mod labels;
 mod projects;
 mod reminders;

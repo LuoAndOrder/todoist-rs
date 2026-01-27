@@ -3,10 +3,19 @@
 use chrono::{Local, NaiveDate};
 use owo_colors::OwoColorize;
 
-/// Truncates an ID to 6 characters for display.
+/// Number of characters to show when displaying truncated IDs.
+pub const ID_DISPLAY_LENGTH: usize = 6;
+
+/// Number of minutes in one hour.
+pub const MINUTES_PER_HOUR: i32 = 60;
+
+/// Number of minutes in one day.
+pub const MINUTES_PER_DAY: i32 = 1440;
+
+/// Truncates an ID to [`ID_DISPLAY_LENGTH`] characters for display.
 pub fn truncate_id(id: &str) -> String {
-    if id.len() > 6 {
-        id[..6].to_string()
+    if id.len() > ID_DISPLAY_LENGTH {
+        id[..ID_DISPLAY_LENGTH].to_string()
     } else {
         id.to_string()
     }
@@ -197,14 +206,14 @@ pub fn format_reminder(reminder: &todoist_api::sync::Reminder) -> String {
             if let Some(offset) = reminder.minute_offset {
                 if offset == 0 {
                     "At time of due date".to_string()
-                } else if offset < 60 {
+                } else if offset < MINUTES_PER_HOUR {
                     format!("{} minutes before", offset)
-                } else if offset == 60 {
+                } else if offset == MINUTES_PER_HOUR {
                     "1 hour before".to_string()
-                } else if offset < 1440 {
-                    format!("{} hours before", offset / 60)
+                } else if offset < MINUTES_PER_DAY {
+                    format!("{} hours before", offset / MINUTES_PER_HOUR)
                 } else {
-                    format!("{} days before", offset / 1440)
+                    format!("{} days before", offset / MINUTES_PER_DAY)
                 }
             } else {
                 "Relative reminder".to_string()

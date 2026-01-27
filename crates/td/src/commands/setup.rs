@@ -17,6 +17,9 @@ use super::config::{get_config_path, load_config, Config};
 use super::keyring;
 use super::{CommandContext, CommandError, Result};
 
+/// Minimum expected length for a valid Todoist API token.
+const MIN_API_TOKEN_LENGTH: usize = 20;
+
 /// Token storage options.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenStorage {
@@ -90,7 +93,7 @@ pub async fn run_setup(ctx: &CommandContext) -> Result<String> {
         .validate_with(|input: &String| -> std::result::Result<(), &str> {
             if input.trim().is_empty() {
                 Err("Token cannot be empty")
-            } else if input.len() < 20 {
+            } else if input.len() < MIN_API_TOKEN_LENGTH {
                 Err("Token seems too short - check your token")
             } else {
                 Ok(())

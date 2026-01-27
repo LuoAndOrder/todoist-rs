@@ -8,7 +8,14 @@ use todoist_api::sync::{Note, ProjectNote, SyncCommand};
 use todoist_cache::{Cache, CacheStore, SyncManager};
 
 use super::{CommandContext, CommandError, Result};
+use crate::output::helpers::ID_DISPLAY_LENGTH;
 use crate::output::{format_comments_json, format_comments_table};
+
+/// Maximum length for content preview in compact output.
+const CONTENT_PREVIEW_LENGTH: usize = 30;
+
+/// Maximum length for content display in verbose output.
+const CONTENT_DISPLAY_LENGTH: usize = 40;
 
 /// Options for the comments list command.
 #[derive(Debug, Default)]
@@ -381,10 +388,10 @@ pub async fn execute_add(
             println!("  On {}: {}", parent_type, parent_display);
             println!("  Content: {}", result.content);
         } else {
-            let prefix = &result.id[..6.min(result.id.len())];
+            let prefix = &result.id[..ID_DISPLAY_LENGTH.min(result.id.len())];
             // Truncate content for display
-            let content_display = if result.content.len() > 40 {
-                format!("{}...", &result.content[..37])
+            let content_display = if result.content.len() > CONTENT_DISPLAY_LENGTH {
+                format!("{}...", &result.content[..CONTENT_DISPLAY_LENGTH - 3])
             } else {
                 result.content.clone()
             };
@@ -502,10 +509,10 @@ pub async fn execute_edit(
             println!("  On {}: {}", parent_type, parent_display);
             println!("  Content: {}", result.content);
         } else {
-            let prefix = &result.id[..6.min(result.id.len())];
+            let prefix = &result.id[..ID_DISPLAY_LENGTH.min(result.id.len())];
             // Truncate content for display
-            let content_display = if result.content.len() > 40 {
-                format!("{}...", &result.content[..37])
+            let content_display = if result.content.len() > CONTENT_DISPLAY_LENGTH {
+                format!("{}...", &result.content[..CONTENT_DISPLAY_LENGTH - 3])
             } else {
                 result.content.clone()
             };
@@ -570,8 +577,8 @@ pub async fn execute_delete(
         let cache = manager.cache();
         let (c_id, is_task, p_id, p_name) = resolve_comment(cache, &opts.comment_id)?;
         let comment_content = get_comment_content(cache, &c_id);
-        let preview = if comment_content.len() > 40 {
-            format!("{}...", &comment_content[..37])
+        let preview = if comment_content.len() > CONTENT_DISPLAY_LENGTH {
+            format!("{}...", &comment_content[..CONTENT_DISPLAY_LENGTH - 3])
         } else {
             comment_content
         };
@@ -584,7 +591,7 @@ pub async fn execute_delete(
         let parent_display = parent_name.as_deref().unwrap_or(&parent_id);
         eprintln!(
             "Delete comment ({}) on {} '{}'?",
-            &comment_id[..6.min(comment_id.len())],
+            &comment_id[..ID_DISPLAY_LENGTH.min(comment_id.len())],
             parent_type,
             parent_display
         );
@@ -735,25 +742,25 @@ fn resolve_comment(
             let mut msg =
                 format!("Ambiguous comment ID \"{comment_id}\"\n\nMultiple comments match this prefix:");
             for note in task_note_matches.iter().take(3) {
-                let prefix = &note.id[..6.min(note.id.len())];
-                let content_preview = if note.content.len() > 30 {
-                    format!("{}...", &note.content[..27])
+                let prefix = &note.id[..ID_DISPLAY_LENGTH.min(note.id.len())];
+                let content_preview = if note.content.len() > CONTENT_PREVIEW_LENGTH {
+                    format!("{}...", &note.content[..CONTENT_PREVIEW_LENGTH - 3])
                 } else {
                     note.content.clone()
                 };
                 msg.push_str(&format!("\n  {} (task): {}", prefix, content_preview));
             }
             for note in project_note_matches.iter().take(3) {
-                let prefix = &note.id[..6.min(note.id.len())];
-                let content_preview = if note.content.len() > 30 {
-                    format!("{}...", &note.content[..27])
+                let prefix = &note.id[..ID_DISPLAY_LENGTH.min(note.id.len())];
+                let content_preview = if note.content.len() > CONTENT_PREVIEW_LENGTH {
+                    format!("{}...", &note.content[..CONTENT_PREVIEW_LENGTH - 3])
                 } else {
                     note.content.clone()
                 };
                 msg.push_str(&format!("\n  {} (project): {}", prefix, content_preview));
             }
-            if total_matches > 6 {
-                msg.push_str(&format!("\n  ... and {} more", total_matches - 6));
+            if total_matches > ID_DISPLAY_LENGTH {
+                msg.push_str(&format!("\n  ... and {} more", total_matches - ID_DISPLAY_LENGTH));
             }
             msg.push_str("\n\nPlease use a longer prefix.");
             return Err(CommandError::Config(msg));

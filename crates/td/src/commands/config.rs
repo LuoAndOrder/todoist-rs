@@ -14,6 +14,12 @@ use serde::{Deserialize, Serialize};
 
 use super::{CommandContext, CommandError, Result};
 
+/// Minimum token length to apply masking (show first and last N characters).
+const TOKEN_MASK_MIN_LENGTH: usize = 8;
+
+/// Number of characters to show at start/end of a masked token.
+const TOKEN_MASK_VISIBLE_CHARS: usize = 4;
+
 /// Default config file contents.
 const DEFAULT_CONFIG: &str = r#"# td - Todoist CLI Configuration
 # https://github.com/your-org/todoist-rs
@@ -175,8 +181,12 @@ pub fn execute_show(ctx: &CommandContext) -> Result<()> {
             }
             if let Some(ref token) = config.token {
                 // Mask the token for security
-                let masked = if token.len() > 8 {
-                    format!("{}...{}", &token[..4], &token[token.len()-4..])
+                let masked = if token.len() > TOKEN_MASK_MIN_LENGTH {
+                    format!(
+                        "{}...{}",
+                        &token[..TOKEN_MASK_VISIBLE_CHARS],
+                        &token[token.len() - TOKEN_MASK_VISIBLE_CHARS..]
+                    )
                 } else {
                     "****".to_string()
                 };

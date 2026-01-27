@@ -9,6 +9,7 @@ use todoist_api::sync::{Reminder, SyncCommand};
 use todoist_cache::{Cache, CacheStore, SyncManager};
 
 use super::{CommandContext, CommandError, Result};
+use crate::output::helpers::{MINUTES_PER_DAY, MINUTES_PER_HOUR};
 use crate::output::{format_created_reminder, format_reminders_json, format_reminders_table};
 
 /// Options for the reminders list command.
@@ -305,19 +306,19 @@ pub async fn execute_add(
 fn format_offset(minutes: i32) -> String {
     if minutes == 0 {
         "at time of due date".to_string()
-    } else if minutes < 60 {
+    } else if minutes < MINUTES_PER_HOUR {
         format!("{} minutes before", minutes)
-    } else if minutes == 60 {
+    } else if minutes == MINUTES_PER_HOUR {
         "1 hour before".to_string()
-    } else if minutes < 1440 {
-        let hours = minutes / 60;
+    } else if minutes < MINUTES_PER_DAY {
+        let hours = minutes / MINUTES_PER_HOUR;
         if hours == 1 {
             "1 hour before".to_string()
         } else {
             format!("{} hours before", hours)
         }
     } else {
-        let days = minutes / 1440;
+        let days = minutes / MINUTES_PER_DAY;
         if days == 1 {
             "1 day before".to_string()
         } else {
