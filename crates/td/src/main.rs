@@ -168,6 +168,7 @@ async fn resolve_token(cli: &Cli) -> commands::Result<String> {
 mod tests {
     use super::*;
     use cli::Commands;
+    use serial_test::serial;
     use std::env;
 
     /// Helper to create a test CLI with specified token.
@@ -206,6 +207,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_resolve_token_optional_no_token() {
         // Clear env var to ensure clean test
         let original = env::var("TODOIST_TOKEN").ok();
@@ -234,6 +236,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_resolve_token_optional_from_config() {
         use std::fs;
         use std::io::Write;
@@ -273,6 +276,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_resolve_token_optional_flag_overrides_config() {
         use std::fs;
         use std::io::Write;
