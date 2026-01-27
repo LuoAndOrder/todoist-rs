@@ -13,18 +13,27 @@ pub const MINUTES_PER_HOUR: i32 = 60;
 pub const MINUTES_PER_DAY: i32 = 1440;
 
 /// Truncates an ID to [`ID_DISPLAY_LENGTH`] characters for display.
+///
+/// Uses character-based (not byte-based) truncation to safely handle
+/// multi-byte UTF-8 characters.
 pub fn truncate_id(id: &str) -> String {
-    if id.len() > ID_DISPLAY_LENGTH {
-        id[..ID_DISPLAY_LENGTH].to_string()
+    let char_count = id.chars().count();
+    if char_count > ID_DISPLAY_LENGTH {
+        id.chars().take(ID_DISPLAY_LENGTH).collect()
     } else {
         id.to_string()
     }
 }
 
-/// Truncates a string to a maximum length.
+/// Truncates a string to a maximum length, adding ellipsis if truncated.
+///
+/// Uses character-based (not byte-based) truncation to safely handle
+/// multi-byte UTF-8 characters like emoji and CJK characters.
 pub fn truncate_str(s: &str, max_len: usize) -> String {
-    if s.len() > max_len {
-        format!("{}...", &s[..max_len.saturating_sub(3)])
+    let char_count = s.chars().count();
+    if char_count > max_len {
+        let truncated: String = s.chars().take(max_len.saturating_sub(3)).collect();
+        format!("{}...", truncated)
     } else {
         s.to_string()
     }
@@ -242,9 +251,57 @@ mod tests {
     }
 
     #[test]
+    fn test_truncate_id_utf8_emoji() {
+        // Emoji are multi-byte UTF-8 characters (4 bytes each)
+        // "🎉🎊🎁🎄🎅🎆🎇🎈" = 8 emoji characters
+        assert_eq!(truncate_id("🎉🎊🎁🎄🎅🎆🎇🎈"), "🎉🎊🎁🎄🎅🎆");
+        // Exactly 6 characters should not be truncated
+        assert_eq!(truncate_id("🎉🎊🎁🎄🎅🎆"), "🎉🎊🎁🎄🎅🎆");
+        // Fewer than 6 characters
+        assert_eq!(truncate_id("🎉🎊🎁"), "🎉🎊🎁");
+    }
+
+    #[test]
+    fn test_truncate_id_utf8_chinese() {
+        // Chinese characters are 3-byte UTF-8
+        // "你好世界测试标识符" = 9 characters
+        assert_eq!(truncate_id("你好世界测试标识符"), "你好世界测试");
+        // Exactly 6 characters
+        assert_eq!(truncate_id("你好世界测试"), "你好世界测试");
+    }
+
+    #[test]
     fn test_truncate_str() {
         assert_eq!(truncate_str("short", 10), "short");
         assert_eq!(truncate_str("this is long", 10), "this is...");
+    }
+
+    #[test]
+    fn test_truncate_str_utf8_emoji() {
+        // "🎉🎊🎁🎄🎅🎆🎇🎈🎁🎄" = 10 emoji characters
+        // With max_len=8, should keep 5 chars + "..."
+        assert_eq!(truncate_str("🎉🎊🎁🎄🎅🎆🎇🎈🎁🎄", 8), "🎉🎊🎁🎄🎅...");
+        // Short enough to not truncate
+        assert_eq!(truncate_str("🎉🎊🎁", 10), "🎉🎊🎁");
+    }
+
+    #[test]
+    fn test_truncate_str_utf8_chinese() {
+        // "这是一个很长的中文字符串" = 12 characters
+        // With max_len=10, should keep 7 chars + "..."
+        assert_eq!(
+            truncate_str("这是一个很长的中文字符串", 10),
+            "这是一个很长的..."
+        );
+        // Short enough to not truncate
+        assert_eq!(truncate_str("你好世界", 10), "你好世界");
+    }
+
+    #[test]
+    fn test_truncate_str_mixed_utf8() {
+        // Mixed ASCII, emoji, and Chinese
+        // "Hi🎉你好" = 6 characters
+        assert_eq!(truncate_str("Hi🎉你好World", 6), "Hi🎉...");
     }
 
     #[test]

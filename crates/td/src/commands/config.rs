@@ -180,17 +180,7 @@ pub fn execute_show(ctx: &CommandContext) -> Result<()> {
                 println!("  token_storage: {}", storage);
             }
             if let Some(ref token) = config.token {
-                // Mask the token for security
-                let masked = if token.len() > TOKEN_MASK_MIN_LENGTH {
-                    format!(
-                        "{}...{}",
-                        &token[..TOKEN_MASK_VISIBLE_CHARS],
-                        &token[token.len() - TOKEN_MASK_VISIBLE_CHARS..]
-                    )
-                } else {
-                    "****".to_string()
-                };
-                println!("  token: {}", masked);
+                println!("  token: {}", mask_token(token));
             }
 
             println!("\n[output]");
@@ -370,6 +360,24 @@ pub fn execute_path(ctx: &CommandContext) -> Result<()> {
     Ok(())
 }
 
+/// Masks a token for display, showing only the first and last N characters.
+///
+/// Uses character-based (not byte-based) indexing to safely handle
+/// multi-byte UTF-8 characters.
+fn mask_token(token: &str) -> String {
+    let char_count = token.chars().count();
+    if char_count > TOKEN_MASK_MIN_LENGTH {
+        let prefix: String = token.chars().take(TOKEN_MASK_VISIBLE_CHARS).collect();
+        let suffix: String = token
+            .chars()
+            .skip(char_count - TOKEN_MASK_VISIBLE_CHARS)
+            .collect();
+        format!("{}...{}", prefix, suffix)
+    } else {
+        "****".to_string()
+    }
+}
+
 /// Parses a boolean value from string.
 fn parse_bool(s: &str) -> Result<bool> {
     match s.to_lowercase().as_str() {
@@ -481,5 +489,43 @@ color = true
         assert_eq!(config.output.color, Some(true));
         assert!(config.output.date_format.is_none());
         assert!(config.cache.enabled.is_none());
+    }
+
+    #[test]
+    fn test_mask_token_ascii() {
+        // Long token gets masked with first 4 and last 4 visible
+        assert_eq!(mask_token("abcdefghijklmnop"), "abcd...mnop");
+        // Token at threshold (exactly 9 chars = still masks)
+        assert_eq!(mask_token("123456789"), "1234...6789");
+        // Token at min length (8 chars) gets fully masked
+        assert_eq!(mask_token("12345678"), "****");
+        // Short token gets fully masked
+        assert_eq!(mask_token("short"), "****");
+    }
+
+    #[test]
+    fn test_mask_token_utf8_emoji() {
+        // Emoji tokens (4 bytes per emoji, but counted as 1 character each)
+        // "🔑🔐🔒🔓🎉🎊🎁🎄🎅" = 9 emoji characters -> should mask
+        assert_eq!(mask_token("🔑🔐🔒🔓🎉🎊🎁🎄🎅"), "🔑🔐🔒🔓...🎊🎁🎄🎅");
+        // "🔑🔐🔒🔓🎉🎊🎁🎄" = 8 emoji characters -> too short, fully mask
+        assert_eq!(mask_token("🔑🔐🔒🔓🎉🎊🎁🎄"), "****");
+    }
+
+    #[test]
+    fn test_mask_token_utf8_chinese() {
+        // Chinese characters (3 bytes each, but counted as 1 character)
+        // "密码钥匙令牌凭证安全" = 10 characters -> should mask
+        // First 4: 密码钥匙, Last 4: 凭证安全
+        assert_eq!(mask_token("密码钥匙令牌凭证安全"), "密码钥匙...凭证安全");
+        // "密码钥匙令牌凭证" = 8 characters -> too short
+        assert_eq!(mask_token("密码钥匙令牌凭证"), "****");
+    }
+
+    #[test]
+    fn test_mask_token_mixed_utf8() {
+        // Mixed ASCII, emoji, and Chinese
+        // "key🔑密码token" = 11 characters -> should mask
+        assert_eq!(mask_token("key🔑密码token"), "key🔑...oken");
     }
 }
