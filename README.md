@@ -30,29 +30,30 @@ This is a Cargo workspace with three crates:
 
 ## Installation
 
-### Pre-built binaries (recommended)
+### Homebrew (macOS/Linux)
 
-Download the latest release for your platform from [GitHub Releases](https://github.com/LuoAndOrder/todoist-rs/releases):
+```bash
+brew install LuoAndOrder/tap/todoist-cli
+```
+
+### Pre-built binaries
+
+Download the latest release from [GitHub Releases](https://github.com/LuoAndOrder/todoist-rs/releases):
 
 | Platform | Download |
 |----------|----------|
 | macOS (Apple Silicon) | `td-aarch64-apple-darwin.tar.gz` |
 | macOS (Intel) | `td-x86_64-apple-darwin.tar.gz` |
 | Linux (x64) | `td-x86_64-unknown-linux-gnu.tar.gz` |
-| Linux (ARM64) | `td-aarch64-unknown-linux-gnu.tar.gz` |
 | Windows (x64) | `td-x86_64-pc-windows-msvc.zip` |
 
 ```bash
 # macOS/Linux: extract and move to PATH
 tar xzf td-*.tar.gz
 sudo mv td /usr/local/bin/
-
-# Or install to user directory (no sudo)
-mkdir -p ~/.local/bin
-mv td ~/.local/bin/
 ```
 
-### With Cargo
+### Cargo
 
 ```bash
 cargo install todoist-cli-rs
