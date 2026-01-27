@@ -26,7 +26,7 @@ mod test_context;
 
 use chrono::{Duration, Local, NaiveDate};
 use test_context::TestContext;
-use todoist_api::quick_add::QuickAddRequest;
+use todoist_api_rs::quick_add::QuickAddRequest;
 
 /// Helper to get today's date string in YYYY-MM-DD format.
 fn today_date_string() -> String {

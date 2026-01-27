@@ -17,7 +17,7 @@ use crate::sync::Item;
 /// # Example
 ///
 /// ```no_run
-/// use todoist_api::quick_add::QuickAddRequest;
+/// use todoist_api_rs::quick_add::QuickAddRequest;
 ///
 /// // Create a simple quick add request
 /// let request = QuickAddRequest::new("Buy milk tomorrow #Shopping p1 @errands").unwrap();
@@ -70,7 +70,7 @@ impl QuickAddRequest {
     /// # Example
     ///
     /// ```
-    /// use todoist_api::quick_add::QuickAddRequest;
+    /// use todoist_api_rs::quick_add::QuickAddRequest;
     ///
     /// // Valid text
     /// let request = QuickAddRequest::new("Buy milk").unwrap();

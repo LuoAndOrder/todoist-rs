@@ -13,7 +13,7 @@
 //! # Example
 //!
 //! ```no_run
-//! use todoist_cache::{Cache, CacheStore};
+//! use todoist_cache_rs::{Cache, CacheStore};
 //!
 //! // Create a store with the default XDG path
 //! let store = CacheStore::new()?;
@@ -26,7 +26,7 @@
 //!
 //! // Save changes to disk
 //! store.save(&cache)?;
-//! # Ok::<(), todoist_cache::CacheStoreError>(())
+//! # Ok::<(), todoist_cache_rs::CacheStoreError>(())
 //! ```
 
 pub mod filter;
@@ -40,7 +40,7 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use todoist_api::sync::{
+use todoist_api_rs::sync::{
     Filter, Item, Label, Note, Project, ProjectNote, Reminder, Section, User,
 };
 
@@ -59,7 +59,7 @@ use todoist_api::sync::{
 ///
 /// ```
 /// use std::sync::{Arc, RwLock};
-/// use todoist_cache::Cache;
+/// use todoist_cache_rs::Cache;
 ///
 /// let cache = Arc::new(RwLock::new(Cache::new()));
 ///
@@ -172,7 +172,7 @@ impl Cache {
     /// # Arguments
     ///
     /// * `response` - The sync response from the Todoist API
-    pub fn apply_sync_response(&mut self, response: &todoist_api::sync::SyncResponse) {
+    pub fn apply_sync_response(&mut self, response: &todoist_api_rs::sync::SyncResponse) {
         let now = Utc::now();
 
         // Update sync token
@@ -306,7 +306,7 @@ impl Cache {
     /// # Arguments
     ///
     /// * `response` - The sync response from a mutation (write) operation
-    pub fn apply_mutation_response(&mut self, response: &todoist_api::sync::SyncResponse) {
+    pub fn apply_mutation_response(&mut self, response: &todoist_api_rs::sync::SyncResponse) {
         let now = Utc::now();
 
         // Update sync token - critical for subsequent syncs
@@ -558,7 +558,7 @@ mod tests {
             reminders: vec![Reminder {
                 id: "reminder-1".to_string(),
                 item_id: "item-1".to_string(),
-                reminder_type: todoist_api::models::ReminderType::Relative,
+                reminder_type: todoist_api_rs::models::ReminderType::Relative,
                 due: None,
                 minute_offset: Some(30),
                 is_deleted: false,
@@ -665,7 +665,7 @@ mod tests {
     // Helper functions for creating test resources
     mod test_helpers {
         use super::*;
-        use todoist_api::sync::SyncResponse;
+        use todoist_api_rs::sync::SyncResponse;
         use std::collections::HashMap;
 
         pub fn make_item(id: &str, content: &str, is_deleted: bool) -> Item {
@@ -759,7 +759,7 @@ mod tests {
             Reminder {
                 id: id.to_string(),
                 item_id: "item-1".to_string(),
-                reminder_type: todoist_api::models::ReminderType::Relative,
+                reminder_type: todoist_api_rs::models::ReminderType::Relative,
                 due: None,
                 minute_offset: Some(30),
                 is_deleted,

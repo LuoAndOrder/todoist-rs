@@ -3,9 +3,9 @@
 //! Lists and manages labels via the Sync API.
 //! Uses SyncManager::execute_commands() to automatically update the cache.
 
-use todoist_api::client::TodoistClient;
-use todoist_api::sync::{Label, SyncCommand};
-use todoist_cache::{Cache, CacheStore, SyncManager};
+use todoist_api_rs::client::TodoistClient;
+use todoist_api_rs::sync::{Label, SyncCommand};
+use todoist_cache_rs::{Cache, CacheStore, SyncManager};
 
 use super::{CommandContext, CommandError, Result};
 use crate::output::{format_labels_json, format_labels_table};
@@ -165,8 +165,8 @@ pub async fn execute_add(ctx: &CommandContext, opts: &LabelsAddOptions, token: &
     if response.has_errors() {
         let errors = response.errors();
         if let Some((_, error)) = errors.first() {
-            return Err(CommandError::Api(todoist_api::error::Error::Api(
-                todoist_api::error::ApiError::Validation {
+            return Err(CommandError::Api(todoist_api_rs::error::Error::Api(
+                todoist_api_rs::error::ApiError::Validation {
                     field: None,
                     message: format!("Error {}: {}", error.error_code, error.error),
                 },
@@ -324,8 +324,8 @@ pub async fn execute_edit(ctx: &CommandContext, opts: &LabelsEditOptions, token:
     if response.has_errors() {
         let errors = response.errors();
         if let Some((_, error)) = errors.first() {
-            return Err(CommandError::Api(todoist_api::error::Error::Api(
-                todoist_api::error::ApiError::Validation {
+            return Err(CommandError::Api(todoist_api_rs::error::Error::Api(
+                todoist_api_rs::error::ApiError::Validation {
                     field: None,
                     message: format!("Error {}: {}", error.error_code, error.error),
                 },
@@ -463,8 +463,8 @@ pub async fn execute_delete(ctx: &CommandContext, opts: &LabelsDeleteOptions, to
     if response.has_errors() {
         let errors = response.errors();
         if let Some((_, error)) = errors.first() {
-            return Err(CommandError::Api(todoist_api::error::Error::Api(
-                todoist_api::error::ApiError::Validation {
+            return Err(CommandError::Api(todoist_api_rs::error::Error::Api(
+                todoist_api_rs::error::ApiError::Validation {
                     field: None,
                     message: format!("Error {}: {}", error.error_code, error.error),
                 },

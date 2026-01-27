@@ -16,7 +16,7 @@ pub use crate::models::{Deadline, Due, Duration, DurationUnit, LocationTrigger, 
 /// ## Check for command errors
 ///
 /// ```
-/// use todoist_api::sync::SyncResponse;
+/// use todoist_api_rs::sync::SyncResponse;
 ///
 /// let json = r#"{
 ///     "sync_token": "new-token",
@@ -36,7 +36,7 @@ pub use crate::models::{Deadline, Due, Duration, DurationUnit, LocationTrigger, 
 /// ## Look up real IDs from temp IDs
 ///
 /// ```
-/// use todoist_api::sync::SyncResponse;
+/// use todoist_api_rs::sync::SyncResponse;
 ///
 /// let json = r#"{
 ///     "sync_token": "token",
@@ -154,7 +154,7 @@ pub struct SyncResponse {
 /// # Examples
 ///
 /// ```
-/// use todoist_api::sync::CommandResult;
+/// use todoist_api_rs::sync::CommandResult;
 ///
 /// // Success case
 /// let ok: CommandResult = serde_json::from_str(r#""ok""#).unwrap();

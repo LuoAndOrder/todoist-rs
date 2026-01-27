@@ -57,7 +57,7 @@ impl Default for RetryConfig {
 ///
 /// ```
 /// use std::time::Duration;
-/// use todoist_api::client::TodoistClientBuilder;
+/// use todoist_api_rs::client::TodoistClientBuilder;
 ///
 /// let client = TodoistClientBuilder::new("your-api-token")
 ///     .max_retries(5)
@@ -164,7 +164,7 @@ impl TodoistClientBuilder {
 ///
 /// ```
 /// use std::sync::Arc;
-/// use todoist_api::client::TodoistClient;
+/// use todoist_api_rs::client::TodoistClient;
 ///
 /// let client = Arc::new(TodoistClient::new("token"));
 ///
@@ -184,7 +184,7 @@ impl TodoistClient {
     ///
     /// This is a convenience method equivalent to:
     /// ```
-    /// # use todoist_api::client::TodoistClientBuilder;
+    /// # use todoist_api_rs::client::TodoistClientBuilder;
     /// # let token = "your-api-token";
     /// TodoistClientBuilder::new(token).build();
     /// ```
@@ -408,8 +408,8 @@ impl TodoistClient {
     ///
     /// # Example
     /// ```no_run
-    /// use todoist_api::client::TodoistClient;
-    /// use todoist_api::sync::SyncRequest;
+    /// use todoist_api_rs::client::TodoistClient;
+    /// use todoist_api_rs::sync::SyncRequest;
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -459,8 +459,8 @@ impl TodoistClient {
     ///
     /// # Example
     /// ```no_run
-    /// use todoist_api::client::TodoistClient;
-    /// use todoist_api::quick_add::QuickAddRequest;
+    /// use todoist_api_rs::client::TodoistClient;
+    /// use todoist_api_rs::quick_add::QuickAddRequest;
     ///
     /// #[tokio::main]
     /// async fn main() {

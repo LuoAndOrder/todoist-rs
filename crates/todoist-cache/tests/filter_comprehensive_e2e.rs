@@ -13,9 +13,9 @@
 use std::fs;
 
 use chrono::{Duration, Local};
-use todoist_api::client::TodoistClient;
-use todoist_api::sync::{SyncCommand, SyncRequest, SyncResponse};
-use todoist_cache::filter::{FilterContext, FilterEvaluator, FilterParser};
+use todoist_api_rs::client::TodoistClient;
+use todoist_api_rs::sync::{SyncCommand, SyncRequest, SyncResponse};
+use todoist_cache_rs::filter::{FilterContext, FilterEvaluator, FilterParser};
 
 // ============================================================================
 // Test Context for Rate Limit Management
@@ -61,10 +61,10 @@ struct FilterTestContext {
     client: TodoistClient,
     sync_token: String,
     inbox_id: String,
-    items: Vec<todoist_api::sync::Item>,
-    projects: Vec<todoist_api::sync::Project>,
-    sections: Vec<todoist_api::sync::Section>,
-    labels: Vec<todoist_api::sync::Label>,
+    items: Vec<todoist_api_rs::sync::Item>,
+    projects: Vec<todoist_api_rs::sync::Project>,
+    sections: Vec<todoist_api_rs::sync::Section>,
+    labels: Vec<todoist_api_rs::sync::Label>,
 }
 
 impl FilterTestContext {
@@ -101,7 +101,7 @@ impl FilterTestContext {
     async fn execute(
         &mut self,
         commands: Vec<SyncCommand>,
-    ) -> Result<SyncResponse, todoist_api::error::Error> {
+    ) -> Result<SyncResponse, todoist_api_rs::error::Error> {
         let request = SyncRequest::incremental(&self.sync_token)
             .with_resource_types(vec!["all".to_string()])
             .add_commands(commands);
@@ -147,12 +147,12 @@ impl FilterTestContext {
         }
     }
 
-    fn find_item(&self, id: &str) -> Option<&todoist_api::sync::Item> {
+    fn find_item(&self, id: &str) -> Option<&todoist_api_rs::sync::Item> {
         self.items.iter().find(|i| i.id == id && !i.is_deleted)
     }
 
     /// Evaluate a filter against the current cached items
-    fn evaluate_filter(&self, filter_query: &str) -> Vec<&todoist_api::sync::Item> {
+    fn evaluate_filter(&self, filter_query: &str) -> Vec<&todoist_api_rs::sync::Item> {
         let filter = FilterParser::parse(filter_query).expect("Filter should parse");
         let context = FilterContext::new(&self.projects, &self.sections, &self.labels);
         let evaluator = FilterEvaluator::new(&filter, &context);

@@ -7,7 +7,7 @@
 //! # Example
 //!
 //! ```
-//! use todoist_api::prelude::*;
+//! use todoist_api_rs::prelude::*;
 //!
 //! // Now you have access to:
 //! // - TodoistClient, TodoistClientBuilder (API client)

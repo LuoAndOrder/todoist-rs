@@ -24,7 +24,7 @@
 mod test_context;
 
 use test_context::TestContext;
-use todoist_api::sync::SyncCommand;
+use todoist_api_rs::sync::SyncCommand;
 
 /// Helper to check if task comments are available.
 /// Returns true if the first comment test succeeds, false if comments are unavailable.

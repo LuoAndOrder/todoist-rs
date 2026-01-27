@@ -108,19 +108,19 @@ pub fn confirm_bulk_operation(
 pub enum CommandError {
     /// Cache/sync error.
     #[error("sync error: {0}")]
-    Sync(#[from] todoist_cache::SyncError),
+    Sync(#[from] todoist_cache_rs::SyncError),
 
     /// Cache store error.
     #[error("cache error: {0}")]
-    CacheStore(#[from] todoist_cache::CacheStoreError),
+    CacheStore(#[from] todoist_cache_rs::CacheStoreError),
 
     /// Filter parsing error.
     #[error("filter error: {0}")]
-    Filter(#[from] todoist_cache::filter::FilterError),
+    Filter(#[from] todoist_cache_rs::filter::FilterError),
 
     /// API error.
     #[error("API error: {0}")]
-    Api(#[from] todoist_api::error::Error),
+    Api(#[from] todoist_api_rs::error::Error),
 
     /// Configuration error.
     #[error("configuration error: {0}")]

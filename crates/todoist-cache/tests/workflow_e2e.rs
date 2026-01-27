@@ -13,8 +13,8 @@
 use std::fs;
 
 use chrono::{Duration, Local};
-use todoist_api::client::TodoistClient;
-use todoist_api::sync::{SyncCommand, SyncRequest, SyncResponse};
+use todoist_api_rs::client::TodoistClient;
+use todoist_api_rs::sync::{SyncCommand, SyncRequest, SyncResponse};
 
 // ============================================================================
 // Test Context for Rate Limit Management
@@ -60,10 +60,10 @@ struct WorkflowTestContext {
     client: TodoistClient,
     sync_token: String,
     inbox_id: String,
-    items: Vec<todoist_api::sync::Item>,
-    projects: Vec<todoist_api::sync::Project>,
-    sections: Vec<todoist_api::sync::Section>,
-    labels: Vec<todoist_api::sync::Label>,
+    items: Vec<todoist_api_rs::sync::Item>,
+    projects: Vec<todoist_api_rs::sync::Project>,
+    sections: Vec<todoist_api_rs::sync::Section>,
+    labels: Vec<todoist_api_rs::sync::Label>,
 }
 
 impl WorkflowTestContext {
@@ -100,7 +100,7 @@ impl WorkflowTestContext {
     async fn execute(
         &mut self,
         commands: Vec<SyncCommand>,
-    ) -> Result<SyncResponse, todoist_api::error::Error> {
+    ) -> Result<SyncResponse, todoist_api_rs::error::Error> {
         let request = SyncRequest::incremental(&self.sync_token)
             .with_resource_types(vec!["all".to_string()])
             .add_commands(commands);
@@ -146,26 +146,26 @@ impl WorkflowTestContext {
         }
     }
 
-    fn find_item(&self, id: &str) -> Option<&todoist_api::sync::Item> {
+    fn find_item(&self, id: &str) -> Option<&todoist_api_rs::sync::Item> {
         self.items.iter().find(|i| i.id == id && !i.is_deleted)
     }
 
-    fn find_project(&self, id: &str) -> Option<&todoist_api::sync::Project> {
+    fn find_project(&self, id: &str) -> Option<&todoist_api_rs::sync::Project> {
         self.projects.iter().find(|p| p.id == id && !p.is_deleted)
     }
 
-    fn find_label(&self, id: &str) -> Option<&todoist_api::sync::Label> {
+    fn find_label(&self, id: &str) -> Option<&todoist_api_rs::sync::Label> {
         self.labels.iter().find(|l| l.id == id && !l.is_deleted)
     }
 
-    fn find_label_by_name(&self, name: &str) -> Option<&todoist_api::sync::Label> {
+    fn find_label_by_name(&self, name: &str) -> Option<&todoist_api_rs::sync::Label> {
         self.labels
             .iter()
             .find(|l| !l.is_deleted && l.name.eq_ignore_ascii_case(name))
     }
 
     /// Get all non-deleted items in a specific project
-    fn items_in_project(&self, project_id: &str) -> Vec<&todoist_api::sync::Item> {
+    fn items_in_project(&self, project_id: &str) -> Vec<&todoist_api_rs::sync::Item> {
         self.items
             .iter()
             .filter(|i| !i.is_deleted && !i.checked && i.project_id == project_id)
@@ -173,7 +173,7 @@ impl WorkflowTestContext {
     }
 
     /// Get all non-deleted, uncompleted items due on a specific date
-    fn items_due_on(&self, date: &str) -> Vec<&todoist_api::sync::Item> {
+    fn items_due_on(&self, date: &str) -> Vec<&todoist_api_rs::sync::Item> {
         self.items
             .iter()
             .filter(|i| {

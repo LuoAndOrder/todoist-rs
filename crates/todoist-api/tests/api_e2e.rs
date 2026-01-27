@@ -8,9 +8,9 @@
 #![cfg(feature = "e2e")]
 
 use std::fs;
-use todoist_api::client::TodoistClient;
-use todoist_api::quick_add::QuickAddRequest;
-use todoist_api::sync::{SyncCommand, SyncRequest};
+use todoist_api_rs::client::TodoistClient;
+use todoist_api_rs::quick_add::QuickAddRequest;
+use todoist_api_rs::sync::{SyncCommand, SyncRequest};
 
 fn get_test_token() -> Option<String> {
     // Try to read from .env.local at workspace root

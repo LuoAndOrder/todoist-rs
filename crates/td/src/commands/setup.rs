@@ -11,7 +11,7 @@ use std::io::{self, IsTerminal};
 
 use dialoguer::{Input, Select};
 use owo_colors::OwoColorize;
-use todoist_cache::{CacheStore, SyncManager};
+use todoist_cache_rs::{CacheStore, SyncManager};
 
 use super::config::{get_config_path, load_config, Config};
 use super::keyring;
@@ -110,7 +110,7 @@ pub async fn run_setup(ctx: &CommandContext) -> Result<String> {
         println!("Validating token...");
     }
 
-    let client = todoist_api::client::TodoistClient::new(&token);
+    let client = todoist_api_rs::client::TodoistClient::new(&token);
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 

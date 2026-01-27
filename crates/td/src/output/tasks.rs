@@ -2,8 +2,8 @@
 
 use owo_colors::OwoColorize;
 use serde::Serialize;
-use todoist_api::sync::Item;
-use todoist_cache::Cache;
+use todoist_api_rs::sync::Item;
+use todoist_cache_rs::Cache;
 
 use crate::commands::add::AddResult;
 use crate::commands::quick::QuickResult;
@@ -105,7 +105,7 @@ pub struct CommentOutput<'a> {
 #[derive(Serialize)]
 pub struct ReminderOutput {
     pub id: String,
-    pub reminder_type: todoist_api::models::ReminderType,
+    pub reminder_type: todoist_api_rs::models::ReminderType,
     pub due: Option<DueOutputOwned>,
     pub minute_offset: Option<i32>,
 }

@@ -4,9 +4,9 @@
 //! Uses SyncManager::execute_commands() to automatically update the cache.
 //! Uses resolve_item_by_prefix() for smart lookups with auto-sync fallback.
 
-use todoist_api::client::TodoistClient;
-use todoist_api::sync::SyncCommand;
-use todoist_cache::{CacheStore, SyncManager};
+use todoist_api_rs::client::TodoistClient;
+use todoist_api_rs::sync::SyncCommand;
+use todoist_cache_rs::{CacheStore, SyncManager};
 
 use super::{confirm_bulk_operation, CommandContext, CommandError, ConfirmResult, Result};
 

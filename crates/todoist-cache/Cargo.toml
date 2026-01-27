@@ -1,5 +1,5 @@
 [package]
-name = "todoist-cache"
+name = "todoist-cache-rs"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,7 +7,7 @@ repository.workspace = true
 description = "Local cache for Todoist data"
 
 [lib]
-name = "todoist_cache"
+name = "todoist_cache_rs"
 path = "src/lib.rs"
 
 [features]
@@ -15,7 +15,7 @@ default = []
 e2e = []
 
 [dependencies]
-todoist-api.workspace = true
+todoist-api-rs.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 chrono.workspace = true

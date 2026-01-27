@@ -6,8 +6,8 @@
 //! # Example
 //!
 //! ```
-//! use todoist_cache::filter::{FilterParser, FilterEvaluator, FilterContext};
-//! use todoist_api::sync::{Item, Project, Section, Label};
+//! use todoist_cache_rs::filter::{FilterParser, FilterEvaluator, FilterContext};
+//! use todoist_api_rs::sync::{Item, Project, Section, Label};
 //!
 //! // Parse a filter
 //! let filter = FilterParser::parse("today & p1").unwrap();
@@ -53,7 +53,7 @@
 //! ```
 
 use chrono::{Datelike, Local, NaiveDate};
-use todoist_api::sync::{Item, Label, Project, Section};
+use todoist_api_rs::sync::{Item, Label, Project, Section};
 
 use super::ast::Filter;
 
@@ -324,7 +324,7 @@ impl<'a> FilterEvaluator<'a> {
 mod tests {
     use super::*;
     use chrono::Local;
-    use todoist_api::models::Due;
+    use todoist_api_rs::models::Due;
 
     // ==================== Test Helpers ====================
 

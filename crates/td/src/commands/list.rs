@@ -2,9 +2,9 @@
 //!
 //! Lists tasks from the local cache, optionally filtered by various criteria.
 
-use todoist_api::sync::Item;
-use todoist_cache::filter::{FilterContext, FilterEvaluator, FilterParser};
-use todoist_cache::{Cache, CacheStore, SyncManager};
+use todoist_api_rs::sync::Item;
+use todoist_cache_rs::filter::{FilterContext, FilterEvaluator, FilterParser};
+use todoist_cache_rs::{Cache, CacheStore, SyncManager};
 
 use super::{CommandContext, Result};
 use crate::cli::SortField;
@@ -53,7 +53,7 @@ pub struct ListOptions {
 /// Returns an error if syncing fails or if the filter expression is invalid.
 pub async fn execute(ctx: &CommandContext, opts: &ListOptions, token: &str) -> Result<()> {
     // Initialize sync manager
-    let client = todoist_api::client::TodoistClient::new(token);
+    let client = todoist_api_rs::client::TodoistClient::new(token);
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 

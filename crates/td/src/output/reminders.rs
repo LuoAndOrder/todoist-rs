@@ -2,9 +2,9 @@
 
 use owo_colors::OwoColorize;
 use serde::Serialize;
-use todoist_api::models::ReminderType;
-use todoist_api::sync::Reminder;
-use todoist_cache::Cache;
+use todoist_api_rs::models::ReminderType;
+use todoist_api_rs::sync::Reminder;
+use todoist_cache_rs::Cache;
 
 use crate::commands::reminders::{ReminderAddResult, ReminderDeleteResult};
 

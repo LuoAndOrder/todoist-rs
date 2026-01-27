@@ -5,7 +5,7 @@
 //! For convenient imports, use the prelude:
 //!
 //! ```
-//! use todoist_api::prelude::*;
+//! use todoist_api_rs::prelude::*;
 //! ```
 //!
 //! This re-exports the most commonly used types including [`TodoistClient`],

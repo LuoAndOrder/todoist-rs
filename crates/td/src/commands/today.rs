@@ -3,8 +3,8 @@
 //! Shows today's agenda: tasks due today and optionally overdue/upcoming tasks.
 
 use chrono::{Local, NaiveDate, Utc};
-use todoist_api::sync::Item;
-use todoist_cache::{Cache, CacheStore, SyncManager};
+use todoist_api_rs::sync::Item;
+use todoist_cache_rs::{Cache, CacheStore, SyncManager};
 
 use super::{CommandContext, Result};
 
@@ -42,7 +42,7 @@ pub struct TodayResult<'a> {
 /// Returns an error if syncing fails.
 pub async fn execute(ctx: &CommandContext, opts: &TodayOptions, token: &str) -> Result<()> {
     // Initialize sync manager
-    let client = todoist_api::client::TodoistClient::new(token);
+    let client = todoist_api_rs::client::TodoistClient::new(token);
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
@@ -313,7 +313,7 @@ fn format_priority(api_priority: i32, use_colors: bool) -> String {
 }
 
 /// Formats due date for the today view.
-fn format_due_for_today(due: Option<&todoist_api::sync::Due>, use_colors: bool) -> String {
+fn format_due_for_today(due: Option<&todoist_api_rs::sync::Due>, use_colors: bool) -> String {
     use owo_colors::OwoColorize;
 
     let Some(due) = due else {

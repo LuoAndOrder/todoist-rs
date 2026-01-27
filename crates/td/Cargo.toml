@@ -1,5 +1,5 @@
 [package]
-name = "td"
+name = "todoist-cli-rs"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -11,8 +11,8 @@ name = "td"
 path = "src/main.rs"
 
 [dependencies]
-todoist-api.workspace = true
-todoist-cache.workspace = true
+todoist-api-rs.workspace = true
+todoist-cache-rs.workspace = true
 clap.workspace = true
 clap_complete.workspace = true
 tokio.workspace = true

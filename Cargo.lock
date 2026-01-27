@@ -1476,28 +1476,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "td"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "clap",
- "clap_complete",
- "dialoguer",
- "directories",
- "keyring",
- "owo-colors",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.18",
- "todoist-api",
- "todoist-cache",
- "tokio",
- "toml",
- "uuid",
-]
-
-[[package]]
 name = "tempfile"
 version = "3.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1561,7 +1539,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "todoist-api"
+name = "todoist-api-rs"
 version = "0.1.0"
 dependencies = [
  "chrono",
@@ -1576,7 +1554,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "todoist-cache"
+name = "todoist-cache-rs"
 version = "0.1.0"
 dependencies = [
  "chrono",
@@ -1586,10 +1564,32 @@ dependencies = [
  "strsim",
  "tempfile",
  "thiserror 2.0.18",
- "todoist-api",
+ "todoist-api-rs",
  "tokio",
  "uuid",
  "wiremock",
+]
+
+[[package]]
+name = "todoist-cli-rs"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "clap",
+ "clap_complete",
+ "dialoguer",
+ "directories",
+ "keyring",
+ "owo-colors",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "todoist-api-rs",
+ "todoist-cache-rs",
+ "tokio",
+ "toml",
+ "uuid",
 ]
 
 [[package]]

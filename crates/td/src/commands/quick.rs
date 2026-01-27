@@ -2,9 +2,9 @@
 //!
 //! Creates a new task using the Quick Add REST API with server-side NLP parsing.
 
-use todoist_api::client::TodoistClient;
-use todoist_api::quick_add::{QuickAddRequest, QuickAddResponse};
-use todoist_cache::{CacheStore, SyncManager};
+use todoist_api_rs::client::TodoistClient;
+use todoist_api_rs::quick_add::{QuickAddRequest, QuickAddResponse};
+use todoist_cache_rs::{CacheStore, SyncManager};
 
 use super::{CommandContext, Result};
 
@@ -70,7 +70,7 @@ pub async fn execute(ctx: &CommandContext, opts: &QuickOptions, token: &str) -> 
 
     // Build the quick add request
     let mut request = QuickAddRequest::new(&opts.text)
-        .map_err(todoist_api::error::Error::from)?;
+        .map_err(todoist_api_rs::error::Error::from)?;
 
     if opts.auto_reminder {
         request = request.with_auto_reminder(true);
@@ -144,7 +144,7 @@ async fn resolve_project_name(token: &str, response: &QuickAddResponse) -> Optio
 #[cfg(test)]
 mod tests {
     use super::*;
-    use todoist_api::models::Due;
+    use todoist_api_rs::models::Due;
 
     #[test]
     fn test_quick_options_defaults() {

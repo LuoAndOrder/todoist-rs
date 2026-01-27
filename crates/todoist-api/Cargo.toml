@@ -1,5 +1,5 @@
 [package]
-name = "todoist-api"
+name = "todoist-api-rs"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,7 +7,7 @@ repository.workspace = true
 description = "Todoist API client library"
 
 [lib]
-name = "todoist_api"
+name = "todoist_api_rs"
 path = "src/lib.rs"
 
 [features]

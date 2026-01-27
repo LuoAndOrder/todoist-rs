@@ -18,8 +18,8 @@
 #![cfg(feature = "e2e")]
 
 use std::fs;
-use todoist_api::client::TodoistClient;
-use todoist_api::sync::{
+use todoist_api_rs::client::TodoistClient;
+use todoist_api_rs::sync::{
     Filter, Item, Label, Note, Project, ProjectNote, Reminder, Section, SyncCommand, SyncRequest,
     SyncResponse,
 };
@@ -158,7 +158,7 @@ impl TestContext {
     pub async fn execute(
         &mut self,
         commands: Vec<SyncCommand>,
-    ) -> Result<SyncResponse, todoist_api::error::Error> {
+    ) -> Result<SyncResponse, todoist_api_rs::error::Error> {
         let request = SyncRequest::incremental(&self.sync_token)
             .with_resource_types(vec!["all".to_string()])
             .add_commands(commands);
@@ -178,7 +178,7 @@ impl TestContext {
     ///
     /// Use this to get the latest state from the server when you need to
     /// verify changes made outside of the test context.
-    pub async fn refresh(&mut self) -> Result<SyncResponse, todoist_api::error::Error> {
+    pub async fn refresh(&mut self) -> Result<SyncResponse, todoist_api_rs::error::Error> {
         let request = SyncRequest::incremental(&self.sync_token)
             .with_resource_types(vec!["all".to_string()]);
 
@@ -343,7 +343,7 @@ impl TestContext {
         content: &str,
         project_id: &str,
         extra_args: Option<serde_json::Value>,
-    ) -> Result<String, todoist_api::error::Error> {
+    ) -> Result<String, todoist_api_rs::error::Error> {
         let temp_id = uuid::Uuid::new_v4().to_string();
         let mut args = serde_json::json!({
             "content": content,
@@ -362,7 +362,7 @@ impl TestContext {
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
-            return Err(todoist_api::error::Error::Internal(format!(
+            return Err(todoist_api_rs::error::Error::Internal(format!(
                 "item_add failed: {:?}",
                 response.errors()
             )));
@@ -372,7 +372,7 @@ impl TestContext {
             .real_id(&temp_id)
             .cloned()
             .ok_or_else(|| {
-                todoist_api::error::Error::Internal("No temp_id mapping returned".to_string())
+                todoist_api_rs::error::Error::Internal("No temp_id mapping returned".to_string())
             })
     }
 
@@ -380,7 +380,7 @@ impl TestContext {
     pub async fn create_project(
         &mut self,
         name: &str,
-    ) -> Result<String, todoist_api::error::Error> {
+    ) -> Result<String, todoist_api_rs::error::Error> {
         let temp_id = uuid::Uuid::new_v4().to_string();
         let command = SyncCommand::with_temp_id(
             "project_add",
@@ -390,14 +390,14 @@ impl TestContext {
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
-            return Err(todoist_api::error::Error::Internal(format!(
+            return Err(todoist_api_rs::error::Error::Internal(format!(
                 "project_add failed: {:?}",
                 response.errors()
             )));
         }
 
         response.real_id(&temp_id).cloned().ok_or_else(|| {
-            todoist_api::error::Error::Internal("No temp_id mapping returned".to_string())
+            todoist_api_rs::error::Error::Internal("No temp_id mapping returned".to_string())
         })
     }
 
@@ -406,7 +406,7 @@ impl TestContext {
         &mut self,
         name: &str,
         project_id: &str,
-    ) -> Result<String, todoist_api::error::Error> {
+    ) -> Result<String, todoist_api_rs::error::Error> {
         let temp_id = uuid::Uuid::new_v4().to_string();
         let command = SyncCommand::with_temp_id(
             "section_add",
@@ -419,14 +419,14 @@ impl TestContext {
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
-            return Err(todoist_api::error::Error::Internal(format!(
+            return Err(todoist_api_rs::error::Error::Internal(format!(
                 "section_add failed: {:?}",
                 response.errors()
             )));
         }
 
         response.real_id(&temp_id).cloned().ok_or_else(|| {
-            todoist_api::error::Error::Internal("No temp_id mapping returned".to_string())
+            todoist_api_rs::error::Error::Internal("No temp_id mapping returned".to_string())
         })
     }
 
@@ -434,7 +434,7 @@ impl TestContext {
     pub async fn create_label(
         &mut self,
         name: &str,
-    ) -> Result<String, todoist_api::error::Error> {
+    ) -> Result<String, todoist_api_rs::error::Error> {
         let temp_id = uuid::Uuid::new_v4().to_string();
         let command = SyncCommand::with_temp_id(
             "label_add",
@@ -444,24 +444,24 @@ impl TestContext {
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
-            return Err(todoist_api::error::Error::Internal(format!(
+            return Err(todoist_api_rs::error::Error::Internal(format!(
                 "label_add failed: {:?}",
                 response.errors()
             )));
         }
 
         response.real_id(&temp_id).cloned().ok_or_else(|| {
-            todoist_api::error::Error::Internal("No temp_id mapping returned".to_string())
+            todoist_api_rs::error::Error::Internal("No temp_id mapping returned".to_string())
         })
     }
 
     /// Deletes a task.
-    pub async fn delete_task(&mut self, task_id: &str) -> Result<(), todoist_api::error::Error> {
+    pub async fn delete_task(&mut self, task_id: &str) -> Result<(), todoist_api_rs::error::Error> {
         let command = SyncCommand::new("item_delete", serde_json::json!({"id": task_id}));
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
-            return Err(todoist_api::error::Error::Internal(format!(
+            return Err(todoist_api_rs::error::Error::Internal(format!(
                 "item_delete failed: {:?}",
                 response.errors()
             )));
@@ -474,12 +474,12 @@ impl TestContext {
     pub async fn delete_project(
         &mut self,
         project_id: &str,
-    ) -> Result<(), todoist_api::error::Error> {
+    ) -> Result<(), todoist_api_rs::error::Error> {
         let command = SyncCommand::new("project_delete", serde_json::json!({"id": project_id}));
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
-            return Err(todoist_api::error::Error::Internal(format!(
+            return Err(todoist_api_rs::error::Error::Internal(format!(
                 "project_delete failed: {:?}",
                 response.errors()
             )));
@@ -492,12 +492,12 @@ impl TestContext {
     pub async fn delete_section(
         &mut self,
         section_id: &str,
-    ) -> Result<(), todoist_api::error::Error> {
+    ) -> Result<(), todoist_api_rs::error::Error> {
         let command = SyncCommand::new("section_delete", serde_json::json!({"id": section_id}));
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
-            return Err(todoist_api::error::Error::Internal(format!(
+            return Err(todoist_api_rs::error::Error::Internal(format!(
                 "section_delete failed: {:?}",
                 response.errors()
             )));
@@ -507,12 +507,12 @@ impl TestContext {
     }
 
     /// Deletes a label.
-    pub async fn delete_label(&mut self, label_id: &str) -> Result<(), todoist_api::error::Error> {
+    pub async fn delete_label(&mut self, label_id: &str) -> Result<(), todoist_api_rs::error::Error> {
         let command = SyncCommand::new("label_delete", serde_json::json!({"id": label_id}));
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
-            return Err(todoist_api::error::Error::Internal(format!(
+            return Err(todoist_api_rs::error::Error::Internal(format!(
                 "label_delete failed: {:?}",
                 response.errors()
             )));
@@ -528,7 +528,7 @@ impl TestContext {
         &mut self,
         item_id: &str,
         due_datetime: &str,
-    ) -> Result<String, todoist_api::error::Error> {
+    ) -> Result<String, todoist_api_rs::error::Error> {
         let temp_id = uuid::Uuid::new_v4().to_string();
         let command = SyncCommand::with_temp_id(
             "reminder_add",
@@ -544,14 +544,14 @@ impl TestContext {
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
-            return Err(todoist_api::error::Error::Internal(format!(
+            return Err(todoist_api_rs::error::Error::Internal(format!(
                 "reminder_add (absolute) failed: {:?}",
                 response.errors()
             )));
         }
 
         response.real_id(&temp_id).cloned().ok_or_else(|| {
-            todoist_api::error::Error::Internal("No temp_id mapping returned".to_string())
+            todoist_api_rs::error::Error::Internal("No temp_id mapping returned".to_string())
         })
     }
 
@@ -563,7 +563,7 @@ impl TestContext {
         &mut self,
         item_id: &str,
         minute_offset: i32,
-    ) -> Result<String, todoist_api::error::Error> {
+    ) -> Result<String, todoist_api_rs::error::Error> {
         let temp_id = uuid::Uuid::new_v4().to_string();
         let command = SyncCommand::with_temp_id(
             "reminder_add",
@@ -577,14 +577,14 @@ impl TestContext {
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
-            return Err(todoist_api::error::Error::Internal(format!(
+            return Err(todoist_api_rs::error::Error::Internal(format!(
                 "reminder_add (relative) failed: {:?}",
                 response.errors()
             )));
         }
 
         response.real_id(&temp_id).cloned().ok_or_else(|| {
-            todoist_api::error::Error::Internal("No temp_id mapping returned".to_string())
+            todoist_api_rs::error::Error::Internal("No temp_id mapping returned".to_string())
         })
     }
 
@@ -592,12 +592,12 @@ impl TestContext {
     pub async fn delete_reminder(
         &mut self,
         reminder_id: &str,
-    ) -> Result<(), todoist_api::error::Error> {
+    ) -> Result<(), todoist_api_rs::error::Error> {
         let command = SyncCommand::new("reminder_delete", serde_json::json!({"id": reminder_id}));
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
-            return Err(todoist_api::error::Error::Internal(format!(
+            return Err(todoist_api_rs::error::Error::Internal(format!(
                 "reminder_delete failed: {:?}",
                 response.errors()
             )));
@@ -651,7 +651,7 @@ impl TestContext {
         &mut self,
         item_id: &str,
         content: &str,
-    ) -> Result<String, todoist_api::error::Error> {
+    ) -> Result<String, todoist_api_rs::error::Error> {
         let temp_id = uuid::Uuid::new_v4().to_string();
         let command = SyncCommand::with_temp_id(
             "note_add",
@@ -664,24 +664,24 @@ impl TestContext {
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
-            return Err(todoist_api::error::Error::Internal(format!(
+            return Err(todoist_api_rs::error::Error::Internal(format!(
                 "note_add failed: {:?}",
                 response.errors()
             )));
         }
 
         response.real_id(&temp_id).cloned().ok_or_else(|| {
-            todoist_api::error::Error::Internal("No temp_id mapping returned".to_string())
+            todoist_api_rs::error::Error::Internal("No temp_id mapping returned".to_string())
         })
     }
 
     /// Deletes a task comment (note).
-    pub async fn delete_note(&mut self, note_id: &str) -> Result<(), todoist_api::error::Error> {
+    pub async fn delete_note(&mut self, note_id: &str) -> Result<(), todoist_api_rs::error::Error> {
         let command = SyncCommand::new("note_delete", serde_json::json!({"id": note_id}));
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
-            return Err(todoist_api::error::Error::Internal(format!(
+            return Err(todoist_api_rs::error::Error::Internal(format!(
                 "note_delete failed: {:?}",
                 response.errors()
             )));
@@ -695,7 +695,7 @@ impl TestContext {
         &mut self,
         project_id: &str,
         content: &str,
-    ) -> Result<String, todoist_api::error::Error> {
+    ) -> Result<String, todoist_api_rs::error::Error> {
         let temp_id = uuid::Uuid::new_v4().to_string();
         let command = SyncCommand::with_temp_id(
             "project_note_add",
@@ -708,14 +708,14 @@ impl TestContext {
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
-            return Err(todoist_api::error::Error::Internal(format!(
+            return Err(todoist_api_rs::error::Error::Internal(format!(
                 "project_note_add failed: {:?}",
                 response.errors()
             )));
         }
 
         response.real_id(&temp_id).cloned().ok_or_else(|| {
-            todoist_api::error::Error::Internal("No temp_id mapping returned".to_string())
+            todoist_api_rs::error::Error::Internal("No temp_id mapping returned".to_string())
         })
     }
 
@@ -723,12 +723,12 @@ impl TestContext {
     pub async fn delete_project_note(
         &mut self,
         note_id: &str,
-    ) -> Result<(), todoist_api::error::Error> {
+    ) -> Result<(), todoist_api_rs::error::Error> {
         let command = SyncCommand::new("project_note_delete", serde_json::json!({"id": note_id}));
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
-            return Err(todoist_api::error::Error::Internal(format!(
+            return Err(todoist_api_rs::error::Error::Internal(format!(
                 "project_note_delete failed: {:?}",
                 response.errors()
             )));
@@ -747,7 +747,7 @@ impl TestContext {
         project_ids: &[&str],
         section_ids: &[&str],
         label_ids: &[&str],
-    ) -> Result<(), todoist_api::error::Error> {
+    ) -> Result<(), todoist_api_rs::error::Error> {
         self.batch_delete_with_reminders(task_ids, project_ids, section_ids, label_ids, &[])
             .await
     }
@@ -763,7 +763,7 @@ impl TestContext {
         section_ids: &[&str],
         label_ids: &[&str],
         reminder_ids: &[&str],
-    ) -> Result<(), todoist_api::error::Error> {
+    ) -> Result<(), todoist_api_rs::error::Error> {
         self.batch_delete_all(
             task_ids,
             project_ids,
@@ -786,7 +786,7 @@ impl TestContext {
         project_ids: &[&str],
         note_ids: &[&str],
         project_note_ids: &[&str],
-    ) -> Result<(), todoist_api::error::Error> {
+    ) -> Result<(), todoist_api_rs::error::Error> {
         self.batch_delete_all(
             task_ids,
             project_ids,
@@ -817,7 +817,7 @@ impl TestContext {
         reminder_ids: &[&str],
         note_ids: &[&str],
         project_note_ids: &[&str],
-    ) -> Result<(), todoist_api::error::Error> {
+    ) -> Result<(), todoist_api_rs::error::Error> {
         let mut commands = Vec::new();
 
         // Delete notes first (they depend on tasks)

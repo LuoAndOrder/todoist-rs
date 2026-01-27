@@ -2,7 +2,7 @@
 
 use owo_colors::OwoColorize;
 use serde::Serialize;
-use todoist_api::sync::Label;
+use todoist_api_rs::sync::Label;
 
 use crate::commands::labels::{LabelAddResult, LabelDeleteResult, LabelEditResult};
 

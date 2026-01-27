@@ -21,7 +21,7 @@
 mod test_context;
 
 use test_context::TestContext;
-use todoist_api::sync::SyncCommand;
+use todoist_api_rs::sync::SyncCommand;
 
 // =============================================================================
 // 11.1 Unicode and Special Characters

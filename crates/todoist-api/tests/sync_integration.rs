@@ -5,8 +5,8 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
-use todoist_api::client::TodoistClient;
-use todoist_api::sync::{SyncCommand, SyncRequest};
+use todoist_api_rs::client::TodoistClient;
+use todoist_api_rs::sync::{SyncCommand, SyncRequest};
 use wiremock::matchers::{body_string_contains, header, method, path};
 use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
 

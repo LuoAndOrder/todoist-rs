@@ -4,8 +4,8 @@ use std::collections::HashMap;
 
 use owo_colors::OwoColorize;
 use serde::Serialize;
-use todoist_api::sync::Project;
-use todoist_cache::Cache;
+use todoist_api_rs::sync::Project;
+use todoist_cache_rs::Cache;
 
 use crate::commands::projects::{
     ProjectAddResult, ProjectArchiveResult, ProjectDeleteResult, ProjectEditResult,

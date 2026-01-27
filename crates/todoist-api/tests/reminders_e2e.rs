@@ -25,7 +25,7 @@
 mod test_context;
 
 use test_context::TestContext;
-use todoist_api::sync::SyncCommand;
+use todoist_api_rs::sync::SyncCommand;
 
 /// Helper to check if reminders are available (requires Pro).
 /// Returns true if the first reminder test succeeds, false if reminders are unavailable.

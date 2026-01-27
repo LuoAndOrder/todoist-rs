@@ -2,7 +2,7 @@
 
 use owo_colors::OwoColorize;
 use serde::Serialize;
-use todoist_cache::Cache;
+use todoist_cache_rs::Cache;
 
 use crate::commands::comments::{Comment, CommentAddResult, CommentDeleteResult, CommentEditResult};
 

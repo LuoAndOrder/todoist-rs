@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 /// ## Full sync to fetch all data
 ///
 /// ```
-/// use todoist_api::sync::SyncRequest;
+/// use todoist_api_rs::sync::SyncRequest;
 ///
 /// let request = SyncRequest::full_sync();
 /// assert_eq!(request.sync_token, "*");
@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 /// ## Incremental sync with stored token
 ///
 /// ```
-/// use todoist_api::sync::SyncRequest;
+/// use todoist_api_rs::sync::SyncRequest;
 ///
 /// let request = SyncRequest::incremental("abc123token");
 /// assert_eq!(request.sync_token, "abc123token");
@@ -31,7 +31,7 @@ use serde::{Deserialize, Serialize};
 /// ## Fetch specific resource types
 ///
 /// ```
-/// use todoist_api::sync::SyncRequest;
+/// use todoist_api_rs::sync::SyncRequest;
 ///
 /// let request = SyncRequest::full_sync()
 ///     .with_resource_types(vec!["items".to_string(), "projects".to_string()]);
@@ -142,7 +142,7 @@ impl SyncRequest {
 /// ## Create a simple command
 ///
 /// ```
-/// use todoist_api::sync::SyncCommand;
+/// use todoist_api_rs::sync::SyncCommand;
 /// use serde_json::json;
 ///
 /// let cmd = SyncCommand::new("item_close", json!({"id": "task-123"}));
@@ -153,7 +153,7 @@ impl SyncRequest {
 /// ## Create a command with temp_id for new resources
 ///
 /// ```
-/// use todoist_api::sync::SyncCommand;
+/// use todoist_api_rs::sync::SyncCommand;
 /// use serde_json::json;
 ///
 /// // When creating a new item, use temp_id so you can reference it in subsequent commands

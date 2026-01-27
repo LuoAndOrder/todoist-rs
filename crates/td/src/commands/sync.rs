@@ -3,7 +3,7 @@
 //! Force sync local cache with Todoist. Supports full sync with --full flag.
 
 use chrono::Utc;
-use todoist_cache::{CacheStore, SyncManager};
+use todoist_cache_rs::{CacheStore, SyncManager};
 
 use super::{CommandContext, Result};
 
@@ -47,7 +47,7 @@ pub struct SyncSummary {
 /// Returns an error if syncing fails.
 pub async fn execute(ctx: &CommandContext, opts: &SyncOptions, token: &str) -> Result<()> {
     // Initialize sync manager
-    let client = todoist_api::client::TodoistClient::new(token);
+    let client = todoist_api_rs::client::TodoistClient::new(token);
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 

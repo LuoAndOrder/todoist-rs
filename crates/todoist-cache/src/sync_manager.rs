@@ -8,8 +8,8 @@
 //! # Example
 //!
 //! ```no_run
-//! use todoist_api::client::TodoistClient;
-//! use todoist_cache::{CacheStore, SyncManager};
+//! use todoist_api_rs::client::TodoistClient;
+//! use todoist_cache_rs::{CacheStore, SyncManager};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -27,8 +27,8 @@
 
 use chrono::{DateTime, Duration, Utc};
 use strsim::levenshtein;
-use todoist_api::client::TodoistClient;
-use todoist_api::sync::{SyncCommand, SyncRequest, SyncResponse};
+use todoist_api_rs::client::TodoistClient;
+use todoist_api_rs::sync::{SyncCommand, SyncRequest, SyncResponse};
 
 use crate::{Cache, CacheStore, CacheStoreError};
 
@@ -86,7 +86,7 @@ pub enum SyncError {
 
     /// API error.
     #[error("API error: {0}")]
-    Api(#[from] todoist_api::error::Error),
+    Api(#[from] todoist_api_rs::error::Error),
 
     /// Resource not found in cache (even after sync).
     #[error("{}", format_not_found_error(resource_type, identifier, suggestion.as_deref()))]
@@ -126,8 +126,8 @@ pub type Result<T> = std::result::Result<T, SyncError>;
 /// ```no_run
 /// use std::sync::Arc;
 /// use tokio::sync::Mutex;
-/// use todoist_api::client::TodoistClient;
-/// use todoist_cache::{CacheStore, SyncManager};
+/// use todoist_api_rs::client::TodoistClient;
+/// use todoist_cache_rs::{CacheStore, SyncManager};
 ///
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// let client = TodoistClient::new("token");
@@ -363,9 +363,9 @@ impl SyncManager {
     /// # Example
     ///
     /// ```no_run
-    /// use todoist_api::client::TodoistClient;
-    /// use todoist_api::sync::SyncCommand;
-    /// use todoist_cache::{CacheStore, SyncManager};
+    /// use todoist_api_rs::client::TodoistClient;
+    /// use todoist_api_rs::sync::SyncCommand;
+    /// use todoist_cache_rs::{CacheStore, SyncManager};
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -432,8 +432,8 @@ impl SyncManager {
     /// # Example
     ///
     /// ```no_run
-    /// use todoist_api::client::TodoistClient;
-    /// use todoist_cache::{CacheStore, SyncManager};
+    /// use todoist_api_rs::client::TodoistClient;
+    /// use todoist_cache_rs::{CacheStore, SyncManager};
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -455,7 +455,7 @@ impl SyncManager {
     pub async fn resolve_project(
         &mut self,
         name_or_id: &str,
-    ) -> Result<&todoist_api::sync::Project> {
+    ) -> Result<&todoist_api_rs::sync::Project> {
         // Try cache first
         if self.find_project_in_cache(name_or_id).is_some() {
             // Re-borrow to return reference (can't return from the if-let due to borrow checker)
@@ -489,7 +489,7 @@ impl SyncManager {
     /// Searches for non-deleted projects where either:
     /// - The name matches (case-insensitive)
     /// - The ID matches exactly
-    fn find_project_in_cache(&self, name_or_id: &str) -> Option<&todoist_api::sync::Project> {
+    fn find_project_in_cache(&self, name_or_id: &str) -> Option<&todoist_api_rs::sync::Project> {
         let name_lower = name_or_id.to_lowercase();
         self.cache.projects.iter().find(|p| {
             !p.is_deleted && (p.name.to_lowercase() == name_lower || p.id == name_or_id)
@@ -519,8 +519,8 @@ impl SyncManager {
     /// # Example
     ///
     /// ```no_run
-    /// use todoist_api::client::TodoistClient;
-    /// use todoist_cache::{CacheStore, SyncManager};
+    /// use todoist_api_rs::client::TodoistClient;
+    /// use todoist_cache_rs::{CacheStore, SyncManager};
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -543,7 +543,7 @@ impl SyncManager {
         &mut self,
         name_or_id: &str,
         project_id: Option<&str>,
-    ) -> Result<&todoist_api::sync::Section> {
+    ) -> Result<&todoist_api_rs::sync::Section> {
         // Try cache first
         if self.find_section_in_cache(name_or_id, project_id).is_some() {
             return Ok(self.find_section_in_cache(name_or_id, project_id).unwrap());
@@ -582,7 +582,7 @@ impl SyncManager {
         &self,
         name_or_id: &str,
         project_id: Option<&str>,
-    ) -> Option<&todoist_api::sync::Section> {
+    ) -> Option<&todoist_api_rs::sync::Section> {
         let name_lower = name_or_id.to_lowercase();
         self.cache.sections.iter().find(|s| {
             if s.is_deleted {
@@ -621,8 +621,8 @@ impl SyncManager {
     /// # Example
     ///
     /// ```no_run
-    /// use todoist_api::client::TodoistClient;
-    /// use todoist_cache::{CacheStore, SyncManager};
+    /// use todoist_api_rs::client::TodoistClient;
+    /// use todoist_cache_rs::{CacheStore, SyncManager};
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -644,7 +644,7 @@ impl SyncManager {
     pub async fn resolve_label(
         &mut self,
         name_or_id: &str,
-    ) -> Result<&todoist_api::sync::Label> {
+    ) -> Result<&todoist_api_rs::sync::Label> {
         // Try cache first
         if self.find_label_in_cache(name_or_id).is_some() {
             return Ok(self.find_label_in_cache(name_or_id).unwrap());
@@ -677,7 +677,7 @@ impl SyncManager {
     /// Searches for non-deleted labels where either:
     /// - The name matches (case-insensitive)
     /// - The ID matches exactly
-    fn find_label_in_cache(&self, name_or_id: &str) -> Option<&todoist_api::sync::Label> {
+    fn find_label_in_cache(&self, name_or_id: &str) -> Option<&todoist_api_rs::sync::Label> {
         let name_lower = name_or_id.to_lowercase();
         self.cache.labels.iter().find(|l| {
             !l.is_deleted && (l.name.to_lowercase() == name_lower || l.id == name_or_id)
@@ -708,8 +708,8 @@ impl SyncManager {
     /// # Example
     ///
     /// ```no_run
-    /// use todoist_api::client::TodoistClient;
-    /// use todoist_cache::{CacheStore, SyncManager};
+    /// use todoist_api_rs::client::TodoistClient;
+    /// use todoist_cache_rs::{CacheStore, SyncManager};
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -724,7 +724,7 @@ impl SyncManager {
     ///     Ok(())
     /// }
     /// ```
-    pub async fn resolve_item(&mut self, id: &str) -> Result<&todoist_api::sync::Item> {
+    pub async fn resolve_item(&mut self, id: &str) -> Result<&todoist_api_rs::sync::Item> {
         // Try cache first
         if self.find_item_in_cache(id).is_some() {
             return Ok(self.find_item_in_cache(id).unwrap());
@@ -744,7 +744,7 @@ impl SyncManager {
     /// Helper to find an item in the cache by ID.
     ///
     /// Searches for non-deleted items where the ID matches exactly.
-    fn find_item_in_cache(&self, id: &str) -> Option<&todoist_api::sync::Item> {
+    fn find_item_in_cache(&self, id: &str) -> Option<&todoist_api_rs::sync::Item> {
         self.cache
             .items
             .iter()
@@ -775,8 +775,8 @@ impl SyncManager {
     /// # Example
     ///
     /// ```no_run
-    /// use todoist_api::client::TodoistClient;
-    /// use todoist_cache::{CacheStore, SyncManager};
+    /// use todoist_api_rs::client::TodoistClient;
+    /// use todoist_cache_rs::{CacheStore, SyncManager};
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -799,7 +799,7 @@ impl SyncManager {
         &mut self,
         id_or_prefix: &str,
         require_checked: Option<bool>,
-    ) -> Result<&todoist_api::sync::Item> {
+    ) -> Result<&todoist_api_rs::sync::Item> {
         // Try cache first
         match self.find_item_by_prefix_in_cache(id_or_prefix, require_checked) {
             ItemLookupResult::Found(_) => {
@@ -860,7 +860,7 @@ impl SyncManager {
         }
 
         // Try prefix match
-        let matches: Vec<&todoist_api::sync::Item> = self
+        let matches: Vec<&todoist_api_rs::sync::Item> = self
             .cache
             .items
             .iter()
@@ -897,7 +897,7 @@ impl SyncManager {
 /// Result of an item lookup by prefix.
 enum ItemLookupResult<'a> {
     /// Found exactly one matching item.
-    Found(&'a todoist_api::sync::Item),
+    Found(&'a todoist_api_rs::sync::Item),
     /// Multiple items match the prefix (contains error message).
     Ambiguous(String),
     /// No matching item found.

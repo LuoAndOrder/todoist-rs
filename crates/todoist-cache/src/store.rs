@@ -92,10 +92,10 @@ pub type Result<T> = std::result::Result<T, CacheStoreError>;
 ///
 /// ```no_run
 /// use std::sync::{Arc, Mutex};
-/// use todoist_cache::CacheStore;
+/// use todoist_cache_rs::CacheStore;
 ///
 /// let store = Arc::new(Mutex::new(CacheStore::new()?));
-/// # Ok::<(), todoist_cache::CacheStoreError>(())
+/// # Ok::<(), todoist_cache_rs::CacheStoreError>(())
 /// ```
 ///
 /// In typical CLI usage, the store is owned by a single-threaded runtime
@@ -104,7 +104,7 @@ pub type Result<T> = std::result::Result<T, CacheStoreError>;
 /// # Example
 ///
 /// ```no_run
-/// use todoist_cache::{Cache, CacheStore};
+/// use todoist_cache_rs::{Cache, CacheStore};
 ///
 /// let store = CacheStore::new()?;
 ///
@@ -113,7 +113,7 @@ pub type Result<T> = std::result::Result<T, CacheStoreError>;
 ///
 /// // Save cache to disk
 /// store.save(&cache)?;
-/// # Ok::<(), todoist_cache::CacheStoreError>(())
+/// # Ok::<(), todoist_cache_rs::CacheStoreError>(())
 /// ```
 #[derive(Debug, Clone)]
 pub struct CacheStore {

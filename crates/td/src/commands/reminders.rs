@@ -3,10 +3,10 @@
 //! Lists and manages reminders via the Sync API.
 //! Uses SyncManager::execute_commands() to automatically update the cache.
 
-use todoist_api::client::TodoistClient;
-use todoist_api::models::ReminderType;
-use todoist_api::sync::{Reminder, SyncCommand};
-use todoist_cache::{Cache, CacheStore, SyncManager};
+use todoist_api_rs::client::TodoistClient;
+use todoist_api_rs::models::ReminderType;
+use todoist_api_rs::sync::{Reminder, SyncCommand};
+use todoist_cache_rs::{Cache, CacheStore, SyncManager};
 
 use super::{CommandContext, CommandError, Result};
 use crate::output::helpers::{MINUTES_PER_DAY, MINUTES_PER_HOUR};
@@ -238,8 +238,8 @@ pub async fn execute_add(
     if response.has_errors() {
         let errors = response.errors();
         if let Some((_, error)) = errors.first() {
-            return Err(CommandError::Api(todoist_api::error::Error::Api(
-                todoist_api::error::ApiError::Validation {
+            return Err(CommandError::Api(todoist_api_rs::error::Error::Api(
+                todoist_api_rs::error::ApiError::Validation {
                     field: None,
                     message: format!("Error {}: {}", error.error_code, error.error),
                 },
@@ -422,8 +422,8 @@ pub async fn execute_delete(
     if response.has_errors() {
         let errors = response.errors();
         if let Some((_, error)) = errors.first() {
-            return Err(CommandError::Api(todoist_api::error::Error::Api(
-                todoist_api::error::ApiError::Validation {
+            return Err(CommandError::Api(todoist_api_rs::error::Error::Api(
+                todoist_api_rs::error::ApiError::Validation {
                     field: None,
                     message: format!("Error {}: {}", error.error_code, error.error),
                 },
@@ -491,7 +491,7 @@ fn find_reminder_by_id_or_prefix<'a>(cache: &'a Cache, id: &str) -> Result<&'a R
 }
 
 /// Formats a reminder description for display.
-fn format_reminder_description(reminder_type: ReminderType, minute_offset: Option<i32>, due: Option<&todoist_api::sync::Due>) -> String {
+fn format_reminder_description(reminder_type: ReminderType, minute_offset: Option<i32>, due: Option<&todoist_api_rs::sync::Due>) -> String {
     match reminder_type {
         ReminderType::Relative => {
             if let Some(offset) = minute_offset {
@@ -514,8 +514,8 @@ fn format_reminder_description(reminder_type: ReminderType, minute_offset: Optio
 #[cfg(test)]
 mod tests {
     use super::*;
-    use todoist_api::models::Due;
-    use todoist_api::sync::{Item, Project};
+    use todoist_api_rs::models::Due;
+    use todoist_api_rs::sync::{Item, Project};
 
     #[test]
     fn test_reminders_list_options_defaults() {

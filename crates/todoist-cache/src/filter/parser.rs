@@ -32,7 +32,7 @@ use super::lexer::{FilterToken, Lexer, PositionedToken};
 /// # Example
 ///
 /// ```
-/// use todoist_cache::filter::{FilterParser, Filter};
+/// use todoist_cache_rs::filter::{FilterParser, Filter};
 ///
 /// // Simple keyword
 /// let filter = FilterParser::parse("today").unwrap();

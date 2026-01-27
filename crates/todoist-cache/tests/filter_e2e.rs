@@ -11,10 +11,10 @@
 use std::fs;
 
 use chrono::Local;
-use todoist_api::client::TodoistClient;
-use todoist_api::sync::{SyncCommand, SyncRequest};
-use todoist_cache::filter::{FilterContext, FilterEvaluator, FilterParser};
-use todoist_cache::{CacheStore, SyncManager};
+use todoist_api_rs::client::TodoistClient;
+use todoist_api_rs::sync::{SyncCommand, SyncRequest};
+use todoist_cache_rs::filter::{FilterContext, FilterEvaluator, FilterParser};
+use todoist_cache_rs::{CacheStore, SyncManager};
 
 fn get_test_token() -> Option<String> {
     // Try to read from .env.local at workspace root

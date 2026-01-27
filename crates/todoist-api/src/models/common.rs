@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 /// ## Create a date-only due date
 ///
 /// ```
-/// use todoist_api::models::Due;
+/// use todoist_api_rs::models::Due;
 ///
 /// let due = Due::from_date("2026-01-25");
 /// assert_eq!(due.date, "2026-01-25");
@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 /// ## Create a due date with time
 ///
 /// ```
-/// use todoist_api::models::Due;
+/// use todoist_api_rs::models::Due;
 ///
 /// let due = Due::from_datetime("2026-01-25", "2026-01-25T15:00:00Z");
 /// assert!(due.has_time());
@@ -37,7 +37,7 @@ use serde::{Deserialize, Serialize};
 /// ## Parse the date as NaiveDate
 ///
 /// ```
-/// use todoist_api::models::Due;
+/// use todoist_api_rs::models::Due;
 ///
 /// let due = Due::from_date("2026-01-25");
 /// let date = due.as_naive_date().unwrap();
@@ -126,7 +126,7 @@ pub struct Deadline {
 /// ## Create a duration in minutes
 ///
 /// ```
-/// use todoist_api::models::Duration;
+/// use todoist_api_rs::models::Duration;
 ///
 /// let duration = Duration::minutes(30);
 /// assert_eq!(duration.amount, 30);
@@ -136,7 +136,7 @@ pub struct Deadline {
 /// ## Create a duration in days
 ///
 /// ```
-/// use todoist_api::models::Duration;
+/// use todoist_api_rs::models::Duration;
 ///
 /// let duration = Duration::days(2);
 /// assert_eq!(duration.as_minutes(), 2 * 24 * 60); // 2880 minutes

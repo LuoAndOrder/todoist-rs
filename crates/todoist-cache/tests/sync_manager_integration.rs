@@ -7,8 +7,8 @@ use tempfile::tempdir;
 use wiremock::matchers::{body_string_contains, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-use todoist_api::client::TodoistClient;
-use todoist_cache::{Cache, CacheStore, SyncManager};
+use todoist_api_rs::client::TodoistClient;
+use todoist_cache_rs::{Cache, CacheStore, SyncManager};
 
 /// Creates a mock full sync response JSON.
 fn mock_full_sync_response() -> serde_json::Value {
@@ -160,7 +160,7 @@ async fn test_sync_performs_incremental_sync_with_existing_cache() {
     let store = CacheStore::with_path(cache_path.clone());
     let mut existing_cache = Cache::new();
     existing_cache.sync_token = "existing_token_123".to_string();
-    existing_cache.items = vec![todoist_api::sync::Item {
+    existing_cache.items = vec![todoist_api_rs::sync::Item {
         id: "item-1".to_string(),
         user_id: None,
         project_id: "proj-1".to_string(),
@@ -478,7 +478,7 @@ fn mock_command_response() -> serde_json::Value {
 
 #[tokio::test]
 async fn test_execute_commands_adds_item_to_cache() {
-    use todoist_api::sync::SyncCommand;
+    use todoist_api_rs::sync::SyncCommand;
 
     let mock_server = MockServer::start().await;
     let temp_dir = tempdir().expect("failed to create temp dir");
@@ -540,7 +540,7 @@ async fn test_execute_commands_adds_item_to_cache() {
 
 #[tokio::test]
 async fn test_execute_commands_handles_api_error() {
-    use todoist_api::sync::SyncCommand;
+    use todoist_api_rs::sync::SyncCommand;
 
     let mock_server = MockServer::start().await;
     let temp_dir = tempdir().expect("failed to create temp dir");
@@ -580,7 +580,7 @@ async fn test_execute_commands_handles_api_error() {
 
 #[tokio::test]
 async fn test_execute_commands_updates_last_sync() {
-    use todoist_api::sync::SyncCommand;
+    use todoist_api_rs::sync::SyncCommand;
 
     let mock_server = MockServer::start().await;
     let temp_dir = tempdir().expect("failed to create temp dir");
@@ -661,7 +661,7 @@ fn mock_delete_command_response() -> serde_json::Value {
 
 #[tokio::test]
 async fn test_execute_commands_removes_item_on_delete() {
-    use todoist_api::sync::SyncCommand;
+    use todoist_api_rs::sync::SyncCommand;
 
     let mock_server = MockServer::start().await;
     let temp_dir = tempdir().expect("failed to create temp dir");
@@ -672,7 +672,7 @@ async fn test_execute_commands_removes_item_on_delete() {
     let mut existing_cache = Cache::new();
     existing_cache.sync_token = "pre_delete_token".to_string();
     existing_cache.items = vec![
-        todoist_api::sync::Item {
+        todoist_api_rs::sync::Item {
             id: "item-to-delete".to_string(),
             user_id: None,
             project_id: "proj-1".to_string(),
@@ -697,7 +697,7 @@ async fn test_execute_commands_removes_item_on_delete() {
             completed_at: None,
             duration: None,
         },
-        todoist_api::sync::Item {
+        todoist_api_rs::sync::Item {
             id: "item-to-keep".to_string(),
             user_id: None,
             project_id: "proj-1".to_string(),
@@ -806,7 +806,7 @@ fn mock_update_command_response() -> serde_json::Value {
 
 #[tokio::test]
 async fn test_execute_commands_updates_item_on_edit() {
-    use todoist_api::sync::SyncCommand;
+    use todoist_api_rs::sync::SyncCommand;
 
     let mock_server = MockServer::start().await;
     let temp_dir = tempdir().expect("failed to create temp dir");
@@ -816,7 +816,7 @@ async fn test_execute_commands_updates_item_on_edit() {
     let store = CacheStore::with_path(cache_path.clone());
     let mut existing_cache = Cache::new();
     existing_cache.sync_token = "pre_update_token".to_string();
-    existing_cache.items = vec![todoist_api::sync::Item {
+    existing_cache.items = vec![todoist_api_rs::sync::Item {
         id: "item-to-update".to_string(),
         user_id: None,
         project_id: "proj-1".to_string(),
@@ -974,7 +974,7 @@ async fn test_resolve_project_succeeds_from_cache_no_sync() {
     let store = CacheStore::with_path(cache_path.clone());
     let mut existing_cache = Cache::new();
     existing_cache.sync_token = "existing_token".to_string();
-    existing_cache.projects = vec![todoist_api::sync::Project {
+    existing_cache.projects = vec![todoist_api_rs::sync::Project {
         id: "proj-in-cache".to_string(),
         name: "Work".to_string(),
         color: Some("red".to_string()),
@@ -1107,7 +1107,7 @@ async fn test_resolve_project_returns_not_found_after_sync() {
 
     // Verify it's a NotFound error with correct details
     match err {
-        todoist_cache::SyncError::NotFound {
+        todoist_cache_rs::SyncError::NotFound {
             resource_type,
             identifier,
             ..
@@ -1166,7 +1166,7 @@ async fn test_resolve_section_succeeds_from_cache_no_sync() {
     let store = CacheStore::with_path(cache_path.clone());
     let mut existing_cache = Cache::new();
     existing_cache.sync_token = "existing_token".to_string();
-    existing_cache.sections = vec![todoist_api::sync::Section {
+    existing_cache.sections = vec![todoist_api_rs::sync::Section {
         id: "sec-in-cache".to_string(),
         name: "To Do".to_string(),
         project_id: "proj-1".to_string(),
@@ -1252,7 +1252,7 @@ async fn test_resolve_section_returns_not_found_after_sync() {
 
     assert!(result.is_err());
     match result.unwrap_err() {
-        todoist_cache::SyncError::NotFound {
+        todoist_cache_rs::SyncError::NotFound {
             resource_type,
             identifier,
             ..
@@ -1310,7 +1310,7 @@ async fn test_resolve_item_succeeds_from_cache_no_sync() {
     let store = CacheStore::with_path(cache_path.clone());
     let mut existing_cache = Cache::new();
     existing_cache.sync_token = "existing_token".to_string();
-    existing_cache.items = vec![todoist_api::sync::Item {
+    existing_cache.items = vec![todoist_api_rs::sync::Item {
         id: "item-in-cache".to_string(),
         user_id: None,
         project_id: "proj-1".to_string(),
@@ -1410,7 +1410,7 @@ async fn test_resolve_item_returns_not_found_after_sync() {
 
     assert!(result.is_err());
     match result.unwrap_err() {
-        todoist_cache::SyncError::NotFound {
+        todoist_cache_rs::SyncError::NotFound {
             resource_type,
             identifier,
             ..
@@ -1431,7 +1431,7 @@ async fn test_resolve_item_by_prefix_succeeds_from_cache_no_sync() {
     let store = CacheStore::with_path(cache_path.clone());
     let mut existing_cache = Cache::new();
     existing_cache.sync_token = "existing_token".to_string();
-    existing_cache.items = vec![todoist_api::sync::Item {
+    existing_cache.items = vec![todoist_api_rs::sync::Item {
         id: "abcdef123456".to_string(),
         user_id: None,
         project_id: "proj-1".to_string(),
@@ -1529,7 +1529,7 @@ async fn test_resolve_item_by_prefix_returns_not_found_after_sync() {
 
     assert!(result.is_err());
     match result.unwrap_err() {
-        todoist_cache::SyncError::NotFound {
+        todoist_cache_rs::SyncError::NotFound {
             resource_type,
             identifier,
             ..
@@ -1552,7 +1552,7 @@ async fn test_resolve_item_by_prefix_with_require_checked_filter() {
     let mut existing_cache = Cache::new();
     existing_cache.sync_token = "existing_token".to_string();
     existing_cache.items = vec![
-        todoist_api::sync::Item {
+        todoist_api_rs::sync::Item {
             id: "completed-task-123".to_string(),
             user_id: None,
             project_id: "proj-1".to_string(),
@@ -1577,7 +1577,7 @@ async fn test_resolve_item_by_prefix_with_require_checked_filter() {
             completed_at: None,
             duration: None,
         },
-        todoist_api::sync::Item {
+        todoist_api_rs::sync::Item {
             id: "active-task-456".to_string(),
             user_id: None,
             project_id: "proj-1".to_string(),
@@ -1662,7 +1662,7 @@ async fn test_sync_falls_back_to_full_sync_on_invalid_token() {
     let store = CacheStore::with_path(cache_path.clone());
     let mut existing_cache = Cache::new();
     existing_cache.sync_token = "old_invalid_token".to_string();
-    existing_cache.items = vec![todoist_api::sync::Item {
+    existing_cache.items = vec![todoist_api_rs::sync::Item {
         id: "old-item".to_string(),
         user_id: None,
         project_id: "proj-1".to_string(),
@@ -1852,7 +1852,7 @@ async fn test_add_item_is_visible_immediately_without_sync() {
     //! This test demonstrates the key cache behavior: mutations update the
     //! cache in place, making reads instant (no network round-trip needed).
 
-    use todoist_api::sync::SyncCommand;
+    use todoist_api_rs::sync::SyncCommand;
 
     let mock_server = MockServer::start().await;
     let temp_dir = tempdir().expect("failed to create temp dir");
@@ -1923,7 +1923,7 @@ async fn test_deleted_item_not_visible_without_sync() {
     //! This ensures that `td delete <id>` followed by `td list` won't show
     //! the deleted item, even without running `td sync`.
 
-    use todoist_api::sync::SyncCommand;
+    use todoist_api_rs::sync::SyncCommand;
 
     let mock_server = MockServer::start().await;
     let temp_dir = tempdir().expect("failed to create temp dir");
@@ -1933,7 +1933,7 @@ async fn test_deleted_item_not_visible_without_sync() {
     let store = CacheStore::with_path(cache_path.clone());
     let mut existing_cache = Cache::new();
     existing_cache.sync_token = "initial_token".to_string();
-    existing_cache.items = vec![todoist_api::sync::Item {
+    existing_cache.items = vec![todoist_api_rs::sync::Item {
         id: "item-to-delete".to_string(),
         user_id: None,
         project_id: "proj-1".to_string(),
@@ -2044,7 +2044,7 @@ async fn test_edited_item_shows_updated_content_without_sync() {
     //! This ensures that `td edit <id> --content "new"` followed by `td show <id>`
     //! displays the updated content, even without running `td sync`.
 
-    use todoist_api::sync::SyncCommand;
+    use todoist_api_rs::sync::SyncCommand;
 
     let mock_server = MockServer::start().await;
     let temp_dir = tempdir().expect("failed to create temp dir");
@@ -2054,7 +2054,7 @@ async fn test_edited_item_shows_updated_content_without_sync() {
     let store = CacheStore::with_path(cache_path.clone());
     let mut existing_cache = Cache::new();
     existing_cache.sync_token = "initial_token".to_string();
-    existing_cache.items = vec![todoist_api::sync::Item {
+    existing_cache.items = vec![todoist_api_rs::sync::Item {
         id: "item-to-edit".to_string(),
         user_id: None,
         project_id: "proj-1".to_string(),

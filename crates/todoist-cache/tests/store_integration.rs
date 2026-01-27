@@ -5,7 +5,7 @@
 use std::fs;
 
 use tempfile::tempdir;
-use todoist_cache::{Cache, CacheStore};
+use todoist_cache_rs::{Cache, CacheStore};
 
 #[test]
 fn test_save_and_load_roundtrip() {

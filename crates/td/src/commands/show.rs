@@ -2,8 +2,8 @@
 //!
 //! Displays detailed information about a task from the local cache.
 
-use todoist_api::sync::{Item, Note, Reminder};
-use todoist_cache::{Cache, CacheStore, SyncManager};
+use todoist_api_rs::sync::{Item, Note, Reminder};
+use todoist_cache_rs::{Cache, CacheStore, SyncManager};
 
 use super::{CommandContext, CommandError, Result};
 use crate::output::{format_item_details_json, format_item_details_table};
@@ -50,7 +50,7 @@ pub struct ShowResult<'a> {
 /// Returns an error if syncing fails or if the task is not found.
 pub async fn execute(ctx: &CommandContext, opts: &ShowOptions, token: &str) -> Result<()> {
     // Initialize sync manager
-    let client = todoist_api::client::TodoistClient::new(token);
+    let client = todoist_api_rs::client::TodoistClient::new(token);
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
@@ -279,8 +279,8 @@ mod tests {
         }
     }
 
-    fn make_test_item(id: &str, content: &str) -> todoist_api::sync::Item {
-        todoist_api::sync::Item {
+    fn make_test_item(id: &str, content: &str) -> todoist_api_rs::sync::Item {
+        todoist_api_rs::sync::Item {
             id: id.to_string(),
             user_id: None,
             project_id: "proj-1".to_string(),

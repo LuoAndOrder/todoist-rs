@@ -5,9 +5,9 @@
 //! Uses resolve_item_by_prefix(), resolve_project(), and resolve_section()
 //! for smart lookups with auto-sync fallback.
 
-use todoist_api::client::TodoistClient;
-use todoist_api::sync::SyncCommand;
-use todoist_cache::{CacheStore, SyncManager};
+use todoist_api_rs::client::TodoistClient;
+use todoist_api_rs::sync::SyncCommand;
+use todoist_cache_rs::{CacheStore, SyncManager};
 
 use super::{CommandContext, CommandError, Result};
 
@@ -231,8 +231,8 @@ pub async fn execute(ctx: &CommandContext, opts: &EditOptions, token: &str) -> R
     if response.has_errors() {
         let errors = response.errors();
         if let Some((_, error)) = errors.first() {
-            return Err(CommandError::Api(todoist_api::error::Error::Api(
-                todoist_api::error::ApiError::Validation {
+            return Err(CommandError::Api(todoist_api_rs::error::Error::Api(
+                todoist_api_rs::error::ApiError::Validation {
                     field: None,
                     message: format!("Error {}: {}", error.error_code, error.error),
                 },

@@ -2,7 +2,7 @@
 
 use owo_colors::OwoColorize;
 use serde::Serialize;
-use todoist_api::sync::Filter;
+use todoist_api_rs::sync::Filter;
 
 use crate::commands::filters::{
     FilterAddResult, FilterDeleteResult, FilterEditResult, FilterShowResult,

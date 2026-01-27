@@ -137,7 +137,7 @@ pub fn format_priority_verbose(api_priority: i32, use_colors: bool) -> String {
 }
 
 /// Formats a due date for verbose display (show command).
-pub fn format_due_verbose(due: &todoist_api::sync::Due, use_colors: bool) -> String {
+pub fn format_due_verbose(due: &todoist_api_rs::sync::Due, use_colors: bool) -> String {
     // Try to parse and format the date nicely
     let mut result = if let Ok(date) = NaiveDate::parse_from_str(&due.date, "%Y-%m-%d") {
         let today = Local::now().date_naive();
@@ -207,8 +207,8 @@ pub fn format_datetime(datetime: &str) -> String {
 }
 
 /// Formats a reminder for display.
-pub fn format_reminder(reminder: &todoist_api::sync::Reminder) -> String {
-    use todoist_api::models::ReminderType;
+pub fn format_reminder(reminder: &todoist_api_rs::sync::Reminder) -> String {
+    use todoist_api_rs::models::ReminderType;
 
     match reminder.reminder_type {
         ReminderType::Relative => {

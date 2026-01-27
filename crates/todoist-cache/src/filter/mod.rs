@@ -33,7 +33,7 @@
 //! # Example
 //!
 //! ```
-//! use todoist_cache::filter::{FilterParser, Filter, FilterEvaluator, FilterContext};
+//! use todoist_cache_rs::filter::{FilterParser, Filter, FilterEvaluator, FilterContext};
 //!
 //! // Parse a filter expression
 //! let filter = FilterParser::parse("today").unwrap();
@@ -46,7 +46,7 @@
 //! let evaluator = FilterEvaluator::new(&filter, &context);
 //!
 //! // Filter items (empty example)
-//! let items: Vec<todoist_api::sync::Item> = vec![];
+//! let items: Vec<todoist_api_rs::sync::Item> = vec![];
 //! let results = evaluator.filter_items(&items);
 //! ```
 

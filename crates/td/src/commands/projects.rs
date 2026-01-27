@@ -3,9 +3,9 @@
 //! Lists and manages projects via the Sync API.
 //! Uses SyncManager::execute_commands() to automatically update the cache.
 
-use todoist_api::client::TodoistClient;
-use todoist_api::sync::{Project, SyncCommand};
-use todoist_cache::{Cache, CacheStore, SyncManager};
+use todoist_api_rs::client::TodoistClient;
+use todoist_api_rs::sync::{Project, SyncCommand};
+use todoist_cache_rs::{Cache, CacheStore, SyncManager};
 
 use super::{CommandContext, CommandError, Result};
 use crate::output::{format_created_project, format_projects_json, format_projects_table};
@@ -34,7 +34,7 @@ pub struct ProjectsListOptions {
 /// Returns an error if syncing fails.
 pub async fn execute(ctx: &CommandContext, opts: &ProjectsListOptions, token: &str) -> Result<()> {
     // Initialize sync manager
-    let client = todoist_api::client::TodoistClient::new(token);
+    let client = todoist_api_rs::client::TodoistClient::new(token);
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
@@ -203,8 +203,8 @@ pub async fn execute_add(ctx: &CommandContext, opts: &ProjectsAddOptions, token:
     if response.has_errors() {
         let errors = response.errors();
         if let Some((_, error)) = errors.first() {
-            return Err(CommandError::Api(todoist_api::error::Error::Api(
-                todoist_api::error::ApiError::Validation {
+            return Err(CommandError::Api(todoist_api_rs::error::Error::Api(
+                todoist_api_rs::error::ApiError::Validation {
                     field: None,
                     message: format!("Error {}: {}", error.error_code, error.error),
                 },
@@ -292,9 +292,9 @@ pub struct ProjectsShowResult<'a> {
     /// Number of sections in this project.
     pub section_count: usize,
     /// Sections in this project (if requested).
-    pub sections: Vec<&'a todoist_api::sync::Section>,
+    pub sections: Vec<&'a todoist_api_rs::sync::Section>,
     /// Tasks in this project (if requested).
-    pub tasks: Vec<&'a todoist_api::sync::Item>,
+    pub tasks: Vec<&'a todoist_api_rs::sync::Item>,
 }
 
 /// Executes the projects show command.
@@ -344,7 +344,7 @@ pub async fn execute_show(ctx: &CommandContext, opts: &ProjectsShowOptions, toke
         .count();
 
     // Get sections for this project
-    let all_sections: Vec<&todoist_api::sync::Section> = cache
+    let all_sections: Vec<&todoist_api_rs::sync::Section> = cache
         .sections
         .iter()
         .filter(|s| s.project_id == project.id && !s.is_deleted)
@@ -359,7 +359,7 @@ pub async fn execute_show(ctx: &CommandContext, opts: &ProjectsShowOptions, toke
     };
 
     // Get tasks for this project if requested
-    let tasks: Vec<&todoist_api::sync::Item> = if opts.tasks {
+    let tasks: Vec<&todoist_api_rs::sync::Item> = if opts.tasks {
         cache
             .items
             .iter()
@@ -540,8 +540,8 @@ pub async fn execute_edit(ctx: &CommandContext, opts: &ProjectsEditOptions, toke
     if response.has_errors() {
         let errors = response.errors();
         if let Some((_, error)) = errors.first() {
-            return Err(CommandError::Api(todoist_api::error::Error::Api(
-                todoist_api::error::ApiError::Validation {
+            return Err(CommandError::Api(todoist_api_rs::error::Error::Api(
+                todoist_api_rs::error::ApiError::Validation {
                     field: None,
                     message: format!("Error {}: {}", error.error_code, error.error),
                 },
@@ -661,8 +661,8 @@ pub async fn execute_archive(ctx: &CommandContext, opts: &ProjectsArchiveOptions
     if response.has_errors() {
         let errors = response.errors();
         if let Some((_, error)) = errors.first() {
-            return Err(CommandError::Api(todoist_api::error::Error::Api(
-                todoist_api::error::ApiError::Validation {
+            return Err(CommandError::Api(todoist_api_rs::error::Error::Api(
+                todoist_api_rs::error::ApiError::Validation {
                     field: None,
                     message: format!("Error {}: {}", error.error_code, error.error),
                 },
@@ -759,8 +759,8 @@ pub async fn execute_unarchive(ctx: &CommandContext, opts: &ProjectsUnarchiveOpt
     if response.has_errors() {
         let errors = response.errors();
         if let Some((_, error)) = errors.first() {
-            return Err(CommandError::Api(todoist_api::error::Error::Api(
-                todoist_api::error::ApiError::Validation {
+            return Err(CommandError::Api(todoist_api_rs::error::Error::Api(
+                todoist_api_rs::error::ApiError::Validation {
                     field: None,
                     message: format!("Error {}: {}", error.error_code, error.error),
                 },
@@ -871,8 +871,8 @@ pub async fn execute_delete(ctx: &CommandContext, opts: &ProjectsDeleteOptions, 
     if response.has_errors() {
         let errors = response.errors();
         if let Some((_, error)) = errors.first() {
-            return Err(CommandError::Api(todoist_api::error::Error::Api(
-                todoist_api::error::ApiError::Validation {
+            return Err(CommandError::Api(todoist_api_rs::error::Error::Api(
+                todoist_api_rs::error::ApiError::Validation {
                     field: None,
                     message: format!("Error {}: {}", error.error_code, error.error),
                 },

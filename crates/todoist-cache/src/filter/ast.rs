@@ -79,7 +79,7 @@ impl Filter {
     /// # Example
     ///
     /// ```
-    /// use todoist_cache::filter::Filter;
+    /// use todoist_cache_rs::filter::Filter;
     ///
     /// let filter = Filter::and(Filter::Today, Filter::Priority1);
     /// assert!(matches!(filter, Filter::And(_, _)));
@@ -93,7 +93,7 @@ impl Filter {
     /// # Example
     ///
     /// ```
-    /// use todoist_cache::filter::Filter;
+    /// use todoist_cache_rs::filter::Filter;
     ///
     /// let filter = Filter::or(Filter::Today, Filter::Overdue);
     /// assert!(matches!(filter, Filter::Or(_, _)));
@@ -107,7 +107,7 @@ impl Filter {
     /// # Example
     ///
     /// ```
-    /// use todoist_cache::filter::Filter;
+    /// use todoist_cache_rs::filter::Filter;
     ///
     /// let filter = Filter::negate(Filter::NoDate);
     /// assert!(matches!(filter, Filter::Not(_)));
