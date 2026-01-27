@@ -1110,8 +1110,9 @@ async fn test_resolve_project_returns_not_found_after_sync() {
         todoist_cache::SyncError::NotFound {
             resource_type,
             identifier,
+            ..
         } => {
-            assert_eq!(resource_type, "project");
+            assert_eq!(resource_type, "Project");
             assert_eq!(identifier, "NonexistentProject");
         }
         other => panic!("Expected NotFound error, got: {:?}", other),
@@ -1254,8 +1255,9 @@ async fn test_resolve_section_returns_not_found_after_sync() {
         todoist_cache::SyncError::NotFound {
             resource_type,
             identifier,
+            ..
         } => {
-            assert_eq!(resource_type, "section");
+            assert_eq!(resource_type, "Section");
             assert_eq!(identifier, "Nonexistent");
         }
         other => panic!("Expected NotFound error, got: {:?}", other),
@@ -1411,8 +1413,9 @@ async fn test_resolve_item_returns_not_found_after_sync() {
         todoist_cache::SyncError::NotFound {
             resource_type,
             identifier,
+            ..
         } => {
-            assert_eq!(resource_type, "item");
+            assert_eq!(resource_type, "Item");
             assert_eq!(identifier, "nonexistent-id");
         }
         other => panic!("Expected NotFound error, got: {:?}", other),
@@ -1529,8 +1532,9 @@ async fn test_resolve_item_by_prefix_returns_not_found_after_sync() {
         todoist_cache::SyncError::NotFound {
             resource_type,
             identifier,
+            ..
         } => {
-            assert_eq!(resource_type, "item");
+            assert_eq!(resource_type, "Item");
             assert_eq!(identifier, "nonexistent");
         }
         other => panic!("Expected NotFound error, got: {:?}", other),

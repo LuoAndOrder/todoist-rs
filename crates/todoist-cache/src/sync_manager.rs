@@ -26,6 +26,7 @@
 //! ```
 
 use chrono::{DateTime, Duration, Utc};
+use strsim::levenshtein;
 use todoist_api::client::TodoistClient;
 use todoist_api::sync::{SyncCommand, SyncRequest, SyncResponse};
 
@@ -33,6 +34,48 @@ use crate::{Cache, CacheStore, CacheStoreError};
 
 /// Default staleness threshold in minutes.
 const DEFAULT_STALE_MINUTES: i64 = 5;
+
+/// Maximum Levenshtein distance to consider a name as a suggestion.
+const MAX_SUGGESTION_DISTANCE: usize = 3;
+
+/// Formats the "not found" error message, optionally including a suggestion.
+fn format_not_found_error(
+    resource_type: &str,
+    identifier: &str,
+    suggestion: Option<&str>,
+) -> String {
+    let base = format!(
+        "{} '{}' not found. Try running 'td sync' to refresh your cache.",
+        resource_type, identifier
+    );
+    match suggestion {
+        Some(s) => format!("{} Did you mean '{}'?", base, s),
+        None => base,
+    }
+}
+
+/// Finds the best matching name from a list of candidates using Levenshtein distance.
+///
+/// Returns the best match if its edit distance is within the threshold,
+/// otherwise returns `None`.
+fn find_similar_name<'a>(query: &str, candidates: impl Iterator<Item = &'a str>) -> Option<String> {
+    let query_lower = query.to_lowercase();
+
+    let (best_match, best_distance) = candidates
+        .filter(|name| !name.is_empty())
+        .map(|name| {
+            let distance = levenshtein(&query_lower, &name.to_lowercase());
+            (name.to_string(), distance)
+        })
+        .min_by_key(|(_, d)| *d)?;
+
+    // Only suggest if the distance is within threshold and not an exact match
+    if best_distance > 0 && best_distance <= MAX_SUGGESTION_DISTANCE {
+        Some(best_match)
+    } else {
+        None
+    }
+}
 
 /// Errors that can occur during sync operations.
 #[derive(Debug, thiserror::Error)]
@@ -46,12 +89,14 @@ pub enum SyncError {
     Api(#[from] todoist_api::error::Error),
 
     /// Resource not found in cache (even after sync).
-    #[error("{resource_type} '{identifier}' not found. Try running 'td sync' to refresh your cache.")]
+    #[error("{}", format_not_found_error(resource_type, identifier, suggestion.as_deref()))]
     NotFound {
         /// The type of resource that was not found (e.g., "project", "label").
         resource_type: &'static str,
         /// The name or ID that was searched for.
         identifier: String,
+        /// Optional suggestion for similar resource names.
+        suggestion: Option<String>,
     },
 
     /// Sync token was rejected by the API.
@@ -392,9 +437,21 @@ impl SyncManager {
         self.sync().await?;
 
         // Try again after sync
-        self.find_project_in_cache(name_or_id).ok_or_else(|| SyncError::NotFound {
-            resource_type: "project",
-            identifier: name_or_id.to_string(),
+        self.find_project_in_cache(name_or_id).ok_or_else(|| {
+            // Find similar project names for suggestion
+            let suggestion = find_similar_name(
+                name_or_id,
+                self.cache
+                    .projects
+                    .iter()
+                    .filter(|p| !p.is_deleted)
+                    .map(|p| p.name.as_str()),
+            );
+            SyncError::NotFound {
+                resource_type: "Project",
+                identifier: name_or_id.to_string(),
+                suggestion,
+            }
         })
     }
 
@@ -467,11 +524,24 @@ impl SyncManager {
         self.sync().await?;
 
         // Try again after sync
-        self.find_section_in_cache(name_or_id, project_id)
-            .ok_or_else(|| SyncError::NotFound {
-                resource_type: "section",
+        self.find_section_in_cache(name_or_id, project_id).ok_or_else(|| {
+            // Find similar section names for suggestion (within same project if specified)
+            let suggestion = find_similar_name(
+                name_or_id,
+                self.cache
+                    .sections
+                    .iter()
+                    .filter(|s| {
+                        !s.is_deleted && project_id.is_none_or(|pid| s.project_id == pid)
+                    })
+                    .map(|s| s.name.as_str()),
+            );
+            SyncError::NotFound {
+                resource_type: "Section",
                 identifier: name_or_id.to_string(),
-            })
+                suggestion,
+            }
+        })
     }
 
     /// Helper to find a section in the cache by name or ID.
@@ -555,9 +625,21 @@ impl SyncManager {
         self.sync().await?;
 
         // Try again after sync
-        self.find_label_in_cache(name_or_id).ok_or_else(|| SyncError::NotFound {
-            resource_type: "label",
-            identifier: name_or_id.to_string(),
+        self.find_label_in_cache(name_or_id).ok_or_else(|| {
+            // Find similar label names for suggestion
+            let suggestion = find_similar_name(
+                name_or_id,
+                self.cache
+                    .labels
+                    .iter()
+                    .filter(|l| !l.is_deleted)
+                    .map(|l| l.name.as_str()),
+            );
+            SyncError::NotFound {
+                resource_type: "Label",
+                identifier: name_or_id.to_string(),
+                suggestion,
+            }
         })
     }
 
@@ -624,8 +706,9 @@ impl SyncManager {
 
         // Try again after sync
         self.find_item_in_cache(id).ok_or_else(|| SyncError::NotFound {
-            resource_type: "item",
+            resource_type: "Item",
             identifier: id.to_string(),
+            suggestion: None, // Items are looked up by ID, no name suggestions
         })
     }
 
@@ -701,8 +784,9 @@ impl SyncManager {
             }
             ItemLookupResult::Ambiguous(msg) => {
                 return Err(SyncError::NotFound {
-                    resource_type: "item",
+                    resource_type: "Item",
                     identifier: msg,
+                    suggestion: None,
                 });
             }
             ItemLookupResult::NotFound => {
@@ -717,12 +801,14 @@ impl SyncManager {
         match self.find_item_by_prefix_in_cache(id_or_prefix, require_checked) {
             ItemLookupResult::Found(item) => Ok(item),
             ItemLookupResult::Ambiguous(msg) => Err(SyncError::NotFound {
-                resource_type: "item",
+                resource_type: "Item",
                 identifier: msg,
+                suggestion: None,
             }),
             ItemLookupResult::NotFound => Err(SyncError::NotFound {
-                resource_type: "item",
+                resource_type: "Item",
                 identifier: id_or_prefix.to_string(),
+                suggestion: None, // Items are looked up by ID, no name suggestions
             }),
         }
     }
@@ -896,5 +982,98 @@ mod tests {
 
         assert!(!cache.needs_full_sync());
         // needs_sync = false || is_stale(false) = false
+    }
+
+    // Tests for fuzzy matching suggestions
+
+    #[test]
+    fn test_find_similar_name_exact_match_returns_none() {
+        // Exact match should not return a suggestion
+        let candidates = vec!["Work", "Personal", "Shopping"];
+        let result = find_similar_name("Work", candidates.iter().map(|s| *s));
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_find_similar_name_case_insensitive_exact_match_returns_none() {
+        // Case-insensitive exact match should not return a suggestion
+        let candidates = vec!["Work", "Personal", "Shopping"];
+        let result = find_similar_name("work", candidates.iter().map(|s| *s));
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_find_similar_name_single_typo() {
+        // Single character typo should suggest
+        let candidates = vec!["Work", "Personal", "Shopping"];
+        let result = find_similar_name("Wrok", candidates.iter().map(|s| *s));
+        assert_eq!(result, Some("Work".to_string()));
+    }
+
+    #[test]
+    fn test_find_similar_name_missing_letter() {
+        // Missing letter should suggest
+        let candidates = vec!["Inbox", "Personal", "Shopping"];
+        let result = find_similar_name("inbx", candidates.iter().map(|s| *s));
+        assert_eq!(result, Some("Inbox".to_string()));
+    }
+
+    #[test]
+    fn test_find_similar_name_extra_letter() {
+        // Extra letter should suggest
+        let candidates = vec!["Work", "Personal", "Shopping"];
+        let result = find_similar_name("Workk", candidates.iter().map(|s| *s));
+        assert_eq!(result, Some("Work".to_string()));
+    }
+
+    #[test]
+    fn test_find_similar_name_too_different() {
+        // Very different string should not suggest
+        let candidates = vec!["Work", "Personal", "Shopping"];
+        let result = find_similar_name("Completely Different", candidates.iter().map(|s| *s));
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_find_similar_name_empty_candidates() {
+        // Empty candidates list should return None
+        let candidates: Vec<&str> = vec![];
+        let result = find_similar_name("Work", candidates.iter().map(|s| *s));
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_find_similar_name_best_match_selected() {
+        // Should select the best (closest) match
+        let candidates = vec!["Workshop", "Work", "Working"];
+        let result = find_similar_name("Wok", candidates.iter().map(|s| *s));
+        assert_eq!(result, Some("Work".to_string()));
+    }
+
+    #[test]
+    fn test_format_not_found_error_without_suggestion() {
+        let msg = format_not_found_error("Project", "inbox", None);
+        assert_eq!(
+            msg,
+            "Project 'inbox' not found. Try running 'td sync' to refresh your cache."
+        );
+    }
+
+    #[test]
+    fn test_format_not_found_error_with_suggestion() {
+        let msg = format_not_found_error("Project", "inbox", Some("Inbox"));
+        assert_eq!(
+            msg,
+            "Project 'inbox' not found. Try running 'td sync' to refresh your cache. Did you mean 'Inbox'?"
+        );
+    }
+
+    #[test]
+    fn test_format_not_found_error_label_with_suggestion() {
+        let msg = format_not_found_error("Label", "urgnt", Some("urgent"));
+        assert_eq!(
+            msg,
+            "Label 'urgnt' not found. Try running 'td sync' to refresh your cache. Did you mean 'urgent'?"
+        );
     }
 }
