@@ -16,14 +16,135 @@ const BASE_URL: &str = "https://api.todoist.com/api/v1";
 /// Default initial backoff duration for retries (1 second).
 const DEFAULT_INITIAL_BACKOFF_SECS: u64 = 1;
 
-/// Maximum backoff duration for retries (30 seconds).
-const MAX_BACKOFF_SECS: u64 = 30;
+/// Default maximum backoff duration for retries (30 seconds).
+const DEFAULT_MAX_BACKOFF_SECS: u64 = 30;
 
-/// Maximum number of retry attempts.
-const MAX_RETRIES: u32 = 3;
+/// Default maximum number of retry attempts.
+const DEFAULT_MAX_RETRIES: u32 = 3;
 
 /// Default request timeout in seconds.
 const DEFAULT_TIMEOUT_SECS: u64 = 30;
+
+/// Configuration for retry behavior.
+#[derive(Clone, Debug)]
+struct RetryConfig {
+    /// Maximum number of retry attempts.
+    max_retries: u32,
+    /// Initial backoff duration for retries.
+    initial_backoff: Duration,
+    /// Maximum backoff duration for retries.
+    max_backoff: Duration,
+}
+
+impl Default for RetryConfig {
+    fn default() -> Self {
+        Self {
+            max_retries: DEFAULT_MAX_RETRIES,
+            initial_backoff: Duration::from_secs(DEFAULT_INITIAL_BACKOFF_SECS),
+            max_backoff: Duration::from_secs(DEFAULT_MAX_BACKOFF_SECS),
+        }
+    }
+}
+
+/// Builder for creating a [`TodoistClient`] with custom configuration.
+///
+/// # Example
+///
+/// ```
+/// use std::time::Duration;
+/// use todoist_api::client::TodoistClientBuilder;
+///
+/// let client = TodoistClientBuilder::new("your-api-token")
+///     .max_retries(5)
+///     .initial_backoff(Duration::from_millis(500))
+///     .max_backoff(Duration::from_secs(60))
+///     .request_timeout(Duration::from_secs(45))
+///     .build();
+/// ```
+#[derive(Clone, Debug)]
+pub struct TodoistClientBuilder {
+    token: String,
+    base_url: String,
+    max_retries: u32,
+    initial_backoff: Duration,
+    max_backoff: Duration,
+    request_timeout: Duration,
+}
+
+impl TodoistClientBuilder {
+    /// Creates a new builder with the given API token and default configuration.
+    ///
+    /// Default values:
+    /// - `max_retries`: 3
+    /// - `initial_backoff`: 1 second
+    /// - `max_backoff`: 30 seconds
+    /// - `request_timeout`: 30 seconds
+    pub fn new(token: impl Into<String>) -> Self {
+        Self {
+            token: token.into(),
+            base_url: BASE_URL.to_string(),
+            max_retries: DEFAULT_MAX_RETRIES,
+            initial_backoff: Duration::from_secs(DEFAULT_INITIAL_BACKOFF_SECS),
+            max_backoff: Duration::from_secs(DEFAULT_MAX_BACKOFF_SECS),
+            request_timeout: Duration::from_secs(DEFAULT_TIMEOUT_SECS),
+        }
+    }
+
+    /// Sets a custom base URL (primarily for testing).
+    pub fn base_url(mut self, base_url: impl Into<String>) -> Self {
+        self.base_url = base_url.into();
+        self
+    }
+
+    /// Sets the maximum number of retry attempts for rate-limited requests.
+    ///
+    /// Default: 3
+    pub fn max_retries(mut self, max_retries: u32) -> Self {
+        self.max_retries = max_retries;
+        self
+    }
+
+    /// Sets the initial backoff duration for exponential backoff.
+    ///
+    /// Default: 1 second
+    pub fn initial_backoff(mut self, initial_backoff: Duration) -> Self {
+        self.initial_backoff = initial_backoff;
+        self
+    }
+
+    /// Sets the maximum backoff duration for exponential backoff.
+    ///
+    /// Default: 30 seconds
+    pub fn max_backoff(mut self, max_backoff: Duration) -> Self {
+        self.max_backoff = max_backoff;
+        self
+    }
+
+    /// Sets the request timeout duration.
+    ///
+    /// Default: 30 seconds
+    pub fn request_timeout(mut self, timeout: Duration) -> Self {
+        self.request_timeout = timeout;
+        self
+    }
+
+    /// Builds the [`TodoistClient`] with the configured settings.
+    pub fn build(self) -> TodoistClient {
+        TodoistClient {
+            token: self.token,
+            http_client: reqwest::Client::builder()
+                .timeout(self.request_timeout)
+                .build()
+                .expect("Failed to build HTTP client"),
+            base_url: self.base_url,
+            retry_config: RetryConfig {
+                max_retries: self.max_retries,
+                initial_backoff: self.initial_backoff,
+                max_backoff: self.max_backoff,
+            },
+        }
+    }
+}
 
 /// Client for interacting with the Todoist API.
 #[derive(Clone)]
@@ -31,37 +152,38 @@ pub struct TodoistClient {
     token: String,
     http_client: reqwest::Client,
     base_url: String,
+    retry_config: RetryConfig,
 }
 
 impl TodoistClient {
-    /// Creates a new TodoistClient with the given API token.
+    /// Creates a new TodoistClient with the given API token and default configuration.
     ///
-    /// The client is configured with a 30-second request timeout to prevent
-    /// API calls from hanging indefinitely.
+    /// This is a convenience method equivalent to:
+    /// ```
+    /// # use todoist_api::client::TodoistClientBuilder;
+    /// # let token = "your-api-token";
+    /// TodoistClientBuilder::new(token).build();
+    /// ```
+    ///
+    /// Default configuration:
+    /// - Request timeout: 30 seconds
+    /// - Max retries: 3
+    /// - Initial backoff: 1 second
+    /// - Max backoff: 30 seconds
     pub fn new(token: impl Into<String>) -> Self {
-        Self {
-            token: token.into(),
-            http_client: reqwest::Client::builder()
-                .timeout(Duration::from_secs(DEFAULT_TIMEOUT_SECS))
-                .build()
-                .expect("Failed to build HTTP client"),
-            base_url: BASE_URL.to_string(),
-        }
+        TodoistClientBuilder::new(token).build()
     }
 
     /// Creates a new TodoistClient with a custom base URL (for testing).
     ///
-    /// The client is configured with a 30-second request timeout to prevent
-    /// API calls from hanging indefinitely.
+    /// The client is configured with default retry/timeout settings.
     pub fn with_base_url(token: impl Into<String>, base_url: impl Into<String>) -> Self {
-        Self {
-            token: token.into(),
-            http_client: reqwest::Client::builder()
-                .timeout(Duration::from_secs(DEFAULT_TIMEOUT_SECS))
-                .build()
-                .expect("Failed to build HTTP client"),
-            base_url: base_url.into(),
-        }
+        TodoistClientBuilder::new(token).base_url(base_url).build()
+    }
+
+    /// Returns a builder for creating a client with custom configuration.
+    pub fn builder(token: impl Into<String>) -> TodoistClientBuilder {
+        TodoistClientBuilder::new(token)
     }
 
     /// Returns the API token.
@@ -79,18 +201,35 @@ impl TodoistClient {
         &self.base_url
     }
 
+    /// Returns the maximum number of retries configured.
+    pub fn max_retries(&self) -> u32 {
+        self.retry_config.max_retries
+    }
+
+    /// Returns the initial backoff duration configured.
+    pub fn initial_backoff(&self) -> Duration {
+        self.retry_config.initial_backoff
+    }
+
+    /// Returns the maximum backoff duration configured.
+    pub fn max_backoff(&self) -> Duration {
+        self.retry_config.max_backoff
+    }
+
     /// Calculates the backoff duration for a retry attempt.
     ///
     /// If `retry_after` is provided (from a 429 response), uses that value.
-    /// Otherwise, uses exponential backoff: initial * 2^attempt, capped at MAX_BACKOFF_SECS.
+    /// Otherwise, uses exponential backoff: initial * 2^attempt, capped at max_backoff.
     fn calculate_backoff(&self, attempt: u32, retry_after: Option<u64>) -> Duration {
+        let max_backoff_secs = self.retry_config.max_backoff.as_secs();
         if let Some(secs) = retry_after {
-            // Use Retry-After header value, but cap it at MAX_BACKOFF_SECS
-            Duration::from_secs(secs.min(MAX_BACKOFF_SECS))
+            // Use Retry-After header value, but cap it at max_backoff
+            Duration::from_secs(secs.min(max_backoff_secs))
         } else {
-            // Exponential backoff: 1s, 2s, 4s, ... capped at 30s
-            let backoff_secs = DEFAULT_INITIAL_BACKOFF_SECS.saturating_mul(1 << attempt);
-            Duration::from_secs(backoff_secs.min(MAX_BACKOFF_SECS))
+            // Exponential backoff: initial * 2^attempt, capped at max_backoff
+            let initial_secs = self.retry_config.initial_backoff.as_secs();
+            let backoff_secs = initial_secs.saturating_mul(1 << attempt);
+            Duration::from_secs(backoff_secs.min(max_backoff_secs))
         }
     }
 
@@ -103,8 +242,9 @@ impl TodoistClient {
     /// The deserialized response body.
     pub async fn get<T: DeserializeOwned>(&self, endpoint: &str) -> Result<T> {
         let url = format!("{}{}", self.base_url, endpoint);
+        let max_retries = self.retry_config.max_retries;
 
-        for attempt in 0..=MAX_RETRIES {
+        for attempt in 0..=max_retries {
             let response = self
                 .http_client
                 .get(&url)
@@ -112,7 +252,7 @@ impl TodoistClient {
                 .send()
                 .await?;
 
-            match self.handle_response_with_retry(response, attempt).await {
+            match self.handle_response_with_retry(response, attempt, max_retries).await {
                 Ok(RetryDecision::Success(value)) => return Ok(value),
                 Ok(RetryDecision::Retry { retry_after }) => {
                     let backoff = self.calculate_backoff(attempt, retry_after);
@@ -140,8 +280,9 @@ impl TodoistClient {
         body: &B,
     ) -> Result<T> {
         let url = format!("{}{}", self.base_url, endpoint);
+        let max_retries = self.retry_config.max_retries;
 
-        for attempt in 0..=MAX_RETRIES {
+        for attempt in 0..=max_retries {
             let response = self
                 .http_client
                 .post(&url)
@@ -150,7 +291,7 @@ impl TodoistClient {
                 .send()
                 .await?;
 
-            match self.handle_response_with_retry(response, attempt).await {
+            match self.handle_response_with_retry(response, attempt, max_retries).await {
                 Ok(RetryDecision::Success(value)) => return Ok(value),
                 Ok(RetryDecision::Retry { retry_after }) => {
                     let backoff = self.calculate_backoff(attempt, retry_after);
@@ -172,8 +313,9 @@ impl TodoistClient {
     /// The deserialized response body.
     pub async fn post_empty<T: DeserializeOwned>(&self, endpoint: &str) -> Result<T> {
         let url = format!("{}{}", self.base_url, endpoint);
+        let max_retries = self.retry_config.max_retries;
 
-        for attempt in 0..=MAX_RETRIES {
+        for attempt in 0..=max_retries {
             let response = self
                 .http_client
                 .post(&url)
@@ -181,7 +323,7 @@ impl TodoistClient {
                 .send()
                 .await?;
 
-            match self.handle_response_with_retry(response, attempt).await {
+            match self.handle_response_with_retry(response, attempt, max_retries).await {
                 Ok(RetryDecision::Success(value)) => return Ok(value),
                 Ok(RetryDecision::Retry { retry_after }) => {
                     let backoff = self.calculate_backoff(attempt, retry_after);
@@ -203,8 +345,9 @@ impl TodoistClient {
     /// Ok(()) on success.
     pub async fn delete(&self, endpoint: &str) -> Result<()> {
         let url = format!("{}{}", self.base_url, endpoint);
+        let max_retries = self.retry_config.max_retries;
 
-        for attempt in 0..=MAX_RETRIES {
+        for attempt in 0..=max_retries {
             let response = self
                 .http_client
                 .delete(&url)
@@ -212,7 +355,7 @@ impl TodoistClient {
                 .send()
                 .await?;
 
-            match self.handle_empty_response_with_retry(response, attempt).await {
+            match self.handle_empty_response_with_retry(response, attempt, max_retries).await {
                 Ok(RetryDecision::Success(())) => return Ok(()),
                 Ok(RetryDecision::Retry { retry_after }) => {
                     let backoff = self.calculate_backoff(attempt, retry_after);
@@ -254,8 +397,9 @@ impl TodoistClient {
     /// ```
     pub async fn sync(&self, request: SyncRequest) -> Result<SyncResponse> {
         let url = format!("{}/sync", self.base_url);
+        let max_retries = self.retry_config.max_retries;
 
-        for attempt in 0..=MAX_RETRIES {
+        for attempt in 0..=max_retries {
             let response = self
                 .http_client
                 .post(&url)
@@ -265,7 +409,7 @@ impl TodoistClient {
                 .send()
                 .await?;
 
-            match self.handle_response_with_retry(response, attempt).await {
+            match self.handle_response_with_retry(response, attempt, max_retries).await {
                 Ok(RetryDecision::Success(value)) => return Ok(value),
                 Ok(RetryDecision::Retry { retry_after }) => {
                     let backoff = self.calculate_backoff(attempt, retry_after);
@@ -304,8 +448,9 @@ impl TodoistClient {
     /// ```
     pub async fn quick_add(&self, request: QuickAddRequest) -> Result<QuickAddResponse> {
         let url = format!("{}/tasks/quick", self.base_url);
+        let max_retries = self.retry_config.max_retries;
 
-        for attempt in 0..=MAX_RETRIES {
+        for attempt in 0..=max_retries {
             let response = self
                 .http_client
                 .post(&url)
@@ -314,7 +459,7 @@ impl TodoistClient {
                 .send()
                 .await?;
 
-            match self.handle_response_with_retry(response, attempt).await {
+            match self.handle_response_with_retry(response, attempt, max_retries).await {
                 Ok(RetryDecision::Success(value)) => return Ok(value),
                 Ok(RetryDecision::Retry { retry_after }) => {
                     let backoff = self.calculate_backoff(attempt, retry_after);
@@ -332,6 +477,7 @@ impl TodoistClient {
         &self,
         response: reqwest::Response,
         attempt: u32,
+        max_retries: u32,
     ) -> Result<RetryDecision<T>> {
         let status = response.status();
 
@@ -341,7 +487,7 @@ impl TodoistClient {
         }
 
         // Check for rate limiting (429)
-        if status.as_u16() == 429 && attempt < MAX_RETRIES {
+        if status.as_u16() == 429 && attempt < max_retries {
             let retry_after = response
                 .headers()
                 .get("retry-after")
@@ -359,6 +505,7 @@ impl TodoistClient {
         &self,
         response: reqwest::Response,
         attempt: u32,
+        max_retries: u32,
     ) -> Result<RetryDecision<()>> {
         let status = response.status();
 
@@ -367,7 +514,7 @@ impl TodoistClient {
         }
 
         // Check for rate limiting (429)
-        if status.as_u16() == 429 && attempt < MAX_RETRIES {
+        if status.as_u16() == 429 && attempt < max_retries {
             let retry_after = response
                 .headers()
                 .get("retry-after")
@@ -517,9 +664,9 @@ mod tests {
         let backoff = client.calculate_backoff(0, Some(5));
         assert_eq!(backoff, Duration::from_secs(5));
 
-        // Should cap at MAX_BACKOFF_SECS
+        // Should cap at max_backoff (default 30s)
         let backoff = client.calculate_backoff(0, Some(60));
-        assert_eq!(backoff, Duration::from_secs(MAX_BACKOFF_SECS));
+        assert_eq!(backoff, Duration::from_secs(DEFAULT_MAX_BACKOFF_SECS));
     }
 
     // Test: calculate_backoff uses exponential backoff when no Retry-After
@@ -544,14 +691,14 @@ mod tests {
         assert_eq!(backoff, Duration::from_secs(8));
     }
 
-    // Test: calculate_backoff caps at MAX_BACKOFF_SECS
+    // Test: calculate_backoff caps at max_backoff
     #[test]
     fn test_calculate_backoff_caps_at_max() {
         let client = TodoistClient::new("test-token");
 
-        // Very high attempt number should still cap at 30 seconds
+        // Very high attempt number should still cap at max_backoff (default 30 seconds)
         let backoff = client.calculate_backoff(10, None);
-        assert_eq!(backoff, Duration::from_secs(MAX_BACKOFF_SECS));
+        assert_eq!(backoff, Duration::from_secs(DEFAULT_MAX_BACKOFF_SECS));
     }
 
     // Test: TodoistClient uses the default timeout constant
@@ -559,6 +706,107 @@ mod tests {
     fn test_default_timeout_constant() {
         // Verify the timeout constant is set to 30 seconds
         assert_eq!(DEFAULT_TIMEOUT_SECS, 30);
+    }
+
+    // Test: TodoistClientBuilder creates client with default values
+    #[test]
+    fn test_builder_default_values() {
+        let client = TodoistClientBuilder::new("test-token").build();
+
+        assert_eq!(client.token(), "test-token");
+        assert_eq!(client.base_url(), BASE_URL);
+        assert_eq!(client.max_retries(), DEFAULT_MAX_RETRIES);
+        assert_eq!(client.initial_backoff(), Duration::from_secs(DEFAULT_INITIAL_BACKOFF_SECS));
+        assert_eq!(client.max_backoff(), Duration::from_secs(DEFAULT_MAX_BACKOFF_SECS));
+    }
+
+    // Test: TodoistClientBuilder allows customizing max_retries
+    #[test]
+    fn test_builder_custom_max_retries() {
+        let client = TodoistClientBuilder::new("test-token")
+            .max_retries(5)
+            .build();
+
+        assert_eq!(client.max_retries(), 5);
+    }
+
+    // Test: TodoistClientBuilder allows customizing initial_backoff
+    #[test]
+    fn test_builder_custom_initial_backoff() {
+        let client = TodoistClientBuilder::new("test-token")
+            .initial_backoff(Duration::from_millis(500))
+            .build();
+
+        assert_eq!(client.initial_backoff(), Duration::from_millis(500));
+    }
+
+    // Test: TodoistClientBuilder allows customizing max_backoff
+    #[test]
+    fn test_builder_custom_max_backoff() {
+        let client = TodoistClientBuilder::new("test-token")
+            .max_backoff(Duration::from_secs(60))
+            .build();
+
+        assert_eq!(client.max_backoff(), Duration::from_secs(60));
+    }
+
+    // Test: TodoistClientBuilder allows chaining all options
+    #[test]
+    fn test_builder_chaining() {
+        let client = TodoistClientBuilder::new("test-token")
+            .base_url("https://custom.example.com")
+            .max_retries(5)
+            .initial_backoff(Duration::from_millis(500))
+            .max_backoff(Duration::from_secs(60))
+            .request_timeout(Duration::from_secs(45))
+            .build();
+
+        assert_eq!(client.base_url(), "https://custom.example.com");
+        assert_eq!(client.max_retries(), 5);
+        assert_eq!(client.initial_backoff(), Duration::from_millis(500));
+        assert_eq!(client.max_backoff(), Duration::from_secs(60));
+    }
+
+    // Test: TodoistClient::builder() returns a builder
+    #[test]
+    fn test_client_builder_method() {
+        let client = TodoistClient::builder("test-token")
+            .max_retries(10)
+            .build();
+
+        assert_eq!(client.max_retries(), 10);
+    }
+
+    // Test: Custom initial_backoff affects calculate_backoff
+    #[test]
+    fn test_custom_initial_backoff_affects_calculation() {
+        let client = TodoistClientBuilder::new("test-token")
+            .initial_backoff(Duration::from_secs(2))
+            .build();
+
+        // Attempt 0: 2 seconds (custom initial)
+        let backoff = client.calculate_backoff(0, None);
+        assert_eq!(backoff, Duration::from_secs(2));
+
+        // Attempt 1: 4 seconds (2 * 2)
+        let backoff = client.calculate_backoff(1, None);
+        assert_eq!(backoff, Duration::from_secs(4));
+    }
+
+    // Test: Custom max_backoff caps calculation
+    #[test]
+    fn test_custom_max_backoff_caps_calculation() {
+        let client = TodoistClientBuilder::new("test-token")
+            .max_backoff(Duration::from_secs(10))
+            .build();
+
+        // High attempt should cap at custom max_backoff (10s)
+        let backoff = client.calculate_backoff(10, None);
+        assert_eq!(backoff, Duration::from_secs(10));
+
+        // Retry-After should also be capped at custom max_backoff
+        let backoff = client.calculate_backoff(0, Some(60));
+        assert_eq!(backoff, Duration::from_secs(10));
     }
 }
 
@@ -988,15 +1236,11 @@ mod wiremock_tests {
             .mount(&mock_server)
             .await;
 
-        // Create a client with a very short timeout for testing
-        let client = TodoistClient {
-            token: "test-token".to_string(),
-            http_client: reqwest::Client::builder()
-                .timeout(Duration::from_secs(1))
-                .build()
-                .expect("Failed to build HTTP client"),
-            base_url: mock_server.uri(),
-        };
+        // Create a client with a very short timeout for testing using the builder
+        let client = TodoistClientBuilder::new("test-token")
+            .base_url(mock_server.uri())
+            .request_timeout(Duration::from_secs(1))
+            .build();
 
         let result: Result<TestTask> = client.get("/tasks/slow").await;
 
