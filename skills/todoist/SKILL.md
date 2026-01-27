@@ -61,6 +61,7 @@ td list -f "(today | overdue) & !@waiting_on" --sync
 Quick add (natural language):
 ```bash
 td quick "Buy milk tomorrow @errands #Personal"
+td quick "Review PR tomorrow" --note "Check the auth changes carefully"
 ```
 
 Structured add:
@@ -70,6 +71,10 @@ td add "Task content" \
   -P 2 \
   -d "today" \
   -l "urgent"
+
+# With description
+td add "Prepare quarterly report" -P 1 -d "friday" \
+  --description "Include sales metrics and customer feedback summary"
 ```
 
 Options:
@@ -77,6 +82,9 @@ Options:
 - `-p, --project` - project name
 - `-d, --due` - due date ("today", "tomorrow", "2026-01-30", "next monday")
 - `-l, --label` - label (repeat for multiple)
+- `--description` - task description/notes (shown below task title)
+- `--section` - target section within project
+- `--parent` - parent task ID (creates subtask)
 
 ### Complete Tasks
 
@@ -90,12 +98,27 @@ td done <id> --all-occurrences         # End recurring task permanently
 
 ```bash
 td edit <task-id> -c "New content"
+td edit <task-id> --description "Additional notes here"
 td edit <task-id> -P 1
 td edit <task-id> -d "tomorrow"
 td edit <task-id> --add-label "urgent"
 td edit <task-id> --remove-label "next"
 td edit <task-id> --no-due             # Remove due date
+td edit <task-id> --section "Next Actions"
+td edit <task-id> -p "Work"            # Move to different project
 ```
+
+Edit options:
+- `-c, --content` - update task title
+- `--description` - update task description/notes
+- `-P, --priority` - change priority (1-4)
+- `-d, --due` - change due date
+- `--no-due` - remove due date
+- `-l, --label` - replace all labels
+- `--add-label` - add a label
+- `--remove-label` - remove a label
+- `-p, --project` - move to different project
+- `--section` - move to section within project
 
 ### Show Task Details
 
