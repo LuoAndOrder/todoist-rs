@@ -371,8 +371,15 @@ mod tests {
 
     #[test]
     fn test_write_error_includes_file_path() {
-        // Try to write to a path where we can't create directories
-        let path = PathBuf::from("/nonexistent_root_dir/subdir/cache.json");
+        use tempfile::tempdir;
+
+        // Create a file where we need a directory - this will cause mkdir to fail
+        let temp_dir = tempdir().expect("failed to create temp dir");
+        let blocker_file = temp_dir.path().join("blocker");
+        fs::write(&blocker_file, "blocking").expect("failed to create blocker file");
+
+        // Try to create a cache file inside the blocker file (which is not a directory)
+        let path = blocker_file.join("subdir").join("cache.json");
         let store = CacheStore::with_path(path);
 
         let cache = crate::Cache::new();
@@ -390,7 +397,7 @@ mod tests {
             error_msg
         );
         assert!(
-            error_msg.contains("/nonexistent_root_dir"),
+            error_msg.contains("blocker"),
             "error should include path component: {}",
             error_msg
         );
