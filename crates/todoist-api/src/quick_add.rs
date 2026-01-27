@@ -5,6 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::error::ApiError;
 use crate::models::Due;
 use crate::sync::Item;
 
@@ -19,14 +20,16 @@ use crate::sync::Item;
 /// use todoist_api::quick_add::QuickAddRequest;
 ///
 /// // Create a simple quick add request
-/// let request = QuickAddRequest::new("Buy milk tomorrow #Shopping p1 @errands");
+/// let request = QuickAddRequest::new("Buy milk tomorrow #Shopping p1 @errands").unwrap();
 ///
 /// // With a note attachment
 /// let request = QuickAddRequest::new("Call mom tomorrow at 5pm")
+///     .unwrap()
 ///     .with_note("Don't forget to ask about Sunday dinner");
 ///
 /// // With auto reminder enabled
 /// let request = QuickAddRequest::new("Meeting at 3pm")
+///     .unwrap()
 ///     .with_auto_reminder(true);
 /// ```
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -59,13 +62,41 @@ impl QuickAddRequest {
     /// # Arguments
     ///
     /// * `text` - The natural language text to parse for creating the task.
-    pub fn new(text: impl Into<String>) -> Self {
-        Self {
-            text: text.into(),
+    ///
+    /// # Errors
+    ///
+    /// Returns `ApiError::Validation` if the text is empty or contains only whitespace.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use todoist_api::quick_add::QuickAddRequest;
+    ///
+    /// // Valid text
+    /// let request = QuickAddRequest::new("Buy milk").unwrap();
+    ///
+    /// // Empty text returns an error
+    /// let result = QuickAddRequest::new("");
+    /// assert!(result.is_err());
+    ///
+    /// // Whitespace-only text returns an error
+    /// let result = QuickAddRequest::new("   ");
+    /// assert!(result.is_err());
+    /// ```
+    pub fn new(text: impl Into<String>) -> Result<Self, ApiError> {
+        let text = text.into();
+        if text.trim().is_empty() {
+            return Err(ApiError::Validation {
+                field: Some("text".to_string()),
+                message: "task text cannot be empty".to_string(),
+            });
+        }
+        Ok(Self {
+            text,
             note: None,
             reminder: None,
             auto_reminder: None,
-        }
+        })
     }
 
     /// Adds a note/comment to attach to the created task.
@@ -253,7 +284,7 @@ mod tests {
 
     #[test]
     fn test_quick_add_request_new() {
-        let request = QuickAddRequest::new("Buy milk tomorrow");
+        let request = QuickAddRequest::new("Buy milk tomorrow").unwrap();
         assert_eq!(request.text, "Buy milk tomorrow");
         assert!(request.note.is_none());
         assert!(request.reminder.is_none());
@@ -261,8 +292,44 @@ mod tests {
     }
 
     #[test]
+    fn test_quick_add_request_new_empty_text_returns_error() {
+        let result = QuickAddRequest::new("");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        match err {
+            ApiError::Validation { field, message } => {
+                assert_eq!(field, Some("text".to_string()));
+                assert!(message.contains("empty"));
+            }
+            _ => panic!("Expected Validation error, got {:?}", err),
+        }
+    }
+
+    #[test]
+    fn test_quick_add_request_new_whitespace_only_returns_error() {
+        let result = QuickAddRequest::new("   \t\n  ");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        match err {
+            ApiError::Validation { field, message } => {
+                assert_eq!(field, Some("text".to_string()));
+                assert!(message.contains("empty"));
+            }
+            _ => panic!("Expected Validation error, got {:?}", err),
+        }
+    }
+
+    #[test]
+    fn test_quick_add_request_new_valid_text_with_whitespace() {
+        // Text with leading/trailing whitespace is valid (whitespace is preserved)
+        let request = QuickAddRequest::new("  Buy milk  ").unwrap();
+        assert_eq!(request.text, "  Buy milk  ");
+    }
+
+    #[test]
     fn test_quick_add_request_with_note() {
         let request = QuickAddRequest::new("Call mom")
+            .unwrap()
             .with_note("Ask about dinner plans");
         assert_eq!(request.note, Some("Ask about dinner plans".to_string()));
     }
@@ -270,6 +337,7 @@ mod tests {
     #[test]
     fn test_quick_add_request_with_reminder() {
         let request = QuickAddRequest::new("Meeting at 3pm")
+            .unwrap()
             .with_reminder("30 minutes before");
         assert_eq!(request.reminder, Some("30 minutes before".to_string()));
     }
@@ -277,6 +345,7 @@ mod tests {
     #[test]
     fn test_quick_add_request_with_auto_reminder() {
         let request = QuickAddRequest::new("Meeting at 3pm")
+            .unwrap()
             .with_auto_reminder(true);
         assert_eq!(request.auto_reminder, Some(true));
     }
@@ -284,6 +353,7 @@ mod tests {
     #[test]
     fn test_quick_add_request_builder_chain() {
         let request = QuickAddRequest::new("Buy groceries tomorrow #Shopping @errands p2")
+            .unwrap()
             .with_note("Don't forget the milk")
             .with_reminder("1 hour before")
             .with_auto_reminder(true);
@@ -296,7 +366,7 @@ mod tests {
 
     #[test]
     fn test_quick_add_request_to_form_body_minimal() {
-        let request = QuickAddRequest::new("Test task");
+        let request = QuickAddRequest::new("Test task").unwrap();
         let body = request.to_form_body();
 
         assert_eq!(body, "text=Test%20task");
@@ -305,6 +375,7 @@ mod tests {
     #[test]
     fn test_quick_add_request_to_form_body_full() {
         let request = QuickAddRequest::new("Test task")
+            .unwrap()
             .with_note("A note")
             .with_reminder("tomorrow")
             .with_auto_reminder(true);
@@ -318,7 +389,7 @@ mod tests {
 
     #[test]
     fn test_quick_add_request_to_form_body_with_special_chars() {
-        let request = QuickAddRequest::new("Buy milk #Shopping @errands");
+        let request = QuickAddRequest::new("Buy milk #Shopping @errands").unwrap();
         let body = request.to_form_body();
 
         // # and @ should be URL encoded

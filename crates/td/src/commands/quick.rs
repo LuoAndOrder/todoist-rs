@@ -69,7 +69,8 @@ pub async fn execute(ctx: &CommandContext, opts: &QuickOptions, token: &str) -> 
     let client = TodoistClient::new(token);
 
     // Build the quick add request
-    let mut request = QuickAddRequest::new(&opts.text);
+    let mut request = QuickAddRequest::new(&opts.text)
+        .map_err(todoist_api::error::Error::from)?;
 
     if opts.auto_reminder {
         request = request.with_auto_reminder(true);

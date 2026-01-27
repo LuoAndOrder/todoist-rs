@@ -297,7 +297,7 @@ async fn test_quick_add_simple() {
     let client = TodoistClient::new(token);
 
     // Create a task using quick add
-    let request = QuickAddRequest::new("E2E test quick add task");
+    let request = QuickAddRequest::new("E2E test quick add task").unwrap();
     let response = client.quick_add(request).await;
 
     match response {
@@ -339,7 +339,7 @@ async fn test_quick_add_with_nlp() {
     let client = TodoistClient::new(token);
 
     // Create a task with NLP parsing (due date and priority)
-    let request = QuickAddRequest::new("E2E quick add tomorrow p2");
+    let request = QuickAddRequest::new("E2E quick add tomorrow p2").unwrap();
     let response = client.quick_add(request).await;
 
     match response {
@@ -396,6 +396,7 @@ async fn test_quick_add_with_note() {
 
     // Create a task with a note
     let request = QuickAddRequest::new("E2E quick add with note")
+        .unwrap()
         .with_note("This is a test note from E2E");
     let response = client.quick_add(request).await;
 

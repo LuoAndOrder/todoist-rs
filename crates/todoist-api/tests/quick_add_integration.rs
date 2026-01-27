@@ -38,7 +38,7 @@ async fn test_quick_add_simple() {
         .await;
 
     let client = TodoistClient::with_base_url("test-token", mock_server.uri());
-    let request = QuickAddRequest::new("Buy milk");
+    let request = QuickAddRequest::new("Buy milk").unwrap();
     let response = client.quick_add(request).await.unwrap();
 
     assert_eq!(response.id, "task-123");
@@ -83,7 +83,7 @@ async fn test_quick_add_with_nlp_parsing() {
         .await;
 
     let client = TodoistClient::with_base_url("test-token", mock_server.uri());
-    let request = QuickAddRequest::new("Buy groceries tomorrow at 3pm #Shopping p2 @errands @shopping");
+    let request = QuickAddRequest::new("Buy groceries tomorrow at 3pm #Shopping p2 @errands @shopping").unwrap();
     let response = client.quick_add(request).await.unwrap();
 
     assert_eq!(response.id, "task-456");
@@ -130,6 +130,7 @@ async fn test_quick_add_with_note() {
 
     let client = TodoistClient::with_base_url("test-token", mock_server.uri());
     let request = QuickAddRequest::new("Call mom")
+        .unwrap()
         .with_note("Ask about dinner plans");
     let response = client.quick_add(request).await.unwrap();
 
@@ -170,6 +171,7 @@ async fn test_quick_add_with_all_options() {
 
     let client = TodoistClient::with_base_url("test-token", mock_server.uri());
     let request = QuickAddRequest::new("Team meeting tomorrow at 2pm #Work p1 @work")
+        .unwrap()
         .with_note("Prepare agenda")
         .with_reminder("30 minutes before")
         .with_auto_reminder(true);
@@ -225,7 +227,7 @@ async fn test_quick_add_retry_on_rate_limit() {
         .await;
 
     let client = TodoistClient::with_base_url("test-token", mock_server.uri());
-    let request = QuickAddRequest::new("Test task");
+    let request = QuickAddRequest::new("Test task").unwrap();
     let response = client.quick_add(request).await.unwrap();
 
     assert_eq!(response.id, "task-retry");
@@ -245,7 +247,7 @@ async fn test_quick_add_auth_failure() {
         .await;
 
     let client = TodoistClient::with_base_url("invalid-token", mock_server.uri());
-    let request = QuickAddRequest::new("Test task");
+    let request = QuickAddRequest::new("Test task").unwrap();
     let result = client.quick_add(request).await;
 
     assert!(result.is_err());
@@ -253,25 +255,20 @@ async fn test_quick_add_auth_failure() {
     assert_eq!(err.exit_code(), 2); // Auth error exit code
 }
 
-/// Test: Quick add fails with validation error
-#[tokio::test]
-async fn test_quick_add_validation_error() {
-    let mock_server = MockServer::start().await;
-
-    Mock::given(method("POST"))
-        .and(path("/tasks/quick"))
-        .respond_with(ResponseTemplate::new(400).set_body_string("Invalid request: text is required"))
-        .expect(1)
-        .mount(&mock_server)
-        .await;
-
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
-    let request = QuickAddRequest::new("");
-    let result = client.quick_add(request).await;
-
+/// Test: QuickAddRequest::new() validates empty text
+#[test]
+fn test_quick_add_request_empty_text_validation() {
+    // Empty text should return a validation error
+    let result = QuickAddRequest::new("");
     assert!(result.is_err());
-    let err = result.unwrap_err();
-    assert_eq!(err.exit_code(), 2); // Validation error maps to exit code 2
+
+    // Whitespace-only text should also return a validation error
+    let result = QuickAddRequest::new("   ");
+    assert!(result.is_err());
+
+    // Valid text should succeed
+    let result = QuickAddRequest::new("Valid task");
+    assert!(result.is_ok());
 }
 
 /// Test: Response can be converted to Item
@@ -306,7 +303,7 @@ async fn test_quick_add_response_to_item() {
         .await;
 
     let client = TodoistClient::with_base_url("test-token", mock_server.uri());
-    let request = QuickAddRequest::new("Task for conversion");
+    let request = QuickAddRequest::new("Task for conversion").unwrap();
     let response = client.quick_add(request).await.unwrap();
 
     // Convert to Item

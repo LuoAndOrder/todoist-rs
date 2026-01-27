@@ -441,7 +441,7 @@ impl TodoistClient {
     /// #[tokio::main]
     /// async fn main() {
     ///     let client = TodoistClient::new("your-api-token");
-    ///     let request = QuickAddRequest::new("Buy milk tomorrow #Shopping p2 @errands");
+    ///     let request = QuickAddRequest::new("Buy milk tomorrow #Shopping p2 @errands").unwrap();
     ///     let response = client.quick_add(request).await.unwrap();
     ///     println!("Created task: {} in project {}", response.content, response.project_id);
     /// }

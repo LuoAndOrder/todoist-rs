@@ -59,7 +59,7 @@ async fn test_quick_add_plain_text() {
     };
 
     // Quick add plain text
-    let request = QuickAddRequest::new("E2E Quick Add - Simple task");
+    let request = QuickAddRequest::new("E2E Quick Add - Simple task").unwrap();
     let response = ctx
         .client()
         .quick_add(request)
@@ -102,7 +102,7 @@ async fn test_quick_add_due_today() {
         return;
     };
 
-    let request = QuickAddRequest::new("E2E Quick Add - Buy milk today");
+    let request = QuickAddRequest::new("E2E Quick Add - Buy milk today").unwrap();
     let response = ctx
         .client()
         .quick_add(request)
@@ -147,7 +147,7 @@ async fn test_quick_add_due_tomorrow() {
         return;
     };
 
-    let request = QuickAddRequest::new("E2E Quick Add - Call mom tomorrow");
+    let request = QuickAddRequest::new("E2E Quick Add - Call mom tomorrow").unwrap();
     let response = ctx
         .client()
         .quick_add(request)
@@ -186,7 +186,7 @@ async fn test_quick_add_due_specific_date() {
         return;
     };
 
-    let request = QuickAddRequest::new("E2E Quick Add - Meeting on Dec 25");
+    let request = QuickAddRequest::new("E2E Quick Add - Meeting on Dec 25").unwrap();
     let response = ctx
         .client()
         .quick_add(request)
@@ -224,7 +224,7 @@ async fn test_quick_add_due_next_week() {
         return;
     };
 
-    let request = QuickAddRequest::new("E2E Quick Add - Review next monday");
+    let request = QuickAddRequest::new("E2E Quick Add - Review next monday").unwrap();
     let response = ctx
         .client()
         .quick_add(request)
@@ -267,7 +267,7 @@ async fn test_quick_add_recurring() {
         return;
     };
 
-    let request = QuickAddRequest::new("E2E Quick Add - Standup every weekday at 9am");
+    let request = QuickAddRequest::new("E2E Quick Add - Standup every weekday at 9am").unwrap();
     let response = ctx
         .client()
         .quick_add(request)
@@ -306,7 +306,7 @@ async fn test_quick_add_priority_p1() {
         return;
     };
 
-    let request = QuickAddRequest::new("E2E Quick Add - Fix critical bug p1");
+    let request = QuickAddRequest::new("E2E Quick Add - Fix critical bug p1").unwrap();
     let response = ctx
         .client()
         .quick_add(request)
@@ -342,7 +342,7 @@ async fn test_quick_add_priority_p2() {
         return;
     };
 
-    let request = QuickAddRequest::new("E2E Quick Add - Review PR p2");
+    let request = QuickAddRequest::new("E2E Quick Add - Review PR p2").unwrap();
     let response = ctx
         .client()
         .quick_add(request)
@@ -390,7 +390,8 @@ async fn test_quick_add_label() {
         .await
         .expect("Should create label");
 
-    let request = QuickAddRequest::new(format!("E2E Quick Add - Finish report @{}", label_name));
+    let request =
+        QuickAddRequest::new(format!("E2E Quick Add - Finish report @{}", label_name)).unwrap();
     let response = ctx
         .client()
         .quick_add(request)
@@ -449,7 +450,7 @@ async fn test_quick_add_multiple_labels() {
         .expect("Should create label2");
 
     let request =
-        QuickAddRequest::new(format!("E2E Quick Add - Task @{} @{}", label1, label2));
+        QuickAddRequest::new(format!("E2E Quick Add - Task @{} @{}", label1, label2)).unwrap();
     let response = ctx
         .client()
         .quick_add(request)
@@ -514,7 +515,8 @@ async fn test_quick_add_project() {
         .expect("Should create project");
 
     // Quick add with project reference
-    let request = QuickAddRequest::new(format!("E2E Quick Add - Buy groceries #{}", project_name));
+    let request =
+        QuickAddRequest::new(format!("E2E Quick Add - Buy groceries #{}", project_name)).unwrap();
     let response = ctx
         .client()
         .quick_add(request)
@@ -590,7 +592,8 @@ async fn test_quick_add_section() {
     let request = QuickAddRequest::new(format!(
         "E2E Quick Add - New feature #{} /{}",
         project_name, section_name
-    ));
+    ))
+    .unwrap();
     let response = ctx
         .client()
         .quick_add(request)
@@ -657,7 +660,8 @@ async fn test_quick_add_combined() {
     let request = QuickAddRequest::new(format!(
         "E2E Quick Add - Submit report tomorrow p2 @{} #{}",
         label_name, project_name
-    ));
+    ))
+    .unwrap();
     let response = ctx
         .client()
         .quick_add(request)
@@ -725,7 +729,7 @@ async fn test_quick_add_with_description() {
     let note_content = "Detailed description for testing";
 
     let request =
-        QuickAddRequest::new("E2E Quick Add - Task with note").with_note(note_content);
+        QuickAddRequest::new("E2E Quick Add - Task with note").unwrap().with_note(note_content);
     let response = ctx
         .client()
         .quick_add(request)
@@ -772,7 +776,7 @@ async fn test_quick_add_due_with_time() {
         return;
     };
 
-    let request = QuickAddRequest::new("E2E Quick Add - Meeting at 3pm today");
+    let request = QuickAddRequest::new("E2E Quick Add - Meeting at 3pm today").unwrap();
     let response = ctx
         .client()
         .quick_add(request)
@@ -825,7 +829,7 @@ async fn test_quick_add_priority_p3_p4() {
     };
 
     // Test p3
-    let request_p3 = QuickAddRequest::new("E2E Quick Add - Low priority p3");
+    let request_p3 = QuickAddRequest::new("E2E Quick Add - Low priority p3").unwrap();
     let response_p3 = ctx
         .client()
         .quick_add(request_p3)
@@ -835,7 +839,7 @@ async fn test_quick_add_priority_p3_p4() {
     assert_eq!(response_p3.priority, 2, "p3 should map to priority 2");
 
     // Test p4 (or no priority - default)
-    let request_p4 = QuickAddRequest::new("E2E Quick Add - Lowest priority p4");
+    let request_p4 = QuickAddRequest::new("E2E Quick Add - Lowest priority p4").unwrap();
     let response_p4 = ctx
         .client()
         .quick_add(request_p4)
