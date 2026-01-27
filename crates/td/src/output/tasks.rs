@@ -79,7 +79,7 @@ pub struct TaskDetailsOutput<'a> {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub comments: Vec<CommentOutput<'a>>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub reminders: Vec<ReminderOutput<'a>>,
+    pub reminders: Vec<ReminderOutput>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub subtasks: Vec<SubtaskOutput<'a>>,
 }
@@ -103,11 +103,22 @@ pub struct CommentOutput<'a> {
 
 /// JSON output for a reminder.
 #[derive(Serialize)]
-pub struct ReminderOutput<'a> {
-    pub id: &'a str,
-    pub reminder_type: &'a str,
-    pub due: Option<DueOutput<'a>>,
+pub struct ReminderOutput {
+    pub id: String,
+    pub reminder_type: todoist_api::models::ReminderType,
+    pub due: Option<DueOutputOwned>,
     pub minute_offset: Option<i32>,
+}
+
+/// Owned version of DueOutput for use in ReminderOutput.
+#[derive(Serialize)]
+pub struct DueOutputOwned {
+    pub date: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub datetime: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub string: Option<String>,
+    pub is_recurring: bool,
 }
 
 /// JSON output for a subtask.
@@ -203,12 +214,12 @@ pub fn format_item_details_json(result: &ShowResult) -> Result<String, serde_jso
         .reminders
         .iter()
         .map(|r| ReminderOutput {
-            id: &r.id,
-            reminder_type: &r.reminder_type,
-            due: r.due.as_ref().map(|d| DueOutput {
-                date: &d.date,
-                datetime: d.datetime.as_deref(),
-                string: d.string.as_deref(),
+            id: r.id.clone(),
+            reminder_type: r.reminder_type,
+            due: r.due.as_ref().map(|d| DueOutputOwned {
+                date: d.date.clone(),
+                datetime: d.datetime.clone(),
+                string: d.string.clone(),
                 is_recurring: d.is_recurring,
             }),
             minute_offset: r.minute_offset,

@@ -2,6 +2,7 @@
 
 use owo_colors::OwoColorize;
 use serde::Serialize;
+use todoist_api::models::ReminderType;
 use todoist_api::sync::Reminder;
 use todoist_cache::Cache;
 
@@ -23,7 +24,7 @@ pub struct ReminderListOutput<'a> {
     pub item_id: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_name: Option<&'a str>,
-    pub reminder_type: &'a str,
+    pub reminder_type: ReminderType,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub due: Option<DueOutput<'a>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -55,7 +56,7 @@ pub fn format_reminders_json(
                 id: &r.id,
                 item_id: &r.item_id,
                 task_name,
-                reminder_type: &r.reminder_type,
+                reminder_type: r.reminder_type,
                 due,
                 minute_offset: r.minute_offset,
             }
@@ -124,7 +125,7 @@ pub struct CreatedReminderOutput<'a> {
     pub task_id: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_name: Option<&'a str>,
-    pub reminder_type: &'a str,
+    pub reminder_type: ReminderType,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub due: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -137,7 +138,7 @@ pub fn format_created_reminder(result: &ReminderAddResult) -> Result<String, ser
         id: &result.id,
         task_id: &result.task_id,
         task_name: result.task_name.as_deref(),
-        reminder_type: &result.reminder_type,
+        reminder_type: result.reminder_type,
         due: result.due.as_deref(),
         minute_offset: result.minute_offset,
     };
@@ -152,7 +153,7 @@ pub struct DeletedReminderOutput<'a> {
     pub task_id: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_name: Option<&'a str>,
-    pub reminder_type: &'a str,
+    pub reminder_type: ReminderType,
     pub status: &'static str,
 }
 
@@ -162,7 +163,7 @@ pub fn format_deleted_reminder(result: &ReminderDeleteResult) -> Result<String, 
         id: &result.id,
         task_id: &result.task_id,
         task_name: result.task_name.as_deref(),
-        reminder_type: &result.reminder_type,
+        reminder_type: result.reminder_type,
         status: "deleted",
     };
 

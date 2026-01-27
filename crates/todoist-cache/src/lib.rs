@@ -534,10 +534,16 @@ mod tests {
             reminders: vec![Reminder {
                 id: "reminder-1".to_string(),
                 item_id: "item-1".to_string(),
-                reminder_type: "relative".to_string(),
+                reminder_type: todoist_api::models::ReminderType::Relative,
                 due: None,
                 minute_offset: Some(30),
                 is_deleted: false,
+                notify_uid: None,
+                name: None,
+                loc_lat: None,
+                loc_long: None,
+                loc_trigger: None,
+                radius: None,
             }],
             filters: vec![Filter {
                 id: "filter-1".to_string(),
@@ -729,10 +735,16 @@ mod tests {
             Reminder {
                 id: id.to_string(),
                 item_id: "item-1".to_string(),
-                reminder_type: "relative".to_string(),
+                reminder_type: todoist_api::models::ReminderType::Relative,
                 due: None,
                 minute_offset: Some(30),
                 is_deleted,
+                notify_uid: None,
+                name: None,
+                loc_lat: None,
+                loc_long: None,
+                loc_trigger: None,
+                radius: None,
             }
         }
 

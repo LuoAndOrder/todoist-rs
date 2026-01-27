@@ -4,6 +4,7 @@
 //! Uses SyncManager::execute_commands() to automatically update the cache.
 
 use todoist_api::client::TodoistClient;
+use todoist_api::models::ReminderType;
 use todoist_api::sync::{Reminder, SyncCommand};
 use todoist_cache::{Cache, CacheStore, SyncManager};
 
@@ -151,8 +152,8 @@ pub struct ReminderAddResult {
     pub task_id: String,
     /// The task name (content).
     pub task_name: Option<String>,
-    /// The reminder type ("absolute" or "relative").
-    pub reminder_type: String,
+    /// The reminder type.
+    pub reminder_type: ReminderType,
     /// The due date/time (for absolute reminders).
     pub due: Option<String>,
     /// Minutes before due time (for relative reminders).
@@ -211,7 +212,7 @@ pub async fn execute_add(
             "type": "absolute",
             "due": due_obj,
         });
-        ("absolute".to_string(), args)
+        (ReminderType::Absolute, args)
     } else if let Some(offset) = opts.offset {
         // Relative reminder
         let args = serde_json::json!({
@@ -219,7 +220,7 @@ pub async fn execute_add(
             "type": "relative",
             "minute_offset": offset,
         });
-        ("relative".to_string(), args)
+        (ReminderType::Relative, args)
     } else {
         unreachable!("Already validated that one of due or offset is provided");
     };
@@ -348,7 +349,7 @@ pub struct ReminderDeleteResult {
     /// The task name (content).
     pub task_name: Option<String>,
     /// The reminder type.
-    pub reminder_type: String,
+    pub reminder_type: ReminderType,
 }
 
 /// Executes the reminders delete command.
@@ -378,7 +379,7 @@ pub async fn execute_delete(
         let reminder = find_reminder_by_id_or_prefix(cache, &opts.reminder_id)?;
         let r_id = reminder.id.clone();
         let t_id = reminder.item_id.clone();
-        let r_type = reminder.reminder_type.clone();
+        let r_type = reminder.reminder_type;
         let r_offset = reminder.minute_offset;
         let r_due = reminder.due.clone();
         let t_name = cache
@@ -394,7 +395,7 @@ pub async fn execute_delete(
         let task_display = task_name
             .as_deref()
             .unwrap_or(&task_id);
-        let reminder_desc = format_reminder_description(&reminder_type, reminder_offset, reminder_due.as_ref());
+        let reminder_desc = format_reminder_description(reminder_type, reminder_offset, reminder_due.as_ref());
         eprintln!(
             "Delete reminder '{}' for task '{}'?",
             reminder_desc,
@@ -476,7 +477,7 @@ fn find_reminder_by_id_or_prefix<'a>(cache: &'a Cache, id: &str) -> Result<&'a R
             let mut msg = format!("Ambiguous reminder ID \"{id}\"\n\nMultiple reminders match this prefix:");
             for reminder in matches.iter().take(5) {
                 let prefix = &reminder.id[..6.min(reminder.id.len())];
-                let desc = format_reminder_description(&reminder.reminder_type, reminder.minute_offset, reminder.due.as_ref());
+                let desc = format_reminder_description(reminder.reminder_type, reminder.minute_offset, reminder.due.as_ref());
                 msg.push_str(&format!("\n  {}  {}", prefix, desc));
             }
             if matches.len() > 5 {
@@ -489,23 +490,23 @@ fn find_reminder_by_id_or_prefix<'a>(cache: &'a Cache, id: &str) -> Result<&'a R
 }
 
 /// Formats a reminder description for display.
-fn format_reminder_description(reminder_type: &str, minute_offset: Option<i32>, due: Option<&todoist_api::sync::Due>) -> String {
+fn format_reminder_description(reminder_type: ReminderType, minute_offset: Option<i32>, due: Option<&todoist_api::sync::Due>) -> String {
     match reminder_type {
-        "relative" => {
+        ReminderType::Relative => {
             if let Some(offset) = minute_offset {
                 format_offset(offset)
             } else {
                 "relative reminder".to_string()
             }
         }
-        "absolute" => {
+        ReminderType::Absolute => {
             if let Some(d) = due {
                 format!("at {}", d.date)
             } else {
                 "absolute reminder".to_string()
             }
         }
-        _ => reminder_type.to_string(),
+        ReminderType::Location => "location-based reminder".to_string(),
     }
 }
 
@@ -622,15 +623,21 @@ mod tests {
                 Reminder {
                     id: "reminder-1".to_string(),
                     item_id: "task-1".to_string(),
-                    reminder_type: "relative".to_string(),
+                    reminder_type: ReminderType::Relative,
                     due: None,
                     minute_offset: Some(30),
                     is_deleted: false,
+                    notify_uid: None,
+                    name: None,
+                    loc_lat: None,
+                    loc_long: None,
+                    loc_trigger: None,
+                    radius: None,
                 },
                 Reminder {
                     id: "reminder-2".to_string(),
                     item_id: "task-1".to_string(),
-                    reminder_type: "absolute".to_string(),
+                    reminder_type: ReminderType::Absolute,
                     due: Some(Due {
                         date: "2025-01-26".to_string(),
                         datetime: Some("2025-01-26T10:00:00Z".to_string()),
@@ -641,6 +648,12 @@ mod tests {
                     }),
                     minute_offset: None,
                     is_deleted: false,
+                    notify_uid: None,
+                    name: None,
+                    loc_lat: None,
+                    loc_long: None,
+                    loc_trigger: None,
+                    radius: None,
                 },
             ],
             filters: vec![],
@@ -733,7 +746,7 @@ mod tests {
             id: "reminder-123".to_string(),
             task_id: "task-1".to_string(),
             task_name: Some("My Task".to_string()),
-            reminder_type: "absolute".to_string(),
+            reminder_type: ReminderType::Absolute,
             due: Some("2025-01-26T10:00:00".to_string()),
             minute_offset: None,
         };
@@ -741,7 +754,7 @@ mod tests {
         assert_eq!(result.id, "reminder-123");
         assert_eq!(result.task_id, "task-1");
         assert_eq!(result.task_name, Some("My Task".to_string()));
-        assert_eq!(result.reminder_type, "absolute");
+        assert_eq!(result.reminder_type, ReminderType::Absolute);
         assert_eq!(result.due, Some("2025-01-26T10:00:00".to_string()));
         assert!(result.minute_offset.is_none());
     }
@@ -752,7 +765,7 @@ mod tests {
             id: "reminder-456".to_string(),
             task_id: "task-2".to_string(),
             task_name: Some("Another Task".to_string()),
-            reminder_type: "relative".to_string(),
+            reminder_type: ReminderType::Relative,
             due: None,
             minute_offset: Some(60),
         };
@@ -760,7 +773,7 @@ mod tests {
         assert_eq!(result.id, "reminder-456");
         assert_eq!(result.task_id, "task-2");
         assert_eq!(result.task_name, Some("Another Task".to_string()));
-        assert_eq!(result.reminder_type, "relative");
+        assert_eq!(result.reminder_type, ReminderType::Relative);
         assert!(result.due.is_none());
         assert_eq!(result.minute_offset, Some(60));
     }
@@ -830,13 +843,13 @@ mod tests {
             id: "reminder-789".to_string(),
             task_id: "task-1".to_string(),
             task_name: Some("Test Task".to_string()),
-            reminder_type: "relative".to_string(),
+            reminder_type: ReminderType::Relative,
         };
 
         assert_eq!(result.id, "reminder-789");
         assert_eq!(result.task_id, "task-1");
         assert_eq!(result.task_name, Some("Test Task".to_string()));
-        assert_eq!(result.reminder_type, "relative");
+        assert_eq!(result.reminder_type, ReminderType::Relative);
     }
 
     #[test]
@@ -886,15 +899,15 @@ mod tests {
     #[test]
     fn test_format_reminder_description_relative() {
         assert_eq!(
-            format_reminder_description("relative", Some(30), None),
+            format_reminder_description(ReminderType::Relative, Some(30), None),
             "30 minutes before"
         );
         assert_eq!(
-            format_reminder_description("relative", Some(60), None),
+            format_reminder_description(ReminderType::Relative, Some(60), None),
             "1 hour before"
         );
         assert_eq!(
-            format_reminder_description("relative", None, None),
+            format_reminder_description(ReminderType::Relative, None, None),
             "relative reminder"
         );
     }
@@ -910,20 +923,20 @@ mod tests {
             lang: None,
         };
         assert_eq!(
-            format_reminder_description("absolute", None, Some(&due)),
+            format_reminder_description(ReminderType::Absolute, None, Some(&due)),
             "at 2025-01-26"
         );
         assert_eq!(
-            format_reminder_description("absolute", None, None),
+            format_reminder_description(ReminderType::Absolute, None, None),
             "absolute reminder"
         );
     }
 
     #[test]
-    fn test_format_reminder_description_unknown() {
+    fn test_format_reminder_description_location() {
         assert_eq!(
-            format_reminder_description("location", None, None),
-            "location"
+            format_reminder_description(ReminderType::Location, None, None),
+            "location-based reminder"
         );
     }
 }

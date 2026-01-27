@@ -190,8 +190,10 @@ pub fn format_datetime(datetime: &str) -> String {
 
 /// Formats a reminder for display.
 pub fn format_reminder(reminder: &todoist_api::sync::Reminder) -> String {
-    match reminder.reminder_type.as_str() {
-        "relative" => {
+    use todoist_api::models::ReminderType;
+
+    match reminder.reminder_type {
+        ReminderType::Relative => {
             if let Some(offset) = reminder.minute_offset {
                 if offset == 0 {
                     "At time of due date".to_string()
@@ -208,15 +210,14 @@ pub fn format_reminder(reminder: &todoist_api::sync::Reminder) -> String {
                 "Relative reminder".to_string()
             }
         }
-        "absolute" => {
+        ReminderType::Absolute => {
             if let Some(ref due) = reminder.due {
                 format!("At {}", due.date)
             } else {
                 "Absolute reminder".to_string()
             }
         }
-        "location" => "Location-based reminder".to_string(),
-        _ => reminder.reminder_type.clone(),
+        ReminderType::Location => "Location-based reminder".to_string(),
     }
 }
 

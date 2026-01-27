@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 // Re-export common types that are used by sync API consumers
-pub use crate::models::{Deadline, Due, Duration, DurationUnit};
+pub use crate::models::{Deadline, Due, Duration, DurationUnit, LocationTrigger, ReminderType};
 
 /// Response from the Sync API endpoint.
 ///
@@ -469,9 +469,9 @@ pub struct Reminder {
     /// The task this reminder is for.
     pub item_id: String,
 
-    /// Reminder type: "relative", "absolute", or "location".
+    /// Reminder type: relative, absolute, or location.
     #[serde(rename = "type")]
-    pub reminder_type: String,
+    pub reminder_type: ReminderType,
 
     /// Due information for the reminder.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -484,6 +484,30 @@ pub struct Reminder {
     /// Whether the reminder is deleted.
     #[serde(default)]
     pub is_deleted: bool,
+
+    /// User ID to notify (typically the current user).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notify_uid: Option<String>,
+
+    /// Location name (for location reminders).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+
+    /// Location latitude (for location reminders).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub loc_lat: Option<String>,
+
+    /// Location longitude (for location reminders).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub loc_long: Option<String>,
+
+    /// Location trigger: on_enter or on_leave (for location reminders).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub loc_trigger: Option<LocationTrigger>,
+
+    /// Radius around the location in meters (for location reminders).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub radius: Option<i32>,
 }
 
 /// A saved filter.
@@ -876,7 +900,7 @@ mod tests {
     }
 
     #[test]
-    fn test_reminder_deserialize() {
+    fn test_reminder_deserialize_relative() {
         let json = r#"{
             "id": "reminder-1",
             "item_id": "item-1",
@@ -888,8 +912,51 @@ mod tests {
         let reminder: Reminder = serde_json::from_str(json).unwrap();
         assert_eq!(reminder.id, "reminder-1");
         assert_eq!(reminder.item_id, "item-1");
-        assert_eq!(reminder.reminder_type, "relative");
+        assert_eq!(reminder.reminder_type, ReminderType::Relative);
         assert_eq!(reminder.minute_offset, Some(30));
+    }
+
+    #[test]
+    fn test_reminder_deserialize_absolute() {
+        let json = r#"{
+            "id": "reminder-2",
+            "item_id": "item-1",
+            "type": "absolute",
+            "due": {
+                "date": "2025-01-26",
+                "datetime": "2025-01-26T10:00:00Z"
+            },
+            "is_deleted": false
+        }"#;
+
+        let reminder: Reminder = serde_json::from_str(json).unwrap();
+        assert_eq!(reminder.id, "reminder-2");
+        assert_eq!(reminder.reminder_type, ReminderType::Absolute);
+        assert!(reminder.due.is_some());
+    }
+
+    #[test]
+    fn test_reminder_deserialize_location() {
+        let json = r#"{
+            "id": "reminder-3",
+            "item_id": "item-1",
+            "type": "location",
+            "name": "Home",
+            "loc_lat": "37.7749",
+            "loc_long": "-122.4194",
+            "loc_trigger": "on_enter",
+            "radius": 100,
+            "is_deleted": false
+        }"#;
+
+        let reminder: Reminder = serde_json::from_str(json).unwrap();
+        assert_eq!(reminder.id, "reminder-3");
+        assert_eq!(reminder.reminder_type, ReminderType::Location);
+        assert_eq!(reminder.name, Some("Home".to_string()));
+        assert_eq!(reminder.loc_lat, Some("37.7749".to_string()));
+        assert_eq!(reminder.loc_long, Some("-122.4194".to_string()));
+        assert_eq!(reminder.loc_trigger, Some(LocationTrigger::OnEnter));
+        assert_eq!(reminder.radius, Some(100));
     }
 
     #[test]
