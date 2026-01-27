@@ -8,7 +8,7 @@
 //! use todoist_api_rs::prelude::*;
 //! ```
 //!
-//! This re-exports the most commonly used types including [`TodoistClient`],
+//! This re-exports the most commonly used types including [`client::TodoistClient`],
 //! error types, sync API types, and data models.
 
 pub mod client;
