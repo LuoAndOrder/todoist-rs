@@ -245,6 +245,7 @@ mod tests {
 
         let mut file = fs::File::create(&config_path).unwrap();
         writeln!(file, r#"token = "config-token""#).unwrap();
+        drop(file); // Ensure file is flushed before reading
 
         // Set TD_CONFIG to point to our temp config
         let original_config = env::var("TD_CONFIG").ok();
@@ -283,6 +284,7 @@ mod tests {
 
         let mut file = fs::File::create(&config_path).unwrap();
         writeln!(file, r#"token = "config-token""#).unwrap();
+        drop(file); // Ensure file is flushed before reading
 
         // Set TD_CONFIG to point to our temp config
         let original_config = env::var("TD_CONFIG").ok();
