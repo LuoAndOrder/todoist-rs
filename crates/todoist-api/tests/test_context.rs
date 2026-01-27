@@ -901,10 +901,10 @@ mod tests {
         match ctx {
             Ok(ctx) => {
                 // Verify basic state
-                assert!(!ctx.inbox_id().is_empty());
-                assert!(!ctx.sync_token().is_empty());
+                assert!(!ctx.inbox_id().is_empty(), "inbox_id should not be empty after initialization");
+                assert!(!ctx.sync_token().is_empty(), "sync_token should not be empty after initialization");
                 // Should have at least the inbox project
-                assert!(ctx.projects().count() >= 1);
+                assert!(ctx.projects().count() >= 1, "should have at least the inbox project");
             }
             Err(e) => {
                 eprintln!("Skipping test: {}", e);
@@ -931,8 +931,8 @@ mod tests {
 
         // Find it in cache (no API call)
         let task = ctx.find_item(&task_id).expect("Task should be in cache");
-        assert_eq!(task.content, "TestContext - test task");
-        assert_eq!(task.project_id, inbox_id);
+        assert_eq!(task.content, "TestContext - test task", "task content should match what was created");
+        assert_eq!(task.project_id, inbox_id, "task should be in inbox project");
 
         // Cleanup
         ctx.delete_task(&task_id).await.expect("Should delete task");
@@ -973,7 +973,7 @@ mod tests {
             .collect();
 
         let response = ctx.execute(commands).await.expect("Batch create should work");
-        assert!(!response.has_errors());
+        assert!(!response.has_errors(), "batch create should not have errors");
 
         // Get real IDs
         let task_ids: Vec<String> = temp_ids
@@ -984,7 +984,7 @@ mod tests {
         // Verify all tasks in cache
         for (i, task_id) in task_ids.iter().enumerate() {
             let task = ctx.find_item(task_id).expect("Task should be in cache");
-            assert_eq!(task.content, format!("TestContext - batch task {}", i));
+            assert_eq!(task.content, format!("TestContext - batch task {}", i), "task {} content should match", i);
         }
 
         // Batch delete
