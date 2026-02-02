@@ -6,7 +6,7 @@
 //! for smart lookups with auto-sync fallback.
 
 use todoist_api_rs::client::TodoistClient;
-use todoist_api_rs::sync::SyncCommand;
+use todoist_api_rs::sync::{SyncCommand, SyncCommandType};
 use todoist_cache_rs::{CacheStore, SyncManager};
 
 use super::{CommandContext, CommandError, Result};
@@ -150,7 +150,7 @@ pub async fn execute(ctx: &CommandContext, opts: &EditOptions, token: &str) -> R
             updated_fields.push("description".to_string());
         }
 
-        let update_command = SyncCommand::new("item_update", args);
+        let update_command = SyncCommand::new(SyncCommandType::ItemUpdate, args);
         commands.push(update_command);
     }
 
@@ -201,7 +201,7 @@ pub async fn execute(ctx: &CommandContext, opts: &EditOptions, token: &str) -> R
 
         // Only add move command if we're actually moving somewhere
         if move_args.get("project_id").is_some() || move_args.get("section_id").is_some() {
-            let move_command = SyncCommand::new("item_move", move_args);
+            let move_command = SyncCommand::new(SyncCommandType::ItemMove, move_args);
             commands.push(move_command);
         }
     }

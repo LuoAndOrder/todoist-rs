@@ -4,7 +4,7 @@
 //! Uses SyncManager::execute_commands() to automatically update the cache.
 
 use todoist_api_rs::client::TodoistClient;
-use todoist_api_rs::sync::{Filter, SyncCommand};
+use todoist_api_rs::sync::{Filter, SyncCommand, SyncCommandType};
 use todoist_cache_rs::{Cache, CacheStore, SyncManager};
 
 use super::{CommandContext, CommandError, Result};
@@ -163,7 +163,7 @@ pub async fn execute_add(
     }
 
     // Create the command
-    let command = SyncCommand::with_temp_id("filter_add", &temp_id, args);
+    let command = SyncCommand::with_temp_id(SyncCommandType::FilterAdd, &temp_id, args);
 
     // Execute the command via SyncManager
     // This sends the command, applies the response to cache, and saves to disk
@@ -427,7 +427,7 @@ pub async fn execute_edit(
     }
 
     // Create the command
-    let command = SyncCommand::new("filter_update", args);
+    let command = SyncCommand::new(SyncCommandType::FilterUpdate, args);
 
     // Execute the command via SyncManager
     // This sends the command, applies the response to cache, and saves to disk
@@ -572,7 +572,7 @@ pub async fn execute_delete(
     });
 
     // Create the command
-    let command = SyncCommand::new("filter_delete", args);
+    let command = SyncCommand::new(SyncCommandType::FilterDelete, args);
 
     // Execute the command via SyncManager
     // This sends the command, applies the response to cache, and saves to disk

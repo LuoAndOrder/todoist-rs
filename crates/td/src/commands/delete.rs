@@ -5,7 +5,7 @@
 //! Uses resolve_item_by_prefix() for smart lookups with auto-sync fallback.
 
 use todoist_api_rs::client::TodoistClient;
-use todoist_api_rs::sync::SyncCommand;
+use todoist_api_rs::sync::{SyncCommand, SyncCommandType};
 use todoist_cache_rs::{CacheStore, SyncManager};
 
 use super::{confirm_bulk_operation, CommandContext, CommandError, ConfirmResult, Result};
@@ -82,7 +82,7 @@ pub async fn execute(ctx: &CommandContext, opts: &DeleteOptions, token: &str) ->
     // Build commands for all tasks using item_delete
     let commands: Vec<SyncCommand> = resolved_items
         .iter()
-        .map(|(id, _)| SyncCommand::new("item_delete", serde_json::json!({ "id": id })))
+        .map(|(id, _)| SyncCommand::new(SyncCommandType::ItemDelete, serde_json::json!({ "id": id })))
         .collect();
 
     // Execute the commands via SyncManager

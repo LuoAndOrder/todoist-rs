@@ -5,7 +5,7 @@
 //! Uses resolve_item_by_prefix() for smart lookups with auto-sync fallback.
 
 use todoist_api_rs::client::TodoistClient;
-use todoist_api_rs::sync::SyncCommand;
+use todoist_api_rs::sync::{SyncCommand, SyncCommandType};
 use todoist_cache_rs::{CacheStore, SyncManager};
 
 use super::{confirm_bulk_operation, CommandContext, CommandError, ConfirmResult, Result};
@@ -85,11 +85,13 @@ pub async fn execute(ctx: &CommandContext, opts: &DoneOptions, token: &str) -> R
 
     // Build commands for all tasks
     // Use item_close by default (schedules recurring tasks to next occurrence)
-    // Use item_complete when --all-occurrences is set (fully completes including recurring)
+    // Use item_update with date_completed when --all-occurrences is set (fully completes including recurring)
+    // Note: The Todoist API doesn't have a separate "item_complete" command; we use item_update
+    // with a specific date_completed timestamp for that behavior.
     let command_type = if opts.all_occurrences {
-        "item_complete"
+        SyncCommandType::ItemUpdateDateCompleted
     } else {
-        "item_close"
+        SyncCommandType::ItemClose
     };
 
     let commands: Vec<SyncCommand> = resolved_items

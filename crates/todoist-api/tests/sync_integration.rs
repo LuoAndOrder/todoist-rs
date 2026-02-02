@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
 use todoist_api_rs::client::TodoistClient;
-use todoist_api_rs::sync::{SyncCommand, SyncRequest};
+use todoist_api_rs::sync::{SyncCommand, SyncCommandType, SyncRequest};
 use wiremock::matchers::{body_string_contains, header, method, path};
 use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
 
@@ -160,13 +160,13 @@ async fn test_sync_command_execution() {
 
     let commands = vec![
         SyncCommand::with_uuid_and_temp_id(
-            "item_add",
+            SyncCommandType::ItemAdd,
             "cmd-uuid-1",
             "temp-item-1",
             serde_json::json!({"content": "Task 1", "project_id": "proj-1"}),
         ),
         SyncCommand::with_uuid_and_temp_id(
-            "item_add",
+            SyncCommandType::ItemAdd,
             "cmd-uuid-2",
             "temp-item-2",
             serde_json::json!({"content": "Task 2", "project_id": "proj-1"}),
@@ -220,13 +220,13 @@ async fn test_sync_command_partial_failure() {
 
     let commands = vec![
         SyncCommand::with_uuid_and_temp_id(
-            "item_add",
+            SyncCommandType::ItemAdd,
             "cmd-success",
             "temp-success",
             serde_json::json!({"content": "Valid task", "project_id": "proj-1"}),
         ),
         SyncCommand::with_uuid_and_temp_id(
-            "item_add",
+            SyncCommandType::ItemAdd,
             "cmd-failure",
             "temp-invalid",
             serde_json::json!({"content": "Invalid task", "project_id": "invalid-temp-id"}),
@@ -423,7 +423,7 @@ async fn test_sync_combined_read_write() {
     let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
 
     let command = SyncCommand::with_uuid_and_temp_id(
-        "item_add",
+        SyncCommandType::ItemAdd,
         "add-item-cmd",
         "temp-new-item",
         serde_json::json!({"content": "New task via command", "project_id": "proj-1"}),
@@ -576,7 +576,7 @@ async fn test_sync_item_close_command() {
     let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
 
     let command = SyncCommand {
-        command_type: "item_close".to_string(),
+        command_type: SyncCommandType::ItemClose,
         uuid: "close-cmd-uuid".to_string(),
         temp_id: None,
         args: serde_json::json!({"id": "item-to-close"}),

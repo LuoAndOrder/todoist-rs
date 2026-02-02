@@ -4,7 +4,7 @@
 //! Uses SyncManager::execute_commands() to automatically update the cache.
 
 use todoist_api_rs::client::TodoistClient;
-use todoist_api_rs::sync::{Section, SyncCommand};
+use todoist_api_rs::sync::{Section, SyncCommand, SyncCommandType};
 use todoist_cache_rs::{Cache, CacheStore, SyncManager};
 
 use super::{CommandContext, CommandError, Result};
@@ -212,7 +212,7 @@ pub async fn execute_add(
     });
 
     // Create the command
-    let command = SyncCommand::with_temp_id("section_add", &temp_id, args);
+    let command = SyncCommand::with_temp_id(SyncCommandType::SectionAdd, &temp_id, args);
 
     // Execute the command via SyncManager
     // This sends the command, applies the response to cache, and saves to disk
@@ -341,7 +341,7 @@ pub async fn execute_edit(
     }
 
     // Create the command
-    let command = SyncCommand::new("section_update", args);
+    let command = SyncCommand::new(SyncCommandType::SectionUpdate, args);
 
     // Execute the command via SyncManager
     // This sends the command, applies the response to cache, and saves to disk
@@ -487,7 +487,7 @@ pub async fn execute_delete(
     });
 
     // Create the command
-    let command = SyncCommand::new("section_delete", args);
+    let command = SyncCommand::new(SyncCommandType::SectionDelete, args);
 
     // Execute the command via SyncManager
     // This sends the command, applies the response to cache, and saves to disk

@@ -4,7 +4,7 @@
 //! Uses SyncManager::execute_commands() to automatically update the cache.
 
 use todoist_api_rs::client::TodoistClient;
-use todoist_api_rs::sync::SyncCommand;
+use todoist_api_rs::sync::{SyncCommand, SyncCommandType};
 use todoist_cache_rs::{CacheStore, SyncManager};
 
 use super::{CommandContext, CommandError, Result};
@@ -125,7 +125,7 @@ pub async fn execute(ctx: &CommandContext, opts: &AddOptions, token: &str) -> Re
 
     // Create and execute the command via SyncManager
     // This sends the command, applies the response to cache, and saves to disk
-    let command = SyncCommand::with_temp_id("item_add", &temp_id, args);
+    let command = SyncCommand::with_temp_id(SyncCommandType::ItemAdd, &temp_id, args);
     let response = manager.execute_commands(vec![command]).await?;
 
     // Check for command errors in the response

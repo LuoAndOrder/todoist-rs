@@ -4,7 +4,7 @@
 //! Uses SyncManager::execute_commands() to automatically update the cache.
 
 use todoist_api_rs::client::TodoistClient;
-use todoist_api_rs::sync::{Project, SyncCommand};
+use todoist_api_rs::sync::{Project, SyncCommand, SyncCommandType};
 use todoist_cache_rs::{Cache, CacheStore, SyncManager};
 
 use super::{CommandContext, CommandError, Result};
@@ -201,7 +201,7 @@ pub async fn execute_add(
     }
 
     // Create the command
-    let command = SyncCommand::with_temp_id("project_add", &temp_id, args);
+    let command = SyncCommand::with_temp_id(SyncCommandType::ProjectAdd, &temp_id, args);
 
     // Execute the command via SyncManager
     // This sends the command, applies the response to cache, and saves to disk
@@ -567,7 +567,7 @@ pub async fn execute_edit(
     }
 
     // Create the command
-    let command = SyncCommand::new("project_update", args);
+    let command = SyncCommand::new(SyncCommandType::ProjectUpdate, args);
 
     // Execute the command via SyncManager
     // This sends the command, applies the response to cache, and saves to disk
@@ -699,7 +699,7 @@ pub async fn execute_archive(
     });
 
     // Create the command
-    let command = SyncCommand::new("project_archive", args);
+    let command = SyncCommand::new(SyncCommandType::ProjectArchive, args);
 
     // Execute the command via SyncManager
     // This sends the command, applies the response to cache, and saves to disk
@@ -805,7 +805,7 @@ pub async fn execute_unarchive(
     });
 
     // Create the command
-    let command = SyncCommand::new("project_unarchive", args);
+    let command = SyncCommand::new(SyncCommandType::ProjectUnarchive, args);
 
     // Execute the command via SyncManager
     // This sends the command, applies the response to cache, and saves to disk
@@ -927,7 +927,7 @@ pub async fn execute_delete(
     });
 
     // Create the command
-    let command = SyncCommand::new("project_delete", args);
+    let command = SyncCommand::new(SyncCommandType::ProjectDelete, args);
 
     // Execute the command via SyncManager
     // This sends the command, applies the response to cache, and saves to disk

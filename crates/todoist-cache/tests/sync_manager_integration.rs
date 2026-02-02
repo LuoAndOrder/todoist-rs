@@ -480,7 +480,7 @@ fn mock_command_response() -> serde_json::Value {
 
 #[tokio::test]
 async fn test_execute_commands_adds_item_to_cache() {
-    use todoist_api_rs::sync::SyncCommand;
+    use todoist_api_rs::sync::{SyncCommand, SyncCommandType};
 
     let mock_server = MockServer::start().await;
     let temp_dir = tempdir().expect("failed to create temp dir");
@@ -510,7 +510,7 @@ async fn test_execute_commands_adds_item_to_cache() {
 
     // Execute item_add command
     let cmd = SyncCommand::with_temp_id(
-        "item_add",
+        SyncCommandType::ItemAdd,
         "temp-item-123",
         serde_json::json!({"content": "New task from command", "project_id": "proj-1"}),
     );
@@ -542,7 +542,7 @@ async fn test_execute_commands_adds_item_to_cache() {
 
 #[tokio::test]
 async fn test_execute_commands_handles_api_error() {
-    use todoist_api_rs::sync::SyncCommand;
+    use todoist_api_rs::sync::{SyncCommand, SyncCommandType};
 
     let mock_server = MockServer::start().await;
     let temp_dir = tempdir().expect("failed to create temp dir");
@@ -565,7 +565,7 @@ async fn test_execute_commands_handles_api_error() {
     let store = CacheStore::with_path(cache_path.clone());
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
-    let cmd = SyncCommand::new("item_add", serde_json::json!({"content": "Test"}));
+    let cmd = SyncCommand::new(SyncCommandType::ItemAdd, serde_json::json!({"content": "Test"}));
     let result = manager.execute_commands(vec![cmd]).await;
 
     // Should return error
@@ -582,7 +582,7 @@ async fn test_execute_commands_handles_api_error() {
 
 #[tokio::test]
 async fn test_execute_commands_updates_last_sync() {
-    use todoist_api_rs::sync::SyncCommand;
+    use todoist_api_rs::sync::{SyncCommand, SyncCommandType};
 
     let mock_server = MockServer::start().await;
     let temp_dir = tempdir().expect("failed to create temp dir");
@@ -608,7 +608,7 @@ async fn test_execute_commands_updates_last_sync() {
     assert!(manager.cache().last_sync.is_none());
 
     let before = chrono::Utc::now();
-    let cmd = SyncCommand::new("item_add", serde_json::json!({"content": "Test"}));
+    let cmd = SyncCommand::new(SyncCommandType::ItemAdd, serde_json::json!({"content": "Test"}));
     manager
         .execute_commands(vec![cmd])
         .await
@@ -663,7 +663,7 @@ fn mock_delete_command_response() -> serde_json::Value {
 
 #[tokio::test]
 async fn test_execute_commands_removes_item_on_delete() {
-    use todoist_api_rs::sync::SyncCommand;
+    use todoist_api_rs::sync::{SyncCommand, SyncCommandType};
 
     let mock_server = MockServer::start().await;
     let temp_dir = tempdir().expect("failed to create temp dir");
@@ -749,7 +749,7 @@ async fn test_execute_commands_removes_item_on_delete() {
         .any(|i| i.id == "item-to-delete"));
 
     // Execute item_delete command
-    let cmd = SyncCommand::new("item_delete", serde_json::json!({"id": "item-to-delete"}));
+    let cmd = SyncCommand::new(SyncCommandType::ItemDelete, serde_json::json!({"id": "item-to-delete"}));
     manager
         .execute_commands(vec![cmd])
         .await
@@ -816,7 +816,7 @@ fn mock_update_command_response() -> serde_json::Value {
 
 #[tokio::test]
 async fn test_execute_commands_updates_item_on_edit() {
-    use todoist_api_rs::sync::SyncCommand;
+    use todoist_api_rs::sync::{SyncCommand, SyncCommandType};
 
     let mock_server = MockServer::start().await;
     let temp_dir = tempdir().expect("failed to create temp dir");
@@ -875,7 +875,7 @@ async fn test_execute_commands_updates_item_on_edit() {
 
     // Execute item_update command
     let cmd = SyncCommand::new(
-        "item_update",
+        SyncCommandType::ItemUpdate,
         serde_json::json!({
             "id": "item-to-update",
             "content": "Updated task content",
@@ -1876,7 +1876,7 @@ async fn test_add_item_is_visible_immediately_without_sync() {
     //! This test demonstrates the key cache behavior: mutations update the
     //! cache in place, making reads instant (no network round-trip needed).
 
-    use todoist_api_rs::sync::SyncCommand;
+    use todoist_api_rs::sync::{SyncCommand, SyncCommandType};
 
     let mock_server = MockServer::start().await;
     let temp_dir = tempdir().expect("failed to create temp dir");
@@ -1914,7 +1914,7 @@ async fn test_add_item_is_visible_immediately_without_sync() {
 
     // Add an item (simulates: td add "Buy groceries")
     let cmd = SyncCommand::with_temp_id(
-        "item_add",
+        SyncCommandType::ItemAdd,
         "temp-add-id",
         serde_json::json!({"content": "Buy groceries", "project_id": "proj-1"}),
     );
@@ -1952,7 +1952,7 @@ async fn test_deleted_item_not_visible_without_sync() {
     //! This ensures that `td delete <id>` followed by `td list` won't show
     //! the deleted item, even without running `td sync`.
 
-    use todoist_api_rs::sync::SyncCommand;
+    use todoist_api_rs::sync::{SyncCommand, SyncCommandType};
 
     let mock_server = MockServer::start().await;
     let temp_dir = tempdir().expect("failed to create temp dir");
@@ -2039,7 +2039,7 @@ async fn test_deleted_item_not_visible_without_sync() {
     );
 
     // Delete the item (simulates: td delete item-to-delete)
-    let cmd = SyncCommand::new("item_delete", serde_json::json!({"id": "item-to-delete"}));
+    let cmd = SyncCommand::new(SyncCommandType::ItemDelete, serde_json::json!({"id": "item-to-delete"}));
     manager
         .execute_commands(vec![cmd])
         .await
@@ -2074,7 +2074,7 @@ async fn test_edited_item_shows_updated_content_without_sync() {
     //! This ensures that `td edit <id> --content "new"` followed by `td show <id>`
     //! displays the updated content, even without running `td sync`.
 
-    use todoist_api_rs::sync::SyncCommand;
+    use todoist_api_rs::sync::{SyncCommand, SyncCommandType};
 
     let mock_server = MockServer::start().await;
     let temp_dir = tempdir().expect("failed to create temp dir");
@@ -2160,7 +2160,7 @@ async fn test_edited_item_shows_updated_content_without_sync() {
 
     // Edit the item (simulates: td edit item-to-edit --content "Updated content" --priority 4)
     let cmd = SyncCommand::new(
-        "item_update",
+        SyncCommandType::ItemUpdate,
         serde_json::json!({
             "id": "item-to-edit",
             "content": "Updated content",

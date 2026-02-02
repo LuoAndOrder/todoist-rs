@@ -5,7 +5,7 @@
 
 use todoist_api_rs::client::TodoistClient;
 use todoist_api_rs::models::ReminderType;
-use todoist_api_rs::sync::{Reminder, SyncCommand};
+use todoist_api_rs::sync::{Reminder, SyncCommand, SyncCommandType};
 use todoist_cache_rs::{Cache, CacheStore, SyncManager};
 
 use super::{CommandContext, CommandError, Result};
@@ -227,7 +227,7 @@ pub async fn execute_add(
 
     // Create the command
     let temp_id = uuid::Uuid::new_v4().to_string();
-    let command = SyncCommand::with_temp_id("reminder_add", &temp_id, args);
+    let command = SyncCommand::with_temp_id(SyncCommandType::ReminderAdd, &temp_id, args);
 
     // Execute the command via SyncManager
     // This sends the command, applies the response to cache, and saves to disk
@@ -405,7 +405,7 @@ pub async fn execute_delete(
     });
 
     // Create the command
-    let command = SyncCommand::new("reminder_delete", args);
+    let command = SyncCommand::new(SyncCommandType::ReminderDelete, args);
 
     // Execute the command via SyncManager
     // This sends the command, applies the response to cache, and saves to disk

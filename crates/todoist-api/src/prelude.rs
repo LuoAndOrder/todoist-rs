@@ -42,6 +42,7 @@ pub use crate::sync::{
     Section,
     // Request
     SyncCommand,
+    SyncCommandType,
     SyncRequest,
     SyncResponse,
     User,

@@ -4,7 +4,7 @@
 //! Uses SyncManager::execute_commands() to automatically update the cache.
 
 use todoist_api_rs::client::TodoistClient;
-use todoist_api_rs::sync::{Note, ProjectNote, SyncCommand};
+use todoist_api_rs::sync::{Note, ProjectNote, SyncCommand, SyncCommandType};
 use todoist_cache_rs::{Cache, CacheStore, SyncManager};
 
 use super::{CommandContext, CommandError, Result};
@@ -348,7 +348,7 @@ pub async fn execute_add(
     };
 
     // Create the command
-    let command = SyncCommand::with_temp_id("note_add", &temp_id, args);
+    let command = SyncCommand::with_temp_id(SyncCommandType::NoteAdd, &temp_id, args);
 
     // Execute the command via SyncManager
     // This sends the command, applies the response to cache, and saves to disk
@@ -477,7 +477,7 @@ pub async fn execute_edit(
         "content": opts.content,
     });
 
-    let command = SyncCommand::new("note_update", args);
+    let command = SyncCommand::new(SyncCommandType::NoteUpdate, args);
 
     // Execute the command via SyncManager
     // This sends the command, applies the response to cache, and saves to disk
@@ -621,7 +621,7 @@ pub async fn execute_delete(
         "id": comment_id,
     });
 
-    let command = SyncCommand::new("note_delete", args);
+    let command = SyncCommand::new(SyncCommandType::NoteDelete, args);
 
     // Execute the command via SyncManager
     // This sends the command, applies the response to cache, and saves to disk
