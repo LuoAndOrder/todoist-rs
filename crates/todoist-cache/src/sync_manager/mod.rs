@@ -221,7 +221,7 @@ impl SyncManager {
     /// If an incremental sync fails due to an invalid sync token, this method
     /// automatically falls back to a full sync with `sync_token='*'`.
     ///
-    /// The cache is saved to disk after a successful sync.
+    /// The cache is saved to disk asynchronously after a successful sync.
     ///
     /// # Returns
     ///
@@ -236,7 +236,7 @@ impl SyncManager {
             let request = SyncRequest::full_sync();
             let response = self.client.sync(request).await?;
             self.cache.apply_sync_response(&response);
-            self.store.save(&self.cache)?;
+            self.store.save_async(&self.cache).await?;
             return Ok(&self.cache);
         }
 
@@ -245,7 +245,7 @@ impl SyncManager {
         match self.client.sync(request).await {
             Ok(response) => {
                 self.cache.apply_sync_response(&response);
-                self.store.save(&self.cache)?;
+                self.store.save_async(&self.cache).await?;
                 Ok(&self.cache)
             }
             Err(e) if e.is_invalid_sync_token() => {
@@ -259,7 +259,7 @@ impl SyncManager {
                 let request = SyncRequest::full_sync();
                 let response = self.client.sync(request).await?;
                 self.cache.apply_sync_response(&response);
-                self.store.save(&self.cache)?;
+                self.store.save_async(&self.cache).await?;
                 Ok(&self.cache)
             }
             Err(e) => Err(e.into()),
@@ -269,7 +269,7 @@ impl SyncManager {
     /// Forces a full sync, ignoring the stored sync token.
     ///
     /// This replaces all cached data with fresh data from the server.
-    /// The cache is saved to disk after a successful sync.
+    /// The cache is saved to disk asynchronously after a successful sync.
     ///
     /// # Returns
     ///
@@ -282,7 +282,7 @@ impl SyncManager {
         let request = SyncRequest::full_sync();
         let response = self.client.sync(request).await?;
         self.cache.apply_sync_response(&response);
-        self.store.save(&self.cache)?;
+        self.store.save_async(&self.cache).await?;
 
         Ok(&self.cache)
     }
@@ -326,7 +326,7 @@ impl SyncManager {
     ///
     /// ```no_run
     /// use todoist_api_rs::client::TodoistClient;
-    /// use todoist_api_rs::sync::SyncCommand;
+    /// use todoist_api_rs::sync::{SyncCommand, SyncCommandType};
     /// use todoist_cache_rs::{CacheStore, SyncManager};
     ///
     /// #[tokio::main]
@@ -338,7 +338,7 @@ impl SyncManager {
     ///     // Create a new task
     ///     let temp_id = uuid::Uuid::new_v4().to_string();
     ///     let cmd = SyncCommand::with_temp_id(
-    ///         "item_add",
+    ///         SyncCommandType::ItemAdd,
     ///         &temp_id,
     ///         serde_json::json!({"content": "Buy milk", "project_id": "inbox"}),
     ///     );
@@ -364,8 +364,8 @@ impl SyncManager {
         // Apply the mutation response to update cache with affected resources
         self.cache.apply_mutation_response(&response);
 
-        // Persist the updated cache
-        self.store.save(&self.cache)?;
+        // Persist the updated cache asynchronously
+        self.store.save_async(&self.cache).await?;
 
         Ok(response)
     }

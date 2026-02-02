@@ -2,6 +2,13 @@
 //!
 //! This module provides persistent storage for the Todoist cache using XDG-compliant
 //! paths. The cache is stored as JSON at `~/.cache/td/cache.json`.
+//!
+//! Both synchronous and asynchronous I/O methods are provided:
+//! - `save()`, `load()` - Synchronous methods using `std::fs`
+//! - `save_async()`, `load_async()` - Asynchronous methods using `tokio::fs`
+//!
+//! The async methods are recommended for use in async contexts (like `SyncManager::sync()`)
+//! to avoid blocking the tokio runtime.
 
 use std::fs;
 use std::io;
@@ -264,11 +271,135 @@ impl CacheStore {
             }),
         }
     }
+
+    // =========================================================================
+    // Async I/O Methods
+    // =========================================================================
+
+    /// Loads the cache from disk asynchronously.
+    ///
+    /// This is the async equivalent of [`load()`](Self::load). Use this method
+    /// in async contexts to avoid blocking the tokio runtime.
+    ///
+    /// # Errors
+    ///
+    /// - Returns `CacheStoreError::ReadError` if the file cannot be read.
+    /// - Returns `CacheStoreError::Json` if the file contains invalid JSON.
+    ///
+    /// # Note
+    ///
+    /// If the cache file does not exist, this returns an I/O error with
+    /// `ErrorKind::NotFound`. Use [`load_or_default_async()`](Self::load_or_default_async)
+    /// to get a default cache when the file is missing.
+    pub async fn load_async(&self) -> Result<Cache> {
+        let contents =
+            tokio::fs::read_to_string(&self.path)
+                .await
+                .map_err(|e| CacheStoreError::ReadError {
+                    path: self.path.clone(),
+                    source: e,
+                })?;
+        let mut cache: Cache = serde_json::from_str(&contents)?;
+        // Rebuild indexes since they are not serialized
+        cache.rebuild_indexes();
+        Ok(cache)
+    }
+
+    /// Loads the cache from disk asynchronously, returning a default cache if the file doesn't exist.
+    ///
+    /// This is the async equivalent of [`load_or_default()`](Self::load_or_default).
+    ///
+    /// # Errors
+    ///
+    /// - Returns `CacheStoreError::ReadError` for I/O errors other than "file not found".
+    /// - Returns `CacheStoreError::Json` if the file contains invalid JSON.
+    pub async fn load_or_default_async(&self) -> Result<Cache> {
+        match self.load_async().await {
+            Ok(cache) => Ok(cache),
+            Err(CacheStoreError::ReadError { ref source, .. })
+                if source.kind() == io::ErrorKind::NotFound =>
+            {
+                Ok(Cache::default())
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Saves the cache to disk asynchronously using atomic write.
+    ///
+    /// This is the async equivalent of [`save()`](Self::save). Use this method
+    /// in async contexts to avoid blocking the tokio runtime.
+    ///
+    /// Creates the parent directory if it doesn't exist. The cache is written
+    /// as pretty-printed JSON for easier debugging.
+    ///
+    /// Uses atomic write (tempfile + rename) to prevent corruption if the process
+    /// crashes mid-write.
+    ///
+    /// # Errors
+    ///
+    /// - Returns `CacheStoreError::CreateDirError` if the directory cannot be created.
+    /// - Returns `CacheStoreError::WriteError` if the file cannot be written.
+    /// - Returns `CacheStoreError::Json` if serialization fails.
+    pub async fn save_async(&self, cache: &Cache) -> Result<()> {
+        // Ensure parent directory exists
+        if let Some(parent) = self.path.parent() {
+            tokio::fs::create_dir_all(parent)
+                .await
+                .map_err(|e| CacheStoreError::CreateDirError {
+                    path: parent.to_path_buf(),
+                    source: e,
+                })?;
+        }
+
+        let json = serde_json::to_string_pretty(cache)?;
+
+        // Atomic write: write to temp file, then rename
+        // This prevents corruption if the process crashes mid-write
+        let temp_path = self.path.with_extension("tmp");
+        tokio::fs::write(&temp_path, &json)
+            .await
+            .map_err(|e| CacheStoreError::WriteError {
+                path: temp_path.clone(),
+                source: e,
+            })?;
+        tokio::fs::rename(&temp_path, &self.path)
+            .await
+            .map_err(|e| CacheStoreError::WriteError {
+                path: self.path.clone(),
+                source: e,
+            })?;
+
+        Ok(())
+    }
+
+    /// Deletes the cache file from disk asynchronously.
+    ///
+    /// This is the async equivalent of [`delete()`](Self::delete).
+    ///
+    /// # Errors
+    ///
+    /// Returns `CacheStoreError::DeleteError` if the file cannot be deleted.
+    /// Does not return an error if the file doesn't exist.
+    pub async fn delete_async(&self) -> Result<()> {
+        match tokio::fs::remove_file(&self.path).await {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(CacheStoreError::DeleteError {
+                path: self.path.clone(),
+                source: e,
+            }),
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ==========================================================================
+    // Synchronous I/O Tests
+    // ==========================================================================
 
     #[test]
     fn test_default_path_returns_xdg_path() {
@@ -490,5 +621,122 @@ mod tests {
             msg,
             "failed to delete cache file '/home/user/.cache/td/cache.json': permission denied"
         );
+    }
+
+    // ==========================================================================
+    // Async I/O Tests
+    // ==========================================================================
+
+    #[tokio::test]
+    async fn test_save_and_load_async() {
+        use tempfile::tempdir;
+
+        let temp_dir = tempdir().expect("failed to create temp dir");
+        let path = temp_dir.path().join("cache.json");
+        let store = CacheStore::with_path(path);
+
+        // Create a cache with some data
+        let mut cache = crate::Cache::new();
+        cache.sync_token = "test-token".to_string();
+
+        // Save asynchronously
+        store.save_async(&cache).await.expect("save_async failed");
+
+        // Load asynchronously
+        let loaded = store.load_async().await.expect("load_async failed");
+        assert_eq!(loaded.sync_token, "test-token");
+    }
+
+    #[tokio::test]
+    async fn test_atomic_write_async() {
+        use tempfile::tempdir;
+
+        let temp_dir = tempdir().expect("failed to create temp dir");
+        let path = temp_dir.path().join("cache.json");
+        let store = CacheStore::with_path(path.clone());
+
+        let cache = crate::Cache::new();
+        store.save_async(&cache).await.expect("save_async failed");
+
+        // Verify no temp file left behind
+        let temp_path = path.with_extension("tmp");
+        assert!(!temp_path.exists(), "temp file should be cleaned up");
+        assert!(path.exists(), "cache file should exist");
+    }
+
+    #[tokio::test]
+    async fn test_load_async_missing_file() {
+        let path = PathBuf::from("/nonexistent/path/to/cache.json");
+        let store = CacheStore::with_path(path);
+
+        let result = store.load_async().await;
+        assert!(result.is_err());
+
+        // Should be a ReadError with NotFound
+        match result.unwrap_err() {
+            CacheStoreError::ReadError { source, .. } => {
+                assert_eq!(source.kind(), io::ErrorKind::NotFound);
+            }
+            other => panic!("expected ReadError, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_load_or_default_async_missing_file() {
+        let path = PathBuf::from("/nonexistent/path/to/cache.json");
+        let store = CacheStore::with_path(path);
+
+        // Should return default cache for missing files
+        let result = store.load_or_default_async().await;
+        assert!(result.is_ok());
+
+        let cache = result.unwrap();
+        assert_eq!(cache.sync_token, "*");
+    }
+
+    #[tokio::test]
+    async fn test_delete_async() {
+        use tempfile::tempdir;
+
+        let temp_dir = tempdir().expect("failed to create temp dir");
+        let path = temp_dir.path().join("cache.json");
+        let store = CacheStore::with_path(path.clone());
+
+        // Create the file
+        let cache = crate::Cache::new();
+        store.save_async(&cache).await.expect("save_async failed");
+        assert!(path.exists());
+
+        // Delete asynchronously
+        store.delete_async().await.expect("delete_async failed");
+        assert!(!path.exists());
+    }
+
+    #[tokio::test]
+    async fn test_delete_async_nonexistent() {
+        let path = PathBuf::from("/nonexistent/path/to/cache.json");
+        let store = CacheStore::with_path(path);
+
+        // Should not error for missing files
+        let result = store.delete_async().await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_save_async_creates_directory() {
+        use tempfile::tempdir;
+
+        let temp_dir = tempdir().expect("failed to create temp dir");
+        let path = temp_dir.path().join("subdir").join("nested").join("cache.json");
+        let store = CacheStore::with_path(path.clone());
+
+        // Parent directory doesn't exist
+        assert!(!path.parent().unwrap().exists());
+
+        // Save should create it
+        let cache = crate::Cache::new();
+        store.save_async(&cache).await.expect("save_async failed");
+
+        assert!(path.exists());
     }
 }
