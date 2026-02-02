@@ -16,4 +16,5 @@ pub mod error;
 pub mod models;
 pub mod prelude;
 pub mod quick_add;
+mod retry;
 pub mod sync;
