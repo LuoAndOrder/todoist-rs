@@ -69,7 +69,7 @@ struct WorkflowTestContext {
 impl WorkflowTestContext {
     async fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let token = get_test_token().ok_or("TODOIST_TEST_API_TOKEN not found")?;
-        let client = TodoistClient::new(token);
+        let client = TodoistClient::new(token)?;
 
         // ONE full sync at initialization
         let response = client.sync(SyncRequest::full_sync()).await?;

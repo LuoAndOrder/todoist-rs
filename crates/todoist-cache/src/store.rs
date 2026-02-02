@@ -180,7 +180,9 @@ impl CacheStore {
             path: self.path.clone(),
             source: e,
         })?;
-        let cache = serde_json::from_str(&contents)?;
+        let mut cache: Cache = serde_json::from_str(&contents)?;
+        // Rebuild indexes since they are not serialized
+        cache.rebuild_indexes();
         Ok(cache)
     }
 

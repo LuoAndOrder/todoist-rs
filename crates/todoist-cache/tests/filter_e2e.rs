@@ -56,7 +56,7 @@ async fn test_e2e_filter_today_returns_correct_items() {
     let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
     let cache_path = temp_dir.path().join("cache.json");
 
-    let client = TodoistClient::new(&token);
+    let client = TodoistClient::new(&token).unwrap();
     let store = CacheStore::with_path(cache_path);
     let mut manager = SyncManager::new(client.clone(), store).expect("failed to create manager");
 
@@ -175,7 +175,7 @@ async fn test_e2e_filter_priority_and_label_intersection() {
     let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
     let cache_path = temp_dir.path().join("cache.json");
 
-    let client = TodoistClient::new(&token);
+    let client = TodoistClient::new(&token).unwrap();
     let store = CacheStore::with_path(cache_path);
     let mut manager = SyncManager::new(client.clone(), store).expect("failed to create manager");
 
@@ -378,7 +378,7 @@ async fn test_e2e_filter_project_matches() {
     let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
     let cache_path = temp_dir.path().join("cache.json");
 
-    let client = TodoistClient::new(&token);
+    let client = TodoistClient::new(&token).unwrap();
     let store = CacheStore::with_path(cache_path);
     let mut manager = SyncManager::new(client.clone(), store).expect("failed to create manager");
 

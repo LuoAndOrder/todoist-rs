@@ -127,7 +127,7 @@ async fn test_sync_performs_full_sync_when_no_cache() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let store = CacheStore::with_path(cache_path.clone());
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -196,7 +196,7 @@ async fn test_sync_performs_incremental_sync_with_existing_cache() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let store = CacheStore::with_path(cache_path);
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -234,7 +234,7 @@ async fn test_full_sync_forces_full_sync_even_with_existing_token() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let store = CacheStore::with_path(cache_path);
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -259,7 +259,7 @@ async fn test_sync_persists_cache_to_disk() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let store = CacheStore::with_path(cache_path.clone());
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -290,7 +290,7 @@ async fn test_sync_handles_api_error() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let store = CacheStore::with_path(cache_path);
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -314,7 +314,7 @@ async fn test_reload_refreshes_cache_from_disk() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let store = CacheStore::with_path(cache_path.clone());
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -352,7 +352,7 @@ async fn test_is_stale_with_sync_manager() {
     old_cache.last_sync = Some(chrono::Utc::now() - chrono::Duration::minutes(10));
     store.save(&old_cache).expect("failed to save cache");
 
-    let client = TodoistClient::new("test-token"); // Won't actually be used
+    let client = TodoistClient::new("test-token").unwrap(); // Won't actually be used
     let store = CacheStore::with_path(cache_path);
     let manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -373,7 +373,7 @@ async fn test_is_not_stale_when_recently_synced() {
     fresh_cache.last_sync = Some(chrono::Utc::now());
     store.save(&fresh_cache).expect("failed to save cache");
 
-    let client = TodoistClient::new("test-token");
+    let client = TodoistClient::new("test-token").unwrap();
     let store = CacheStore::with_path(cache_path);
     let manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -394,7 +394,7 @@ async fn test_custom_stale_threshold() {
     cache.last_sync = Some(chrono::Utc::now() - chrono::Duration::minutes(3));
     store.save(&cache).expect("failed to save cache");
 
-    let client = TodoistClient::new("test-token");
+    let client = TodoistClient::new("test-token").unwrap();
     let store = CacheStore::with_path(cache_path.clone());
 
     // With default 5-minute threshold, should NOT be stale
@@ -420,7 +420,7 @@ async fn test_sync_updates_last_sync_timestamp() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let store = CacheStore::with_path(cache_path);
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -501,7 +501,7 @@ async fn test_execute_commands_adds_item_to_cache() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let store = CacheStore::with_path(cache_path.clone());
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -561,7 +561,7 @@ async fn test_execute_commands_handles_api_error() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let store = CacheStore::with_path(cache_path.clone());
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -600,7 +600,7 @@ async fn test_execute_commands_updates_last_sync() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let store = CacheStore::with_path(cache_path);
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -736,7 +736,7 @@ async fn test_execute_commands_removes_item_on_delete() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let store = CacheStore::with_path(cache_path.clone());
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -862,7 +862,7 @@ async fn test_execute_commands_updates_item_on_edit() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let store = CacheStore::with_path(cache_path.clone());
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -1007,7 +1007,7 @@ async fn test_resolve_project_succeeds_from_cache_no_sync() {
     // No mock setup - we expect NO network requests
     // If resolve_project makes a request, the test will fail
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let store = CacheStore::with_path(cache_path);
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -1056,7 +1056,7 @@ async fn test_resolve_project_syncs_on_cache_miss_then_succeeds() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let store = CacheStore::with_path(cache_path);
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -1107,7 +1107,7 @@ async fn test_resolve_project_returns_not_found_after_sync() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let store = CacheStore::with_path(cache_path);
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -1192,7 +1192,7 @@ async fn test_resolve_section_succeeds_from_cache_no_sync() {
     }];
     store.save(&existing_cache).expect("failed to save cache");
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let store = CacheStore::with_path(cache_path);
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -1228,7 +1228,7 @@ async fn test_resolve_section_syncs_on_cache_miss_then_succeeds() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let store = CacheStore::with_path(cache_path);
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -1259,7 +1259,7 @@ async fn test_resolve_section_returns_not_found_after_sync() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let store = CacheStore::with_path(cache_path);
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -1352,7 +1352,7 @@ async fn test_resolve_item_succeeds_from_cache_no_sync() {
     }];
     store.save(&existing_cache).expect("failed to save cache");
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let store = CacheStore::with_path(cache_path);
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -1389,7 +1389,7 @@ async fn test_resolve_item_syncs_on_cache_miss_then_succeeds() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let store = CacheStore::with_path(cache_path);
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -1420,7 +1420,7 @@ async fn test_resolve_item_returns_not_found_after_sync() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let store = CacheStore::with_path(cache_path);
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -1476,7 +1476,7 @@ async fn test_resolve_item_by_prefix_succeeds_from_cache_no_sync() {
     }];
     store.save(&existing_cache).expect("failed to save cache");
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let store = CacheStore::with_path(cache_path);
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -1512,7 +1512,7 @@ async fn test_resolve_item_by_prefix_syncs_on_cache_miss_then_succeeds() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let store = CacheStore::with_path(cache_path);
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -1542,7 +1542,7 @@ async fn test_resolve_item_by_prefix_returns_not_found_after_sync() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let store = CacheStore::with_path(cache_path);
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -1626,7 +1626,7 @@ async fn test_resolve_item_by_prefix_with_require_checked_filter() {
     ];
     store.save(&existing_cache).expect("failed to save cache");
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let store = CacheStore::with_path(cache_path);
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -1728,7 +1728,7 @@ async fn test_sync_falls_back_to_full_sync_on_invalid_token() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let store = CacheStore::with_path(cache_path.clone());
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -1779,7 +1779,7 @@ async fn test_sync_full_sync_does_not_trigger_fallback() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let store = CacheStore::with_path(cache_path);
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -1814,7 +1814,7 @@ async fn test_sync_non_token_errors_propagate() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let store = CacheStore::with_path(cache_path);
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -1902,7 +1902,7 @@ async fn test_add_item_is_visible_immediately_without_sync() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let store = CacheStore::with_path(cache_path.clone());
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -2027,7 +2027,7 @@ async fn test_deleted_item_not_visible_without_sync() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let store = CacheStore::with_path(cache_path.clone());
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -2149,7 +2149,7 @@ async fn test_edited_item_shows_updated_content_without_sync() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let store = CacheStore::with_path(cache_path.clone());
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 

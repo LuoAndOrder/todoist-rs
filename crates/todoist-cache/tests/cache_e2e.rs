@@ -51,7 +51,7 @@ async fn test_e2e_full_sync_populates_cache() {
     let temp_dir = tempdir().expect("failed to create temp dir");
     let cache_path = temp_dir.path().join("cache.json");
 
-    let client = TodoistClient::new(&token);
+    let client = TodoistClient::new(&token).unwrap();
     let store = CacheStore::with_path(cache_path.clone());
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -125,7 +125,7 @@ async fn test_e2e_incremental_sync_updates_cache() {
     let temp_dir = tempdir().expect("failed to create temp dir");
     let cache_path = temp_dir.path().join("cache.json");
 
-    let client = TodoistClient::new(&token);
+    let client = TodoistClient::new(&token).unwrap();
     let store = CacheStore::with_path(cache_path.clone());
     let mut manager = SyncManager::new(client.clone(), store).expect("failed to create manager");
 
@@ -216,7 +216,7 @@ async fn test_e2e_cache_survives_restart() {
 
     // Create first manager and sync
     {
-        let client = TodoistClient::new(&token);
+        let client = TodoistClient::new(&token).unwrap();
         let store = CacheStore::with_path(cache_path.clone());
         let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -233,7 +233,7 @@ async fn test_e2e_cache_survives_restart() {
 
     // Create new manager (simulating restart) - should load existing cache
     {
-        let client = TodoistClient::new(&token);
+        let client = TodoistClient::new(&token).unwrap();
         let store = CacheStore::with_path(cache_path.clone());
         let manager =
             SyncManager::new(client, store).expect("failed to create manager after restart");
@@ -276,7 +276,7 @@ async fn test_e2e_cache_persistence_across_syncs() {
     let temp_dir = tempdir().expect("failed to create temp dir");
     let cache_path = temp_dir.path().join("cache.json");
 
-    let client = TodoistClient::new(&token);
+    let client = TodoistClient::new(&token).unwrap();
     let store = CacheStore::with_path(cache_path.clone());
     let mut manager = SyncManager::new(client.clone(), store).expect("failed to create manager");
 
@@ -363,7 +363,7 @@ async fn test_e2e_stale_cache_triggers_refresh() {
     let cache_path = temp_dir.path().join("cache.json");
 
     // Create a pre-populated cache with an old last_sync timestamp
-    let client = TodoistClient::new(&token);
+    let client = TodoistClient::new(&token).unwrap();
 
     // First, do a real sync to get valid data
     {
@@ -433,7 +433,7 @@ async fn test_e2e_fresh_cache_does_not_trigger_full_sync() {
     let temp_dir = tempdir().expect("failed to create temp dir");
     let cache_path = temp_dir.path().join("cache.json");
 
-    let client = TodoistClient::new(&token);
+    let client = TodoistClient::new(&token).unwrap();
     let store = CacheStore::with_path(cache_path.clone());
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -480,7 +480,7 @@ async fn test_e2e_force_full_sync() {
     let temp_dir = tempdir().expect("failed to create temp dir");
     let cache_path = temp_dir.path().join("cache.json");
 
-    let client = TodoistClient::new(&token);
+    let client = TodoistClient::new(&token).unwrap();
     let store = CacheStore::with_path(cache_path.clone());
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -538,7 +538,7 @@ async fn test_sync_picks_up_task_created_externally() {
     let cache_path = temp_dir.path().join("cache.json");
 
     // Create the SyncManager and perform initial sync
-    let client = TodoistClient::new(&token);
+    let client = TodoistClient::new(&token).unwrap();
     let store = CacheStore::with_path(cache_path.clone());
     let mut manager = SyncManager::new(client.clone(), store).expect("failed to create manager");
 
@@ -617,7 +617,7 @@ async fn test_sync_picks_up_task_deleted_externally() {
     let temp_dir = tempdir().expect("failed to create temp dir");
     let cache_path = temp_dir.path().join("cache.json");
 
-    let client = TodoistClient::new(&token);
+    let client = TodoistClient::new(&token).unwrap();
     let store = CacheStore::with_path(cache_path.clone());
     let mut manager = SyncManager::new(client.clone(), store).expect("failed to create manager");
 
@@ -713,7 +713,7 @@ async fn test_sync_picks_up_task_updated_externally() {
     let temp_dir = tempdir().expect("failed to create temp dir");
     let cache_path = temp_dir.path().join("cache.json");
 
-    let client = TodoistClient::new(&token);
+    let client = TodoistClient::new(&token).unwrap();
     let store = CacheStore::with_path(cache_path.clone());
     let mut manager = SyncManager::new(client.clone(), store).expect("failed to create manager");
 
@@ -822,7 +822,7 @@ async fn test_sync_after_bulk_operations() {
     let temp_dir = tempdir().expect("failed to create temp dir");
     let cache_path = temp_dir.path().join("cache.json");
 
-    let client = TodoistClient::new(&token);
+    let client = TodoistClient::new(&token).unwrap();
     let store = CacheStore::with_path(cache_path.clone());
     let mut manager = SyncManager::new(client.clone(), store).expect("failed to create manager");
 
@@ -936,7 +936,7 @@ async fn test_sync_token_survives_restart() {
 
     // First session: sync and note the token
     {
-        let client = TodoistClient::new(&token);
+        let client = TodoistClient::new(&token).unwrap();
         let store = CacheStore::with_path(cache_path.clone());
         let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
@@ -960,7 +960,7 @@ async fn test_sync_token_survives_restart() {
 
     // Second session: create new manager from same file
     {
-        let client = TodoistClient::new(&token);
+        let client = TodoistClient::new(&token).unwrap();
         let store = CacheStore::with_path(cache_path.clone());
         let manager =
             SyncManager::new(client, store).expect("failed to create manager after restart");
@@ -1015,7 +1015,7 @@ async fn test_full_sync_after_invalid_token() {
 
     // First, do a real sync to get valid data
     {
-        let client = TodoistClient::new(&token);
+        let client = TodoistClient::new(&token).unwrap();
         let store = CacheStore::with_path(cache_path.clone());
         let mut manager = SyncManager::new(client, store).expect("failed to create manager");
         manager.sync().await.expect("initial sync failed");
@@ -1041,7 +1041,7 @@ async fn test_full_sync_after_invalid_token() {
 
     // Create new manager with the corrupted cache
     {
-        let client = TodoistClient::new(&token);
+        let client = TodoistClient::new(&token).unwrap();
         let store = CacheStore::with_path(cache_path);
         let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
