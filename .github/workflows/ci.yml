@@ -61,3 +61,21 @@ jobs:
       - run: cargo doc --workspace --no-deps
         env:
           RUSTDOCFLAGS: -Dwarnings
+
+  e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    # Only run on main branch, not PRs (to protect secrets and avoid rate limits)
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev
+      - uses: Swatinem/rust-cache@v2
+      - name: Run E2E tests
+        env:
+          TODOIST_TEST_API_TOKEN: ${{ secrets.TODOIST_TEST_API_TOKEN }}
+        run: |
+          echo "TODOIST_TEST_API_TOKEN=$TODOIST_TEST_API_TOKEN" > .env.local
+          cargo test --features e2e -- --test-threads=1
