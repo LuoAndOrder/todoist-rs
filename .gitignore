@@ -37,3 +37,6 @@ Thumbs.db
 .ralph/
 PROMPT.md
 ralph.yml
+
+# Tasks
+.tasks/
