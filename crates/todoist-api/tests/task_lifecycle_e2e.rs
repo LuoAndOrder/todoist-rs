@@ -1139,14 +1139,16 @@ async fn test_set_due_date_with_time() {
     assert!(!response.has_errors(), "item_update should succeed");
 
     // Verify due date includes time (from cache)
+    // Note: For floating due dates, the API returns the datetime in the `date` field
+    // as YYYY-MM-DDTHH:MM:SS format (not in a separate `datetime` field)
     let task = ctx.find_item(&task_id).expect("Task should exist in cache");
     assert!(task.due.is_some(), "Task should have due date");
     let due = task.due.as_ref().unwrap();
-    assert!(due.datetime.is_some(), "Should have datetime component");
-    let datetime = due.datetime.as_ref().unwrap();
+    // The time should be in the date field for floating due dates
     assert!(
-        datetime.contains("14:30"),
-        "Datetime should include the specified time"
+        due.date.contains("T") && due.date.contains("14:30"),
+        "Date should include time component, got: {}",
+        due.date
     );
 
     // Clean up
@@ -1169,12 +1171,14 @@ async fn test_set_due_date_with_timezone() {
         .expect("create_task failed");
 
     // Update with due date including timezone
+    // To create a fixed timezone due date, use the Z suffix (UTC format) with timezone
+    // The API will store the date in UTC and use the timezone for display/recurrence
     let update_command = SyncCommand::new(
         SyncCommandType::ItemUpdate,
         serde_json::json!({
             "id": task_id,
             "due": {
-                "date": "2025-06-15T14:30:00",
+                "date": "2025-06-15T18:30:00Z",
                 "timezone": "America/New_York"
             }
         }),
@@ -1191,6 +1195,12 @@ async fn test_set_due_date_with_timezone() {
         due.timezone.as_ref().unwrap(),
         "America/New_York",
         "Timezone should be America/New_York"
+    );
+    // Date should be in UTC format (ends with Z)
+    assert!(
+        due.date.ends_with("Z"),
+        "Fixed timezone due date should be in UTC format, got: {}",
+        due.date
     );
 
     // Clean up
