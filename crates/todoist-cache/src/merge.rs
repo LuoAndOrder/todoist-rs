@@ -250,16 +250,17 @@ where
     D: Fn(&T) -> bool,
 {
     // Phase 1: Build index using borrowed references (no cloning needed)
-    let index: HashMap<&str, usize> = existing
-        .iter()
-        .enumerate()
-        .map(|(i, item)| (get_id(item), i))
-        .collect();
+    // Pre-allocate with exact capacity to avoid reallocations during collection
+    let mut index: HashMap<&str, usize> = HashMap::with_capacity(existing.len());
+    for (i, item) in existing.iter().enumerate() {
+        index.insert(get_id(item), i);
+    }
 
     // Phase 2: Categorize incoming items
-    let mut updates: Vec<(usize, &T)> = Vec::new();
-    let mut inserts: Vec<&T> = Vec::new();
-    let mut to_remove: Vec<usize> = Vec::new();
+    // Pre-allocate with estimated capacities based on typical usage patterns
+    let mut updates: Vec<(usize, &T)> = Vec::with_capacity(incoming.len());
+    let mut inserts: Vec<&T> = Vec::with_capacity(incoming.len() / 4);
+    let mut to_remove: Vec<usize> = Vec::with_capacity(incoming.len() / 10);
 
     for item in incoming {
         let id = get_id(item);
@@ -284,7 +285,8 @@ where
         existing[idx] = item.clone();
     }
 
-    // Phase 4: Append new items
+    // Phase 4: Append new items (reserve capacity before extending)
+    existing.reserve(inserts.len());
     existing.extend(inserts.into_iter().cloned());
 
     // Phase 5: Remove deleted items in reverse order to preserve indices

@@ -164,8 +164,23 @@ impl<'a> FilterEvaluator<'a> {
     }
 
     /// Filters a slice of items, returning only those that match.
+    ///
+    /// Pre-allocates the result vector with an estimated 10% match rate,
+    /// which is typical for date-based and priority filters. The minimum
+    /// capacity is 16 to handle small collections efficiently.
     pub fn filter_items<'b>(&self, items: &'b [Item]) -> Vec<&'b Item> {
-        items.iter().filter(|item| self.matches(item)).collect()
+        // Estimate 10% match rate as reasonable default for most filters.
+        // Most filters (today, priority, project) match small subsets.
+        let estimated_capacity = (items.len() / 10).max(16);
+        let mut result = Vec::with_capacity(estimated_capacity);
+
+        for item in items {
+            if self.matches(item) {
+                result.push(item);
+            }
+        }
+
+        result
     }
 
     /// Evaluates a filter expression against an item.
