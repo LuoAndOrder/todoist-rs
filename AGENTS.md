@@ -174,6 +174,61 @@ ctx.delete_task(&task_id).await?;
 ctx.batch_delete(&task_ids, &project_ids, &section_ids, &label_ids).await?;
 ```
 
+## Releasing
+
+The project uses GitHub Actions for automated releases. Pushing a version tag triggers the workflow.
+
+### Release Process
+
+1. **Update the version** in the workspace `Cargo.toml`:
+   ```bash
+   # Edit version = "x.y.z" to the new version
+   vim Cargo.toml
+   ```
+
+2. **Commit the version bump**:
+   ```bash
+   git add Cargo.toml
+   git commit -m "chore: bump version to x.y.z"
+   ```
+
+3. **Create and push the tag**:
+   ```bash
+   git tag vx.y.z
+   git push origin main
+   git push origin vx.y.z
+   ```
+
+### What Happens Automatically
+
+The `release.yml` workflow:
+
+1. **Builds binaries** for all platforms:
+   - `x86_64-unknown-linux-gnu` (Linux x64)
+   - `x86_64-apple-darwin` (macOS Intel)
+   - `aarch64-apple-darwin` (macOS Apple Silicon)
+   - `x86_64-pc-windows-msvc` (Windows x64)
+
+2. **Publishes to crates.io** in dependency order:
+   - `todoist-api-rs`
+   - `todoist-cache-rs` (depends on api)
+   - `todoist-cli-rs` (depends on cache)
+
+3. **Creates GitHub Release** with:
+   - Auto-generated release notes from commits
+   - Binary archives (`.tar.gz` for Unix, `.zip` for Windows)
+   - SHA256 checksums file
+
+### Version Locations
+
+All crates use workspace versioning - only update the root `Cargo.toml`:
+
+```toml
+# Cargo.toml (workspace root)
+[workspace.package]
+version = "x.y.z"
+```
+
 ## Useful Commands
 
 ```bash
