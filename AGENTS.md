@@ -1,4 +1,4 @@
-# CLAUDE.md - Project Guidelines for Claude Code
+# AGENTS.md - Project Guidelines for coding agents
 
 ## Project Overview
 
