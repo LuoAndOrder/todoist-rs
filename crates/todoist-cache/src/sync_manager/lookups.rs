@@ -63,6 +63,13 @@ pub(crate) enum ItemLookupResult<'a> {
     NotFound,
 }
 
+/// Internal status for cache lookups (used to avoid borrow checker issues).
+enum CacheLookupStatus {
+    Found,
+    Ambiguous(String),
+    NotFound,
+}
+
 impl SyncManager {
     // ==================== Smart Lookup Methods ====================
 
@@ -109,16 +116,15 @@ impl SyncManager {
     /// }
     /// ```
     pub async fn resolve_project(&mut self, name_or_id: &str) -> SyncResult<&Project> {
-        // Try cache first
-        if self.find_project_in_cache(name_or_id).is_some() {
-            // Re-borrow to return reference (can't return from the if-let due to borrow checker)
-            return Ok(self.find_project_in_cache(name_or_id).unwrap());
+        // Try cache first - if found, we can return early after sync check
+        let found_in_cache = self.find_project_in_cache(name_or_id).is_some();
+
+        if !found_in_cache {
+            // Not found - sync and retry
+            self.sync().await?;
         }
 
-        // Not found - sync and retry
-        self.sync().await?;
-
-        // Try again after sync
+        // Return from cache (either was there or now present after sync)
         self.find_project_in_cache(name_or_id).ok_or_else(|| {
             // Find similar project names for suggestion
             let suggestion = find_similar_name(
@@ -198,15 +204,15 @@ impl SyncManager {
         name_or_id: &str,
         project_id: Option<&str>,
     ) -> SyncResult<&Section> {
-        // Try cache first
-        if self.find_section_in_cache(name_or_id, project_id).is_some() {
-            return Ok(self.find_section_in_cache(name_or_id, project_id).unwrap());
+        // Try cache first - if found, we can return early after sync check
+        let found_in_cache = self.find_section_in_cache(name_or_id, project_id).is_some();
+
+        if !found_in_cache {
+            // Not found - sync and retry
+            self.sync().await?;
         }
 
-        // Not found - sync and retry
-        self.sync().await?;
-
-        // Try again after sync
+        // Return from cache (either was there or now present after sync)
         self.find_section_in_cache(name_or_id, project_id)
             .ok_or_else(|| {
                 // Find similar section names for suggestion (within same project if specified)
@@ -297,15 +303,15 @@ impl SyncManager {
     /// }
     /// ```
     pub async fn resolve_label(&mut self, name_or_id: &str) -> SyncResult<&Label> {
-        // Try cache first
-        if self.find_label_in_cache(name_or_id).is_some() {
-            return Ok(self.find_label_in_cache(name_or_id).unwrap());
+        // Try cache first - if found, we can return early after sync check
+        let found_in_cache = self.find_label_in_cache(name_or_id).is_some();
+
+        if !found_in_cache {
+            // Not found - sync and retry
+            self.sync().await?;
         }
 
-        // Not found - sync and retry
-        self.sync().await?;
-
-        // Try again after sync
+        // Return from cache (either was there or now present after sync)
         self.find_label_in_cache(name_or_id).ok_or_else(|| {
             // Find similar label names for suggestion
             let suggestion = find_similar_name(
@@ -378,15 +384,15 @@ impl SyncManager {
     /// }
     /// ```
     pub async fn resolve_item(&mut self, id: &str) -> SyncResult<&Item> {
-        // Try cache first
-        if self.find_item_in_cache(id).is_some() {
-            return Ok(self.find_item_in_cache(id).unwrap());
+        // Try cache first - if found, we can return early after sync check
+        let found_in_cache = self.find_item_in_cache(id).is_some();
+
+        if !found_in_cache {
+            // Not found - sync and retry
+            self.sync().await?;
         }
 
-        // Not found - sync and retry
-        self.sync().await?;
-
-        // Try again after sync
+        // Return from cache (either was there or now present after sync)
         self.find_item_in_cache(id)
             .ok_or_else(|| SyncError::NotFound {
                 resource_type: "Item",
@@ -454,33 +460,28 @@ impl SyncManager {
         id_or_prefix: &str,
         require_checked: Option<bool>,
     ) -> SyncResult<&Item> {
-        // Try cache first
-        match self.find_item_by_prefix_in_cache(id_or_prefix, require_checked) {
-            ItemLookupResult::Found(_) => {
-                // Re-lookup to return reference (borrow checker limitation)
-                if let ItemLookupResult::Found(item) =
-                    self.find_item_by_prefix_in_cache(id_or_prefix, require_checked)
-                {
-                    return Ok(item);
-                }
-                unreachable!()
-            }
-            ItemLookupResult::Ambiguous(msg) => {
-                return Err(SyncError::NotFound {
-                    resource_type: "Item",
-                    identifier: msg,
-                    suggestion: None,
-                });
-            }
-            ItemLookupResult::NotFound => {
-                // Continue to sync
-            }
+        // Check cache status first (without borrowing the result)
+        let cache_status = match self.find_item_by_prefix_in_cache(id_or_prefix, require_checked) {
+            ItemLookupResult::Found(_) => CacheLookupStatus::Found,
+            ItemLookupResult::Ambiguous(msg) => CacheLookupStatus::Ambiguous(msg),
+            ItemLookupResult::NotFound => CacheLookupStatus::NotFound,
+        };
+
+        // Handle ambiguous case early (no sync needed)
+        if let CacheLookupStatus::Ambiguous(msg) = cache_status {
+            return Err(SyncError::NotFound {
+                resource_type: "Item",
+                identifier: msg,
+                suggestion: None,
+            });
         }
 
-        // Not found - sync and retry
-        self.sync().await?;
+        // If not found, sync first
+        if matches!(cache_status, CacheLookupStatus::NotFound) {
+            self.sync().await?;
+        }
 
-        // Try again after sync
+        // Now return from cache
         match self.find_item_by_prefix_in_cache(id_or_prefix, require_checked) {
             ItemLookupResult::Found(item) => Ok(item),
             ItemLookupResult::Ambiguous(msg) => Err(SyncError::NotFound {
