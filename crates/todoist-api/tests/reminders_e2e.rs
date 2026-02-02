@@ -26,7 +26,7 @@ mod test_context;
 
 use test_context::TestContext;
 use todoist_api_rs::models::ReminderType;
-use todoist_api_rs::sync::SyncCommand;
+use todoist_api_rs::sync::{SyncCommand, SyncCommandType};
 
 /// Helper to check if reminders are available (requires Pro).
 /// Returns true if the first reminder test succeeds, false if reminders are unavailable.
@@ -34,7 +34,7 @@ async fn reminders_available(ctx: &mut TestContext, task_id: &str) -> bool {
     // Try to create a test reminder - if it fails, reminders are not available
     let temp_id = uuid::Uuid::new_v4().to_string();
     let command = SyncCommand::with_temp_id(
-        "reminder_add",
+        SyncCommandType::ReminderAdd,
         &temp_id,
         serde_json::json!({
             "item_id": task_id,
@@ -236,7 +236,7 @@ async fn test_update_reminder() {
 
     // Update the reminder with a new time
     let update_command = SyncCommand::new(
-        "reminder_update",
+        SyncCommandType::ReminderUpdate,
         serde_json::json!({
             "id": reminder_id,
             "due": {
@@ -488,7 +488,7 @@ async fn test_reminder_on_recurring_task() {
     );
 
     // Complete the recurring task (this advances to next occurrence)
-    let complete_command = SyncCommand::new("item_close", serde_json::json!({"id": task_id}));
+    let complete_command = SyncCommand::new(SyncCommandType::ItemClose, serde_json::json!({"id": task_id}));
     let response = ctx.execute(vec![complete_command]).await.unwrap();
     assert!(!response.has_errors(), "item_close should succeed");
 
@@ -562,7 +562,7 @@ async fn test_reminder_appears_in_cache() {
     // Create a reminder - the execute() method already updates the cache
     let temp_id = uuid::Uuid::new_v4().to_string();
     let command = SyncCommand::with_temp_id(
-        "reminder_add",
+        SyncCommandType::ReminderAdd,
         &temp_id,
         serde_json::json!({
             "item_id": task_id,

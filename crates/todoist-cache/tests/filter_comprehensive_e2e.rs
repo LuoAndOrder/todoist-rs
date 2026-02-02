@@ -14,7 +14,7 @@ use std::fs;
 
 use chrono::{Duration, Local};
 use todoist_api_rs::client::TodoistClient;
-use todoist_api_rs::sync::{SyncCommand, SyncRequest, SyncResponse};
+use todoist_api_rs::sync::{SyncCommand, SyncCommandType, SyncRequest, SyncResponse};
 use todoist_cache_rs::filter::{FilterContext, FilterEvaluator, FilterParser};
 
 // ============================================================================
@@ -180,7 +180,7 @@ impl FilterTestContext {
             }
         }
 
-        let command = SyncCommand::with_temp_id("item_add", &temp_id, args);
+        let command = SyncCommand::with_temp_id(SyncCommandType::ItemAdd, &temp_id, args);
         let response = self.execute(vec![command]).await?;
 
         response
@@ -193,7 +193,7 @@ impl FilterTestContext {
     async fn create_project(&mut self, name: &str) -> Result<String, Box<dyn std::error::Error>> {
         let temp_id = uuid::Uuid::new_v4().to_string();
         let command =
-            SyncCommand::with_temp_id("project_add", &temp_id, serde_json::json!({ "name": name }));
+            SyncCommand::with_temp_id(SyncCommandType::ProjectAdd, &temp_id, serde_json::json!({ "name": name }));
         let response = self.execute(vec![command]).await?;
         response
             .real_id(&temp_id)
@@ -209,7 +209,7 @@ impl FilterTestContext {
     ) -> Result<String, Box<dyn std::error::Error>> {
         let temp_id = uuid::Uuid::new_v4().to_string();
         let command = SyncCommand::with_temp_id(
-            "project_add",
+            SyncCommandType::ProjectAdd,
             &temp_id,
             serde_json::json!({ "name": name, "parent_id": parent_id }),
         );
@@ -228,7 +228,7 @@ impl FilterTestContext {
     ) -> Result<String, Box<dyn std::error::Error>> {
         let temp_id = uuid::Uuid::new_v4().to_string();
         let command = SyncCommand::with_temp_id(
-            "section_add",
+            SyncCommandType::SectionAdd,
             &temp_id,
             serde_json::json!({ "name": name, "project_id": project_id }),
         );
@@ -243,7 +243,7 @@ impl FilterTestContext {
     async fn create_label(&mut self, name: &str) -> Result<String, Box<dyn std::error::Error>> {
         let temp_id = uuid::Uuid::new_v4().to_string();
         let command =
-            SyncCommand::with_temp_id("label_add", &temp_id, serde_json::json!({ "name": name }));
+            SyncCommand::with_temp_id(SyncCommandType::LabelAdd, &temp_id, serde_json::json!({ "name": name }));
         let response = self.execute(vec![command]).await?;
         response
             .real_id(&temp_id)
@@ -263,25 +263,25 @@ impl FilterTestContext {
 
         for id in task_ids {
             commands.push(SyncCommand::new(
-                "item_delete",
+                SyncCommandType::ItemDelete,
                 serde_json::json!({"id": id}),
             ));
         }
         for id in section_ids {
             commands.push(SyncCommand::new(
-                "section_delete",
+                SyncCommandType::SectionDelete,
                 serde_json::json!({"id": id}),
             ));
         }
         for id in project_ids {
             commands.push(SyncCommand::new(
-                "project_delete",
+                SyncCommandType::ProjectDelete,
                 serde_json::json!({"id": id}),
             ));
         }
         for id in label_ids {
             commands.push(SyncCommand::new(
-                "label_delete",
+                SyncCommandType::LabelDelete,
                 serde_json::json!({"id": id}),
             ));
         }

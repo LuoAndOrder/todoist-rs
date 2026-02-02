@@ -21,8 +21,8 @@
 use std::fs;
 use todoist_api_rs::client::TodoistClient;
 use todoist_api_rs::sync::{
-    Filter, Item, Label, Note, Project, ProjectNote, Reminder, Section, SyncCommand, SyncRequest,
-    SyncResponse,
+    Filter, Item, Label, Note, Project, ProjectNote, Reminder, Section, SyncCommand,
+    SyncCommandType, SyncRequest, SyncResponse,
 };
 
 /// Reads the API token from .env.local or environment variable.
@@ -359,7 +359,7 @@ impl TestContext {
             }
         }
 
-        let command = SyncCommand::with_temp_id("item_add", &temp_id, args);
+        let command = SyncCommand::with_temp_id(SyncCommandType::ItemAdd, &temp_id, args);
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
@@ -380,8 +380,11 @@ impl TestContext {
         name: &str,
     ) -> Result<String, todoist_api_rs::error::Error> {
         let temp_id = uuid::Uuid::new_v4().to_string();
-        let command =
-            SyncCommand::with_temp_id("project_add", &temp_id, serde_json::json!({ "name": name }));
+        let command = SyncCommand::with_temp_id(
+            SyncCommandType::ProjectAdd,
+            &temp_id,
+            serde_json::json!({ "name": name }),
+        );
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
@@ -404,7 +407,7 @@ impl TestContext {
     ) -> Result<String, todoist_api_rs::error::Error> {
         let temp_id = uuid::Uuid::new_v4().to_string();
         let command = SyncCommand::with_temp_id(
-            "section_add",
+            SyncCommandType::SectionAdd,
             &temp_id,
             serde_json::json!({
                 "name": name,
@@ -431,8 +434,11 @@ impl TestContext {
         name: &str,
     ) -> Result<String, todoist_api_rs::error::Error> {
         let temp_id = uuid::Uuid::new_v4().to_string();
-        let command =
-            SyncCommand::with_temp_id("label_add", &temp_id, serde_json::json!({ "name": name }));
+        let command = SyncCommand::with_temp_id(
+            SyncCommandType::LabelAdd,
+            &temp_id,
+            serde_json::json!({ "name": name }),
+        );
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
@@ -449,7 +455,7 @@ impl TestContext {
 
     /// Deletes a task.
     pub async fn delete_task(&mut self, task_id: &str) -> Result<(), todoist_api_rs::error::Error> {
-        let command = SyncCommand::new("item_delete", serde_json::json!({"id": task_id}));
+        let command = SyncCommand::new(SyncCommandType::ItemDelete, serde_json::json!({"id": task_id}));
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
@@ -467,7 +473,7 @@ impl TestContext {
         &mut self,
         project_id: &str,
     ) -> Result<(), todoist_api_rs::error::Error> {
-        let command = SyncCommand::new("project_delete", serde_json::json!({"id": project_id}));
+        let command = SyncCommand::new(SyncCommandType::ProjectDelete, serde_json::json!({"id": project_id}));
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
@@ -485,7 +491,7 @@ impl TestContext {
         &mut self,
         section_id: &str,
     ) -> Result<(), todoist_api_rs::error::Error> {
-        let command = SyncCommand::new("section_delete", serde_json::json!({"id": section_id}));
+        let command = SyncCommand::new(SyncCommandType::SectionDelete, serde_json::json!({"id": section_id}));
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
@@ -503,7 +509,7 @@ impl TestContext {
         &mut self,
         label_id: &str,
     ) -> Result<(), todoist_api_rs::error::Error> {
-        let command = SyncCommand::new("label_delete", serde_json::json!({"id": label_id}));
+        let command = SyncCommand::new(SyncCommandType::LabelDelete, serde_json::json!({"id": label_id}));
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
@@ -526,7 +532,7 @@ impl TestContext {
     ) -> Result<String, todoist_api_rs::error::Error> {
         let temp_id = uuid::Uuid::new_v4().to_string();
         let command = SyncCommand::with_temp_id(
-            "reminder_add",
+            SyncCommandType::ReminderAdd,
             &temp_id,
             serde_json::json!({
                 "item_id": item_id,
@@ -561,7 +567,7 @@ impl TestContext {
     ) -> Result<String, todoist_api_rs::error::Error> {
         let temp_id = uuid::Uuid::new_v4().to_string();
         let command = SyncCommand::with_temp_id(
-            "reminder_add",
+            SyncCommandType::ReminderAdd,
             &temp_id,
             serde_json::json!({
                 "item_id": item_id,
@@ -588,7 +594,7 @@ impl TestContext {
         &mut self,
         reminder_id: &str,
     ) -> Result<(), todoist_api_rs::error::Error> {
-        let command = SyncCommand::new("reminder_delete", serde_json::json!({"id": reminder_id}));
+        let command = SyncCommand::new(SyncCommandType::ReminderDelete, serde_json::json!({"id": reminder_id}));
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
@@ -649,7 +655,7 @@ impl TestContext {
     ) -> Result<String, todoist_api_rs::error::Error> {
         let temp_id = uuid::Uuid::new_v4().to_string();
         let command = SyncCommand::with_temp_id(
-            "note_add",
+            SyncCommandType::NoteAdd,
             &temp_id,
             serde_json::json!({
                 "item_id": item_id,
@@ -672,7 +678,7 @@ impl TestContext {
 
     /// Deletes a task comment (note).
     pub async fn delete_note(&mut self, note_id: &str) -> Result<(), todoist_api_rs::error::Error> {
-        let command = SyncCommand::new("note_delete", serde_json::json!({"id": note_id}));
+        let command = SyncCommand::new(SyncCommandType::NoteDelete, serde_json::json!({"id": note_id}));
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
@@ -693,7 +699,7 @@ impl TestContext {
     ) -> Result<String, todoist_api_rs::error::Error> {
         let temp_id = uuid::Uuid::new_v4().to_string();
         let command = SyncCommand::with_temp_id(
-            "project_note_add",
+            SyncCommandType::ProjectNoteAdd,
             &temp_id,
             serde_json::json!({
                 "project_id": project_id,
@@ -719,7 +725,7 @@ impl TestContext {
         &mut self,
         note_id: &str,
     ) -> Result<(), todoist_api_rs::error::Error> {
-        let command = SyncCommand::new("project_note_delete", serde_json::json!({"id": note_id}));
+        let command = SyncCommand::new(SyncCommandType::ProjectNoteDelete, serde_json::json!({"id": note_id}));
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
@@ -819,7 +825,7 @@ impl TestContext {
         // Delete notes first (they depend on tasks)
         for id in note_ids {
             commands.push(SyncCommand::new(
-                "note_delete",
+                SyncCommandType::NoteDelete,
                 serde_json::json!({"id": id}),
             ));
         }
@@ -827,7 +833,7 @@ impl TestContext {
         // Delete project notes (they depend on projects)
         for id in project_note_ids {
             commands.push(SyncCommand::new(
-                "project_note_delete",
+                SyncCommandType::ProjectNoteDelete,
                 serde_json::json!({"id": id}),
             ));
         }
@@ -835,35 +841,35 @@ impl TestContext {
         // Delete reminders (they depend on tasks)
         for id in reminder_ids {
             commands.push(SyncCommand::new(
-                "reminder_delete",
+                SyncCommandType::ReminderDelete,
                 serde_json::json!({"id": id}),
             ));
         }
 
         for id in task_ids {
             commands.push(SyncCommand::new(
-                "item_delete",
+                SyncCommandType::ItemDelete,
                 serde_json::json!({"id": id}),
             ));
         }
 
         for id in section_ids {
             commands.push(SyncCommand::new(
-                "section_delete",
+                SyncCommandType::SectionDelete,
                 serde_json::json!({"id": id}),
             ));
         }
 
         for id in project_ids {
             commands.push(SyncCommand::new(
-                "project_delete",
+                SyncCommandType::ProjectDelete,
                 serde_json::json!({"id": id}),
             ));
         }
 
         for id in label_ids {
             commands.push(SyncCommand::new(
-                "label_delete",
+                SyncCommandType::LabelDelete,
                 serde_json::json!({"id": id}),
             ));
         }
@@ -970,7 +976,7 @@ mod tests {
             .enumerate()
             .map(|(i, temp_id)| {
                 SyncCommand::with_temp_id(
-                    "item_add",
+                    SyncCommandType::ItemAdd,
                     temp_id,
                     serde_json::json!({
                         "content": format!("TestContext - batch task {}", i),

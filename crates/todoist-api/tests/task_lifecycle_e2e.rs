@@ -20,7 +20,7 @@
 mod test_context;
 
 use test_context::TestContext;
-use todoist_api_rs::sync::SyncCommand;
+use todoist_api_rs::sync::{SyncCommand, SyncCommandType};
 
 // ============================================================================
 // 1.1 Basic CRUD Tests
@@ -110,7 +110,7 @@ async fn test_update_task_content() {
 
     // Update content
     let update_command = SyncCommand::new(
-        "item_update",
+        SyncCommandType::ItemUpdate,
         serde_json::json!({
             "id": task_id,
             "content": "E2E test - modified content"
@@ -144,7 +144,7 @@ async fn test_update_task_description() {
 
     // Add description
     let update_command = SyncCommand::new(
-        "item_update",
+        SyncCommandType::ItemUpdate,
         serde_json::json!({
             "id": task_id,
             "description": "New description"
@@ -159,7 +159,7 @@ async fn test_update_task_description() {
 
     // Update description
     let update_command = SyncCommand::new(
-        "item_update",
+        SyncCommandType::ItemUpdate,
         serde_json::json!({
             "id": task_id,
             "description": "Changed description"
@@ -240,7 +240,7 @@ async fn test_move_task_between_projects() {
 
     // Move task to Project B
     let move_command = SyncCommand::new(
-        "item_move",
+        SyncCommandType::ItemMove,
         serde_json::json!({
             "id": task_id,
             "project_id": project_b_id
@@ -291,7 +291,7 @@ async fn test_move_task_to_section() {
 
     // Move task to section
     let move_command = SyncCommand::new(
-        "item_move",
+        SyncCommandType::ItemMove,
         serde_json::json!({
             "id": task_id,
             "section_id": section_id
@@ -343,7 +343,7 @@ async fn test_move_task_out_of_section() {
 
     // Move task out of section (to project root)
     let move_command = SyncCommand::new(
-        "item_move",
+        SyncCommandType::ItemMove,
         serde_json::json!({
             "id": task_id,
             "project_id": project_id
@@ -398,7 +398,7 @@ async fn test_move_task_to_section_in_different_project() {
 
     // Move task to section in Project B
     let move_command = SyncCommand::new(
-        "item_move",
+        SyncCommandType::ItemMove,
         serde_json::json!({
             "id": task_id,
             "section_id": section_b_id
@@ -447,7 +447,7 @@ async fn test_complete_task_with_item_close() {
     assert!(!task.checked, "Task should not be completed initially");
 
     // Complete task with item_close
-    let close_command = SyncCommand::new("item_close", serde_json::json!({"id": task_id}));
+    let close_command = SyncCommand::new(SyncCommandType::ItemClose, serde_json::json!({"id": task_id}));
     let response = ctx.execute(vec![close_command]).await.unwrap();
     assert!(!response.has_errors(), "item_close should succeed");
 
@@ -476,7 +476,7 @@ async fn test_complete_task_with_item_complete() {
 
     // Complete task with item_complete and completed_at timestamp
     let complete_command = SyncCommand::new(
-        "item_complete",
+        SyncCommandType::ItemComplete,
         serde_json::json!({
             "id": task_id,
             "completed_at": "2025-01-26T12:00:00Z"
@@ -508,7 +508,7 @@ async fn test_uncomplete_task() {
         .await
         .expect("create_task failed");
 
-    let close_command = SyncCommand::new("item_close", serde_json::json!({"id": task_id}));
+    let close_command = SyncCommand::new(SyncCommandType::ItemClose, serde_json::json!({"id": task_id}));
     let response = ctx.execute(vec![close_command]).await.unwrap();
     assert!(!response.has_errors());
 
@@ -518,7 +518,7 @@ async fn test_uncomplete_task() {
 
     // Uncomplete task
     let uncomplete_command =
-        SyncCommand::new("item_uncomplete", serde_json::json!({"id": task_id}));
+        SyncCommand::new(SyncCommandType::ItemUncomplete, serde_json::json!({"id": task_id}));
     let response = ctx.execute(vec![uncomplete_command]).await.unwrap();
     assert!(!response.has_errors(), "item_uncomplete should succeed");
 
@@ -561,7 +561,7 @@ async fn test_complete_recurring_task() {
     );
 
     // Complete recurring task
-    let close_command = SyncCommand::new("item_close", serde_json::json!({"id": task_id}));
+    let close_command = SyncCommand::new(SyncCommandType::ItemClose, serde_json::json!({"id": task_id}));
     let response = ctx.execute(vec![close_command]).await.unwrap();
     assert!(!response.has_errors(), "item_close should succeed");
 
@@ -720,7 +720,7 @@ async fn test_move_subtask_to_different_parent() {
 
     // Move C to be a child of B
     let move_command = SyncCommand::new(
-        "item_move",
+        SyncCommandType::ItemMove,
         serde_json::json!({
             "id": child_c_id,
             "parent_id": parent_b_id
@@ -772,7 +772,7 @@ async fn test_promote_subtask_to_task() {
 
     // Promote child to top-level task (move to project root)
     let move_command = SyncCommand::new(
-        "item_move",
+        SyncCommandType::ItemMove,
         serde_json::json!({
             "id": child_id,
             "project_id": inbox_id
@@ -828,7 +828,7 @@ async fn test_complete_parent_with_subtasks() {
         .expect("create_task failed");
 
     // Complete parent
-    let close_command = SyncCommand::new("item_close", serde_json::json!({"id": parent_id}));
+    let close_command = SyncCommand::new(SyncCommandType::ItemClose, serde_json::json!({"id": parent_id}));
     let response = ctx.execute(vec![close_command]).await.unwrap();
     assert!(!response.has_errors(), "item_close should succeed");
 
@@ -962,7 +962,7 @@ async fn test_reorder_tasks_in_project() {
 
     // Reorder: task3, task1, task2
     let reorder_command = SyncCommand::new(
-        "item_reorder",
+        SyncCommandType::ItemReorder,
         serde_json::json!({
             "items": [
                 {"id": task3_id, "child_order": 1},
@@ -1036,7 +1036,7 @@ async fn test_update_day_orders() {
 
     // Update day orders
     let update_command = SyncCommand::new(
-        "item_update_day_orders",
+        SyncCommandType::ItemUpdateDayOrders,
         serde_json::json!({
             "ids_to_orders": {
                 task3_id.clone(): 1,
@@ -1091,7 +1091,7 @@ async fn test_set_due_date_simple() {
 
     // Update with simple due date (no time)
     let update_command = SyncCommand::new(
-        "item_update",
+        SyncCommandType::ItemUpdate,
         serde_json::json!({
             "id": task_id,
             "due": {"date": "2025-06-15"}
@@ -1129,7 +1129,7 @@ async fn test_set_due_date_with_time() {
 
     // Update with due date including time
     let update_command = SyncCommand::new(
-        "item_update",
+        SyncCommandType::ItemUpdate,
         serde_json::json!({
             "id": task_id,
             "due": {"date": "2025-06-15T14:30:00"}
@@ -1170,7 +1170,7 @@ async fn test_set_due_date_with_timezone() {
 
     // Update with due date including timezone
     let update_command = SyncCommand::new(
-        "item_update",
+        SyncCommandType::ItemUpdate,
         serde_json::json!({
             "id": task_id,
             "due": {
@@ -1214,7 +1214,7 @@ async fn test_set_recurring_due_date() {
 
     // Update with recurring due date using natural language
     let update_command = SyncCommand::new(
-        "item_update",
+        SyncCommandType::ItemUpdate,
         serde_json::json!({
             "id": task_id,
             "due": {"string": "every monday at 9am"}
@@ -1265,7 +1265,7 @@ async fn test_remove_due_date() {
 
     // Remove due date by setting to null
     let update_command = SyncCommand::new(
-        "item_update",
+        SyncCommandType::ItemUpdate,
         serde_json::json!({
             "id": task_id,
             "due": serde_json::Value::Null
@@ -1306,7 +1306,7 @@ async fn test_set_deadline() {
 
     // Set deadline (distinct from due date)
     let update_command = SyncCommand::new(
-        "item_update",
+        SyncCommandType::ItemUpdate,
         serde_json::json!({
             "id": task_id,
             "deadline": {"date": "2025-06-15"}
@@ -1413,7 +1413,7 @@ async fn test_due_date_preserved_on_move() {
 
     // Move task to Project B
     let move_command = SyncCommand::new(
-        "item_move",
+        SyncCommandType::ItemMove,
         serde_json::json!({
             "id": task_id,
             "project_id": project_b_id

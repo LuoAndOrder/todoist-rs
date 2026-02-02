@@ -32,6 +32,8 @@ pub enum SyncCommandType {
     ItemDelete,
     /// Complete/close a task
     ItemClose,
+    /// Complete a task with a specific completion timestamp
+    ItemComplete,
     /// Reopen a completed task
     ItemUncomplete,
     /// Archive a task

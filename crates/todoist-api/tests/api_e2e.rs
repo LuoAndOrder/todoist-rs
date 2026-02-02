@@ -10,7 +10,7 @@
 use std::fs;
 use todoist_api_rs::client::TodoistClient;
 use todoist_api_rs::quick_add::QuickAddRequest;
-use todoist_api_rs::sync::{SyncCommand, SyncRequest};
+use todoist_api_rs::sync::{SyncCommand, SyncCommandType, SyncRequest};
 
 fn get_test_token() -> Option<String> {
     // Try to read from .env.local at workspace root
@@ -220,7 +220,7 @@ async fn test_sync_create_and_complete_item() {
     // Create an item via sync command
     let temp_id = uuid::Uuid::new_v4().to_string();
     let add_command = SyncCommand::with_temp_id(
-        "item_add",
+        SyncCommandType::ItemAdd,
         &temp_id,
         serde_json::json!({
             "content": "E2E test item via sync",
@@ -244,7 +244,7 @@ async fn test_sync_create_and_complete_item() {
     );
 
     // Complete the item
-    let close_command = SyncCommand::new("item_close", serde_json::json!({"id": real_id}));
+    let close_command = SyncCommand::new(SyncCommandType::ItemClose, serde_json::json!({"id": real_id}));
     let close_response = client
         .sync(SyncRequest::with_commands(vec![close_command.clone()]))
         .await
@@ -257,7 +257,7 @@ async fn test_sync_create_and_complete_item() {
     println!("Completed item {}", real_id);
 
     // Delete the item to clean up
-    let delete_command = SyncCommand::new("item_delete", serde_json::json!({"id": real_id}));
+    let delete_command = SyncCommand::new(SyncCommandType::ItemDelete, serde_json::json!({"id": real_id}));
     let delete_response = client
         .sync(SyncRequest::with_commands(vec![delete_command]))
         .await
@@ -316,7 +316,7 @@ async fn test_quick_add_simple() {
 
             // Clean up: delete the task using sync API with v2_id
             let delete_command =
-                SyncCommand::new("item_delete", serde_json::json!({"id": task.api_id()}));
+                SyncCommand::new(SyncCommandType::ItemDelete, serde_json::json!({"id": task.api_id()}));
             let delete_response = client
                 .sync(SyncRequest::with_commands(vec![delete_command]))
                 .await
@@ -372,7 +372,7 @@ async fn test_quick_add_with_nlp() {
 
             // Clean up using v2_id
             let delete_command =
-                SyncCommand::new("item_delete", serde_json::json!({"id": task.api_id()}));
+                SyncCommand::new(SyncCommandType::ItemDelete, serde_json::json!({"id": task.api_id()}));
             let delete_response = client
                 .sync(SyncRequest::with_commands(vec![delete_command]))
                 .await
@@ -415,7 +415,7 @@ async fn test_quick_add_with_note() {
 
             // Clean up using v2_id
             let delete_command =
-                SyncCommand::new("item_delete", serde_json::json!({"id": task.api_id()}));
+                SyncCommand::new(SyncCommandType::ItemDelete, serde_json::json!({"id": task.api_id()}));
             let delete_response = client
                 .sync(SyncRequest::with_commands(vec![delete_command]))
                 .await

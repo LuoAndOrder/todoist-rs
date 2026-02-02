@@ -20,7 +20,7 @@
 mod test_context;
 
 use test_context::TestContext;
-use todoist_api_rs::sync::SyncCommand;
+use todoist_api_rs::sync::{SyncCommand, SyncCommandType};
 
 // ============================================================================
 // 3.1 Basic CRUD Tests
@@ -66,7 +66,7 @@ async fn test_create_project_with_color() {
     // Create project with specific color
     let temp_id = uuid::Uuid::new_v4().to_string();
     let command = SyncCommand::with_temp_id(
-        "project_add",
+        SyncCommandType::ProjectAdd,
         &temp_id,
         serde_json::json!({
             "name": "E2E_Test_ColoredProject",
@@ -105,7 +105,7 @@ async fn test_create_project_with_view_style() {
     // Create project with board view
     let temp_id = uuid::Uuid::new_v4().to_string();
     let command = SyncCommand::with_temp_id(
-        "project_add",
+        SyncCommandType::ProjectAdd,
         &temp_id,
         serde_json::json!({
             "name": "E2E_Test_BoardProject",
@@ -155,7 +155,7 @@ async fn test_update_project_name() {
 
     // Update name
     let update_command = SyncCommand::new(
-        "project_update",
+        SyncCommandType::ProjectUpdate,
         serde_json::json!({
             "id": project_id,
             "name": "E2E_Test_NewName"
@@ -186,7 +186,7 @@ async fn test_update_project_color() {
     // Create project with color "red"
     let temp_id = uuid::Uuid::new_v4().to_string();
     let command = SyncCommand::with_temp_id(
-        "project_add",
+        SyncCommandType::ProjectAdd,
         &temp_id,
         serde_json::json!({
             "name": "E2E_Test_ColorChangeProject",
@@ -205,7 +205,7 @@ async fn test_update_project_color() {
 
     // Update to blue
     let update_command = SyncCommand::new(
-        "project_update",
+        SyncCommandType::ProjectUpdate,
         serde_json::json!({
             "id": project_id,
             "color": "blue"
@@ -350,7 +350,7 @@ async fn test_create_subproject() {
     // Create child project with parent_id
     let temp_id = uuid::Uuid::new_v4().to_string();
     let command = SyncCommand::with_temp_id(
-        "project_add",
+        SyncCommandType::ProjectAdd,
         &temp_id,
         serde_json::json!({
             "name": "E2E_Test_ChildProject",
@@ -394,7 +394,7 @@ async fn test_create_nested_subprojects() {
     // Create B under A
     let temp_id_b = uuid::Uuid::new_v4().to_string();
     let command_b = SyncCommand::with_temp_id(
-        "project_add",
+        SyncCommandType::ProjectAdd,
         &temp_id_b,
         serde_json::json!({
             "name": "E2E_Test_ProjectB",
@@ -408,7 +408,7 @@ async fn test_create_nested_subprojects() {
     // Create C under B
     let temp_id_c = uuid::Uuid::new_v4().to_string();
     let command_c = SyncCommand::with_temp_id(
-        "project_add",
+        SyncCommandType::ProjectAdd,
         &temp_id_c,
         serde_json::json!({
             "name": "E2E_Test_ProjectC",
@@ -478,7 +478,7 @@ async fn test_move_project_under_parent() {
 
     // Move B under A
     let move_command = SyncCommand::new(
-        "project_move",
+        SyncCommandType::ProjectMove,
         serde_json::json!({
             "id": project_b_id,
             "parent_id": project_a_id
@@ -518,7 +518,7 @@ async fn test_promote_subproject_to_root() {
 
     let temp_id = uuid::Uuid::new_v4().to_string();
     let command = SyncCommand::with_temp_id(
-        "project_add",
+        SyncCommandType::ProjectAdd,
         &temp_id,
         serde_json::json!({
             "name": "E2E_Test_PromoteChild",
@@ -535,7 +535,7 @@ async fn test_promote_subproject_to_root() {
 
     // Promote child to root level (set parent_id to null)
     let move_command = SyncCommand::new(
-        "project_move",
+        SyncCommandType::ProjectMove,
         serde_json::json!({
             "id": child_id,
             "parent_id": serde_json::Value::Null
@@ -591,7 +591,7 @@ async fn test_reorder_projects() {
 
     // Reorder: p3, p1, p2
     let reorder_command = SyncCommand::new(
-        "project_reorder",
+        SyncCommandType::ProjectReorder,
         serde_json::json!({
             "projects": [
                 {"id": project3_id, "child_order": 1},
@@ -651,7 +651,7 @@ async fn test_archive_project() {
 
     // Archive project
     let archive_command =
-        SyncCommand::new("project_archive", serde_json::json!({"id": project_id}));
+        SyncCommand::new(SyncCommandType::ProjectArchive, serde_json::json!({"id": project_id}));
     let response = ctx.execute(vec![archive_command]).await.unwrap();
     assert!(!response.has_errors(), "project_archive should succeed");
 
@@ -668,7 +668,7 @@ async fn test_archive_project() {
 
     // Clean up: unarchive first, then delete
     let unarchive_command =
-        SyncCommand::new("project_unarchive", serde_json::json!({"id": project_id}));
+        SyncCommand::new(SyncCommandType::ProjectUnarchive, serde_json::json!({"id": project_id}));
     ctx.execute(vec![unarchive_command]).await.unwrap();
 
     ctx.batch_delete(&[&task_id], &[&project_id], &[], &[])
@@ -690,7 +690,7 @@ async fn test_unarchive_project() {
         .expect("create_project failed");
 
     let archive_command =
-        SyncCommand::new("project_archive", serde_json::json!({"id": project_id}));
+        SyncCommand::new(SyncCommandType::ProjectArchive, serde_json::json!({"id": project_id}));
     let response = ctx.execute(vec![archive_command]).await.unwrap();
     assert!(!response.has_errors());
 
@@ -700,7 +700,7 @@ async fn test_unarchive_project() {
 
     // Unarchive project
     let unarchive_command =
-        SyncCommand::new("project_unarchive", serde_json::json!({"id": project_id}));
+        SyncCommand::new(SyncCommandType::ProjectUnarchive, serde_json::json!({"id": project_id}));
     let response = ctx.execute(vec![unarchive_command]).await.unwrap();
     assert!(!response.has_errors(), "project_unarchive should succeed");
 
@@ -754,7 +754,7 @@ async fn test_archived_project_excluded_from_filters() {
 
     // Archive project
     let archive_command =
-        SyncCommand::new("project_archive", serde_json::json!({"id": project_id}));
+        SyncCommand::new(SyncCommandType::ProjectArchive, serde_json::json!({"id": project_id}));
     let response = ctx.execute(vec![archive_command]).await.unwrap();
     assert!(!response.has_errors(), "project_archive should succeed");
 
@@ -789,7 +789,7 @@ async fn test_archived_project_excluded_from_filters() {
 
     // Clean up: unarchive first
     let unarchive_command =
-        SyncCommand::new("project_unarchive", serde_json::json!({"id": project_id}));
+        SyncCommand::new(SyncCommandType::ProjectUnarchive, serde_json::json!({"id": project_id}));
     ctx.execute(vec![unarchive_command]).await.unwrap();
 
     ctx.batch_delete(&[&task_id], &[&project_id], &[], &[])
@@ -923,7 +923,7 @@ async fn test_rename_section() {
 
     // Rename section
     let update_command = SyncCommand::new(
-        "section_update",
+        SyncCommandType::SectionUpdate,
         serde_json::json!({
             "id": section_id,
             "name": "E2E_Test_NewSectionName"
@@ -1113,7 +1113,7 @@ async fn test_reorder_sections() {
 
     // Reorder: s3, s1, s2
     let reorder_command = SyncCommand::new(
-        "section_reorder",
+        SyncCommandType::SectionReorder,
         serde_json::json!({
             "sections": [
                 {"id": section3_id, "section_order": 1},
@@ -1182,7 +1182,7 @@ async fn test_move_section_to_different_project() {
 
     // Move section to Project B
     let move_command = SyncCommand::new(
-        "section_move",
+        SyncCommandType::SectionMove,
         serde_json::json!({
             "id": section_id,
             "project_id": project_b_id
@@ -1238,7 +1238,7 @@ async fn test_archive_section() {
 
     // Archive section
     let archive_command =
-        SyncCommand::new("section_archive", serde_json::json!({"id": section_id}));
+        SyncCommand::new(SyncCommandType::SectionArchive, serde_json::json!({"id": section_id}));
     let response = ctx.execute(vec![archive_command]).await.unwrap();
     assert!(!response.has_errors(), "section_archive should succeed");
 
@@ -1250,7 +1250,7 @@ async fn test_archive_section() {
 
     // Clean up: unarchive first, then delete
     let unarchive_command =
-        SyncCommand::new("section_unarchive", serde_json::json!({"id": section_id}));
+        SyncCommand::new(SyncCommandType::SectionUnarchive, serde_json::json!({"id": section_id}));
     ctx.execute(vec![unarchive_command]).await.unwrap();
 
     ctx.batch_delete(&[&task_id], &[&project_id], &[&section_id], &[])
@@ -1277,7 +1277,7 @@ async fn test_unarchive_section() {
 
     // Archive section
     let archive_command =
-        SyncCommand::new("section_archive", serde_json::json!({"id": section_id}));
+        SyncCommand::new(SyncCommandType::SectionArchive, serde_json::json!({"id": section_id}));
     let response = ctx.execute(vec![archive_command]).await.unwrap();
     assert!(!response.has_errors());
 
@@ -1287,7 +1287,7 @@ async fn test_unarchive_section() {
 
     // Unarchive section
     let unarchive_command =
-        SyncCommand::new("section_unarchive", serde_json::json!({"id": section_id}));
+        SyncCommand::new(SyncCommandType::SectionUnarchive, serde_json::json!({"id": section_id}));
     let response = ctx.execute(vec![unarchive_command]).await.unwrap();
     assert!(!response.has_errors(), "section_unarchive should succeed");
 

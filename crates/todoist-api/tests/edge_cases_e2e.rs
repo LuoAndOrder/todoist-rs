@@ -21,7 +21,7 @@
 mod test_context;
 
 use test_context::TestContext;
-use todoist_api_rs::sync::SyncCommand;
+use todoist_api_rs::sync::{SyncCommand, SyncCommandType};
 
 // =============================================================================
 // 11.1 Unicode and Special Characters
@@ -609,7 +609,7 @@ async fn test_deeply_nested_projects() {
     let temp_id_b = uuid::Uuid::new_v4().to_string();
     let response_b = ctx
         .execute(vec![SyncCommand::with_temp_id(
-            "project_add",
+            SyncCommandType::ProjectAdd,
             &temp_id_b,
             serde_json::json!({
                 "name": project_b_name,
@@ -625,7 +625,7 @@ async fn test_deeply_nested_projects() {
     let temp_id_c = uuid::Uuid::new_v4().to_string();
     let response_c = ctx
         .execute(vec![SyncCommand::with_temp_id(
-            "project_add",
+            SyncCommandType::ProjectAdd,
             &temp_id_c,
             serde_json::json!({
                 "name": project_c_name,
@@ -641,7 +641,7 @@ async fn test_deeply_nested_projects() {
     let temp_id_d = uuid::Uuid::new_v4().to_string();
     let response_d = ctx
         .execute(vec![SyncCommand::with_temp_id(
-            "project_add",
+            SyncCommandType::ProjectAdd,
             &temp_id_d,
             serde_json::json!({
                 "name": project_d_name,
@@ -657,7 +657,7 @@ async fn test_deeply_nested_projects() {
     let temp_id_e = uuid::Uuid::new_v4().to_string();
     let response_e = ctx
         .execute(vec![SyncCommand::with_temp_id(
-            "project_add",
+            SyncCommandType::ProjectAdd,
             &temp_id_e,
             serde_json::json!({
                 "name": project_e_name,
@@ -931,7 +931,7 @@ async fn test_rapid_create_delete() {
     // Create and delete in same batch
     let commands = vec![
         SyncCommand::with_temp_id(
-            "item_add",
+            SyncCommandType::ItemAdd,
             &temp_id,
             serde_json::json!({
                 "content": "E2E Edge - Rapid create-delete",
@@ -939,7 +939,7 @@ async fn test_rapid_create_delete() {
             }),
         ),
         // Delete references the temp_id which will be resolved by the API
-        SyncCommand::new("item_delete", serde_json::json!({"id": temp_id})),
+        SyncCommand::new(SyncCommandType::ItemDelete, serde_json::json!({"id": temp_id})),
     ];
 
     let response = ctx.execute(commands).await.expect("Batch should succeed");
@@ -1002,7 +1002,7 @@ async fn test_rapid_update_cycle() {
     for i in 1..=update_count {
         let response = ctx
             .execute(vec![SyncCommand::new(
-                "item_update",
+                SyncCommandType::ItemUpdate,
                 serde_json::json!({
                     "id": task_id,
                     "content": format!("E2E Edge - Rapid update {}", i)

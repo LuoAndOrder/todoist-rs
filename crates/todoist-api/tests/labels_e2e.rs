@@ -20,7 +20,7 @@
 mod test_context;
 
 use test_context::TestContext;
-use todoist_api_rs::sync::SyncCommand;
+use todoist_api_rs::sync::{SyncCommand, SyncCommandType};
 
 // ============================================================================
 // 5.1 Label CRUD Tests
@@ -39,9 +39,13 @@ async fn test_create_label() {
         return;
     };
 
+    // Use unique label name to avoid conflicts with leftover data from previous runs
+    let uuid = uuid::Uuid::new_v4().to_string()[..8].to_string();
+    let label_name = format!("e2e-test-create-label-{}", uuid);
+
     // Create a label
     let label_id = ctx
-        .create_label("e2e-test-create-label")
+        .create_label(&label_name)
         .await
         .expect("create_label failed");
 
@@ -50,7 +54,7 @@ async fn test_create_label() {
         .find_label(&label_id)
         .expect("Label should exist in cache");
 
-    assert_eq!(label.name, "e2e-test-create-label");
+    assert_eq!(label.name, label_name);
     assert!(!label.is_deleted, "Label should not be deleted");
 
     // Clean up
@@ -72,13 +76,17 @@ async fn test_create_label_with_color() {
         return;
     };
 
+    // Use unique label name to avoid conflicts with leftover data from previous runs
+    let uuid = uuid::Uuid::new_v4().to_string()[..8].to_string();
+    let label_name = format!("e2e-test-colored-label-{}", uuid);
+
     // Create label with specific color
     let temp_id = uuid::Uuid::new_v4().to_string();
     let command = SyncCommand::with_temp_id(
-        "label_add",
+        SyncCommandType::LabelAdd,
         &temp_id,
         serde_json::json!({
-            "name": "e2e-test-colored-label",
+            "name": label_name,
             "color": "green"
         }),
     );
@@ -91,7 +99,7 @@ async fn test_create_label_with_color() {
     let label = ctx
         .find_label(&label_id)
         .expect("Label should exist in cache");
-    assert_eq!(label.name, "e2e-test-colored-label");
+    assert_eq!(label.name, label_name);
     assert_eq!(
         label.color,
         Some("green".to_string()),
@@ -118,9 +126,14 @@ async fn test_rename_label() {
         return;
     };
 
+    // Use unique label names to avoid conflicts with leftover data from previous runs
+    let uuid = uuid::Uuid::new_v4().to_string()[..8].to_string();
+    let old_name = format!("e2e-test-old-name-{}", uuid);
+    let new_name = format!("e2e-test-new-name-{}", uuid);
+
     // Create a label with initial name
     let label_id = ctx
-        .create_label("e2e-test-old-name")
+        .create_label(&old_name)
         .await
         .expect("create_label failed");
 
@@ -128,14 +141,14 @@ async fn test_rename_label() {
     let label = ctx
         .find_label(&label_id)
         .expect("Label should exist in cache");
-    assert_eq!(label.name, "e2e-test-old-name");
+    assert_eq!(label.name, old_name);
 
     // Rename the label
     let update_command = SyncCommand::new(
-        "label_update",
+        SyncCommandType::LabelUpdate,
         serde_json::json!({
             "id": label_id,
-            "name": "e2e-test-new-name"
+            "name": new_name
         }),
     );
     let response = ctx.execute(vec![update_command]).await.unwrap();
@@ -145,7 +158,7 @@ async fn test_rename_label() {
     let label = ctx
         .find_label(&label_id)
         .expect("Label should exist in cache");
-    assert_eq!(label.name, "e2e-test-new-name");
+    assert_eq!(label.name, new_name);
 
     // Clean up
     ctx.delete_label(&label_id)
@@ -171,9 +184,13 @@ async fn test_delete_label() {
 
     let inbox_id = ctx.inbox_id().to_string();
 
+    // Use unique label name to avoid conflicts with leftover data from previous runs
+    let uuid = uuid::Uuid::new_v4().to_string()[..8].to_string();
+    let label_name = format!("e2e-test-delete-label-{}", uuid);
+
     // Create a label
     let label_id = ctx
-        .create_label("e2e-test-delete-label")
+        .create_label(&label_name)
         .await
         .expect("create_label failed");
 
@@ -182,7 +199,7 @@ async fn test_delete_label() {
         .create_task(
             "E2E test - task with label to delete",
             &inbox_id,
-            Some(serde_json::json!({"labels": ["e2e-test-delete-label"]})),
+            Some(serde_json::json!({"labels": [label_name]})),
         )
         .await
         .expect("create_task failed");
@@ -190,7 +207,7 @@ async fn test_delete_label() {
     // Verify task has the label (from cache)
     let task = ctx.find_item(&task_id).expect("Task should exist in cache");
     assert!(
-        task.labels.contains(&"e2e-test-delete-label".to_string()),
+        task.labels.contains(&label_name),
         "Task should have the label"
     );
 
@@ -211,7 +228,7 @@ async fn test_delete_label() {
     // Verify task no longer has the label
     let task = ctx.find_item(&task_id).expect("Task should still exist");
     assert!(
-        !task.labels.contains(&"e2e-test-delete-label".to_string()),
+        !task.labels.contains(&label_name),
         "Task should no longer have the deleted label"
     );
 
@@ -239,9 +256,13 @@ async fn test_add_single_label_to_task() {
 
     let inbox_id = ctx.inbox_id().to_string();
 
+    // Use unique label name to avoid conflicts with leftover data from previous runs
+    let uuid = uuid::Uuid::new_v4().to_string()[..8].to_string();
+    let label_name = format!("e2e-test-single-label-{}", uuid);
+
     // Create a label
     let label_id = ctx
-        .create_label("e2e-test-single-label")
+        .create_label(&label_name)
         .await
         .expect("create_label failed");
 
@@ -253,10 +274,10 @@ async fn test_add_single_label_to_task() {
 
     // Add the label to the task
     let update_command = SyncCommand::new(
-        "item_update",
+        SyncCommandType::ItemUpdate,
         serde_json::json!({
             "id": task_id,
-            "labels": ["e2e-test-single-label"]
+            "labels": [label_name]
         }),
     );
     let response = ctx.execute(vec![update_command]).await.unwrap();
@@ -265,7 +286,7 @@ async fn test_add_single_label_to_task() {
     // Verify task has the label (from cache)
     let task = ctx.find_item(&task_id).expect("Task should exist in cache");
     assert!(
-        task.labels.contains(&"e2e-test-single-label".to_string()),
+        task.labels.contains(&label_name),
         "Task should have the label"
     );
 
@@ -291,17 +312,23 @@ async fn test_add_multiple_labels_to_task() {
 
     let inbox_id = ctx.inbox_id().to_string();
 
+    // Use unique label names to avoid conflicts with leftover data from previous runs
+    let uuid = uuid::Uuid::new_v4().to_string()[..8].to_string();
+    let label_name_a = format!("e2e-test-multi-label-a-{}", uuid);
+    let label_name_b = format!("e2e-test-multi-label-b-{}", uuid);
+    let label_name_c = format!("e2e-test-multi-label-c-{}", uuid);
+
     // Create 3 labels
     let label1_id = ctx
-        .create_label("e2e-test-multi-label-a")
+        .create_label(&label_name_a)
         .await
         .expect("create_label failed");
     let label2_id = ctx
-        .create_label("e2e-test-multi-label-b")
+        .create_label(&label_name_b)
         .await
         .expect("create_label failed");
     let label3_id = ctx
-        .create_label("e2e-test-multi-label-c")
+        .create_label(&label_name_c)
         .await
         .expect("create_label failed");
 
@@ -313,10 +340,10 @@ async fn test_add_multiple_labels_to_task() {
 
     // Add all labels to the task
     let update_command = SyncCommand::new(
-        "item_update",
+        SyncCommandType::ItemUpdate,
         serde_json::json!({
             "id": task_id,
-            "labels": ["e2e-test-multi-label-a", "e2e-test-multi-label-b", "e2e-test-multi-label-c"]
+            "labels": [label_name_a, label_name_b, label_name_c]
         }),
     );
     let response = ctx.execute(vec![update_command]).await.unwrap();
@@ -325,15 +352,15 @@ async fn test_add_multiple_labels_to_task() {
     // Verify task has all 3 labels (from cache)
     let task = ctx.find_item(&task_id).expect("Task should exist in cache");
     assert!(
-        task.labels.contains(&"e2e-test-multi-label-a".to_string()),
+        task.labels.contains(&label_name_a),
         "Task should have label a"
     );
     assert!(
-        task.labels.contains(&"e2e-test-multi-label-b".to_string()),
+        task.labels.contains(&label_name_b),
         "Task should have label b"
     );
     assert!(
-        task.labels.contains(&"e2e-test-multi-label-c".to_string()),
+        task.labels.contains(&label_name_c),
         "Task should have label c"
     );
     assert_eq!(task.labels.len(), 3, "Task should have exactly 3 labels");
@@ -360,17 +387,23 @@ async fn test_remove_one_label_from_task() {
 
     let inbox_id = ctx.inbox_id().to_string();
 
+    // Use unique label names to avoid conflicts with leftover data from previous runs
+    let uuid = uuid::Uuid::new_v4().to_string()[..8].to_string();
+    let label_name_a = format!("e2e-test-remove-label-a-{}", uuid);
+    let label_name_b = format!("e2e-test-remove-label-b-{}", uuid);
+    let label_name_c = format!("e2e-test-remove-label-c-{}", uuid);
+
     // Create 3 labels
     let label1_id = ctx
-        .create_label("e2e-test-remove-label-a")
+        .create_label(&label_name_a)
         .await
         .expect("create_label failed");
     let label2_id = ctx
-        .create_label("e2e-test-remove-label-b")
+        .create_label(&label_name_b)
         .await
         .expect("create_label failed");
     let label3_id = ctx
-        .create_label("e2e-test-remove-label-c")
+        .create_label(&label_name_c)
         .await
         .expect("create_label failed");
 
@@ -380,7 +413,7 @@ async fn test_remove_one_label_from_task() {
             "E2E test - remove one label",
             &inbox_id,
             Some(serde_json::json!({
-                "labels": ["e2e-test-remove-label-a", "e2e-test-remove-label-b", "e2e-test-remove-label-c"]
+                "labels": [label_name_a, label_name_b, label_name_c]
             })),
         )
         .await
@@ -392,10 +425,10 @@ async fn test_remove_one_label_from_task() {
 
     // Remove label "b" by updating with only "a" and "c"
     let update_command = SyncCommand::new(
-        "item_update",
+        SyncCommandType::ItemUpdate,
         serde_json::json!({
             "id": task_id,
-            "labels": ["e2e-test-remove-label-a", "e2e-test-remove-label-c"]
+            "labels": [label_name_a, label_name_c]
         }),
     );
     let response = ctx.execute(vec![update_command]).await.unwrap();
@@ -404,15 +437,15 @@ async fn test_remove_one_label_from_task() {
     // Verify only "a" and "c" remain (from cache)
     let task = ctx.find_item(&task_id).expect("Task should exist in cache");
     assert!(
-        task.labels.contains(&"e2e-test-remove-label-a".to_string()),
+        task.labels.contains(&label_name_a),
         "Task should still have label a"
     );
     assert!(
-        !task.labels.contains(&"e2e-test-remove-label-b".to_string()),
+        !task.labels.contains(&label_name_b),
         "Task should NOT have label b anymore"
     );
     assert!(
-        task.labels.contains(&"e2e-test-remove-label-c".to_string()),
+        task.labels.contains(&label_name_c),
         "Task should still have label c"
     );
     assert_eq!(task.labels.len(), 2, "Task should have exactly 2 labels");
@@ -439,23 +472,30 @@ async fn test_replace_all_labels() {
 
     let inbox_id = ctx.inbox_id().to_string();
 
+    // Use unique label names to avoid conflicts with leftover data from previous runs
+    let uuid = uuid::Uuid::new_v4().to_string()[..8].to_string();
+    let label_name_old1 = format!("e2e-test-replace-old1-{}", uuid);
+    let label_name_old2 = format!("e2e-test-replace-old2-{}", uuid);
+    let label_name_new1 = format!("e2e-test-replace-new1-{}", uuid);
+    let label_name_new2 = format!("e2e-test-replace-new2-{}", uuid);
+
     // Create old labels
     let old1_id = ctx
-        .create_label("e2e-test-replace-old1")
+        .create_label(&label_name_old1)
         .await
         .expect("create_label failed");
     let old2_id = ctx
-        .create_label("e2e-test-replace-old2")
+        .create_label(&label_name_old2)
         .await
         .expect("create_label failed");
 
     // Create new labels
     let new1_id = ctx
-        .create_label("e2e-test-replace-new1")
+        .create_label(&label_name_new1)
         .await
         .expect("create_label failed");
     let new2_id = ctx
-        .create_label("e2e-test-replace-new2")
+        .create_label(&label_name_new2)
         .await
         .expect("create_label failed");
 
@@ -465,7 +505,7 @@ async fn test_replace_all_labels() {
             "E2E test - replace all labels",
             &inbox_id,
             Some(serde_json::json!({
-                "labels": ["e2e-test-replace-old1", "e2e-test-replace-old2"]
+                "labels": [label_name_old1, label_name_old2]
             })),
         )
         .await
@@ -473,15 +513,15 @@ async fn test_replace_all_labels() {
 
     // Verify task has old labels initially (from cache)
     let task = ctx.find_item(&task_id).expect("Task should exist in cache");
-    assert!(task.labels.contains(&"e2e-test-replace-old1".to_string()));
-    assert!(task.labels.contains(&"e2e-test-replace-old2".to_string()));
+    assert!(task.labels.contains(&label_name_old1));
+    assert!(task.labels.contains(&label_name_old2));
 
     // Replace all labels with new ones
     let update_command = SyncCommand::new(
-        "item_update",
+        SyncCommandType::ItemUpdate,
         serde_json::json!({
             "id": task_id,
-            "labels": ["e2e-test-replace-new1", "e2e-test-replace-new2"]
+            "labels": [label_name_new1, label_name_new2]
         }),
     );
     let response = ctx.execute(vec![update_command]).await.unwrap();
@@ -490,19 +530,19 @@ async fn test_replace_all_labels() {
     // Verify only new labels present (from cache)
     let task = ctx.find_item(&task_id).expect("Task should exist in cache");
     assert!(
-        !task.labels.contains(&"e2e-test-replace-old1".to_string()),
+        !task.labels.contains(&label_name_old1),
         "Task should NOT have old1"
     );
     assert!(
-        !task.labels.contains(&"e2e-test-replace-old2".to_string()),
+        !task.labels.contains(&label_name_old2),
         "Task should NOT have old2"
     );
     assert!(
-        task.labels.contains(&"e2e-test-replace-new1".to_string()),
+        task.labels.contains(&label_name_new1),
         "Task should have new1"
     );
     assert!(
-        task.labels.contains(&"e2e-test-replace-new2".to_string()),
+        task.labels.contains(&label_name_new2),
         "Task should have new2"
     );
     assert_eq!(task.labels.len(), 2, "Task should have exactly 2 labels");
@@ -534,13 +574,18 @@ async fn test_clear_all_labels() {
 
     let inbox_id = ctx.inbox_id().to_string();
 
+    // Use unique label names to avoid conflicts with leftover data from previous runs
+    let uuid = uuid::Uuid::new_v4().to_string()[..8].to_string();
+    let label_name_a = format!("e2e-test-clear-label-a-{}", uuid);
+    let label_name_b = format!("e2e-test-clear-label-b-{}", uuid);
+
     // Create labels
     let label1_id = ctx
-        .create_label("e2e-test-clear-label-a")
+        .create_label(&label_name_a)
         .await
         .expect("create_label failed");
     let label2_id = ctx
-        .create_label("e2e-test-clear-label-b")
+        .create_label(&label_name_b)
         .await
         .expect("create_label failed");
 
@@ -550,7 +595,7 @@ async fn test_clear_all_labels() {
             "E2E test - clear all labels",
             &inbox_id,
             Some(serde_json::json!({
-                "labels": ["e2e-test-clear-label-a", "e2e-test-clear-label-b"]
+                "labels": [label_name_a, label_name_b]
             })),
         )
         .await
@@ -562,7 +607,7 @@ async fn test_clear_all_labels() {
 
     // Clear all labels
     let update_command = SyncCommand::new(
-        "item_update",
+        SyncCommandType::ItemUpdate,
         serde_json::json!({
             "id": task_id,
             "labels": []
@@ -597,9 +642,14 @@ async fn test_label_case_insensitivity() {
 
     let inbox_id = ctx.inbox_id().to_string();
 
+    // Use unique label name to avoid conflicts with leftover data from previous runs
+    let uuid = uuid::Uuid::new_v4().to_string()[..8].to_string();
+    let label_name_mixed = format!("e2e-test-CaseSensitive-{}", uuid);
+    let label_name_lower = label_name_mixed.to_lowercase();
+
     // Create label with mixed case
     let label_id = ctx
-        .create_label("e2e-test-CaseSensitive")
+        .create_label(&label_name_mixed)
         .await
         .expect("create_label failed");
 
@@ -609,7 +659,7 @@ async fn test_label_case_insensitivity() {
             "E2E test - label case insensitivity",
             &inbox_id,
             Some(serde_json::json!({
-                "labels": ["e2e-test-casesensitive"]
+                "labels": [label_name_lower]
             })),
         )
         .await
@@ -623,7 +673,7 @@ async fn test_label_case_insensitivity() {
     let has_label = task
         .labels
         .iter()
-        .any(|l| l.eq_ignore_ascii_case("e2e-test-CaseSensitive"));
+        .any(|l| l.eq_ignore_ascii_case(&label_name_mixed));
     assert!(
         has_label,
         "Task should have the label (case-insensitive match)"
@@ -652,9 +702,13 @@ async fn test_add_label_via_item_update() {
 
     let inbox_id = ctx.inbox_id().to_string();
 
+    // Use unique label name to avoid conflicts with leftover data from previous runs
+    let uuid = uuid::Uuid::new_v4().to_string()[..8].to_string();
+    let label_name = format!("e2e-test-update-add-label-{}", uuid);
+
     // Create a label
     let label_id = ctx
-        .create_label("e2e-test-update-add-label")
+        .create_label(&label_name)
         .await
         .expect("create_label failed");
 
@@ -673,11 +727,11 @@ async fn test_add_label_via_item_update() {
 
     // Get current labels (empty) and append new one
     let mut labels = task.labels.clone();
-    labels.push("e2e-test-update-add-label".to_string());
+    labels.push(label_name.clone());
 
     // Update via item_update
     let update_command = SyncCommand::new(
-        "item_update",
+        SyncCommandType::ItemUpdate,
         serde_json::json!({
             "id": task_id,
             "labels": labels
@@ -689,8 +743,7 @@ async fn test_add_label_via_item_update() {
     // Verify label was added (from cache)
     let task = ctx.find_item(&task_id).expect("Task should exist in cache");
     assert!(
-        task.labels
-            .contains(&"e2e-test-update-add-label".to_string()),
+        task.labels.contains(&label_name),
         "Task should have the label after item_update"
     );
     assert_eq!(task.labels.len(), 1, "Task should have exactly 1 label");

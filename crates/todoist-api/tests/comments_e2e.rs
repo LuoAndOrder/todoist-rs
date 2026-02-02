@@ -24,7 +24,7 @@
 mod test_context;
 
 use test_context::TestContext;
-use todoist_api_rs::sync::SyncCommand;
+use todoist_api_rs::sync::{SyncCommand, SyncCommandType};
 
 /// Helper to check if task comments are available.
 /// Returns true if the first comment test succeeds, false if comments are unavailable.
@@ -32,7 +32,7 @@ async fn comments_available(ctx: &mut TestContext, task_id: &str) -> bool {
     // Try to create a test comment - if it fails, comments are not available
     let temp_id = uuid::Uuid::new_v4().to_string();
     let command = SyncCommand::with_temp_id(
-        "note_add",
+        SyncCommandType::NoteAdd,
         &temp_id,
         serde_json::json!({
             "item_id": task_id,
@@ -68,7 +68,7 @@ async fn project_comments_available(ctx: &mut TestContext, project_id: &str) -> 
     // Try to create a test project comment
     let temp_id = uuid::Uuid::new_v4().to_string();
     let command = SyncCommand::with_temp_id(
-        "project_note_add",
+        SyncCommandType::ProjectNoteAdd,
         &temp_id,
         serde_json::json!({
             "project_id": project_id,
@@ -244,7 +244,7 @@ async fn test_update_task_comment() {
 
     // Update the comment
     let update_command = SyncCommand::new(
-        "note_update",
+        SyncCommandType::NoteUpdate,
         serde_json::json!({
             "id": comment_id,
             "content": "Updated comment content"
@@ -512,7 +512,7 @@ async fn test_update_project_comment() {
 
     // Update the comment
     let update_command = SyncCommand::new(
-        "project_note_update",
+        SyncCommandType::ProjectNoteUpdate,
         serde_json::json!({
             "id": comment_id,
             "content": "Updated project note"

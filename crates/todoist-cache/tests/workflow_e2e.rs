@@ -14,7 +14,7 @@ use std::fs;
 
 use chrono::{Duration, Local};
 use todoist_api_rs::client::TodoistClient;
-use todoist_api_rs::sync::{SyncCommand, SyncRequest, SyncResponse};
+use todoist_api_rs::sync::{SyncCommand, SyncCommandType, SyncRequest, SyncResponse};
 
 // ============================================================================
 // Test Context for Rate Limit Management
@@ -208,7 +208,7 @@ impl WorkflowTestContext {
             }
         }
 
-        let command = SyncCommand::with_temp_id("item_add", &temp_id, args);
+        let command = SyncCommand::with_temp_id(SyncCommandType::ItemAdd, &temp_id, args);
         let response = self.execute(vec![command]).await?;
 
         response
@@ -221,7 +221,7 @@ impl WorkflowTestContext {
     async fn create_project(&mut self, name: &str) -> Result<String, Box<dyn std::error::Error>> {
         let temp_id = uuid::Uuid::new_v4().to_string();
         let command =
-            SyncCommand::with_temp_id("project_add", &temp_id, serde_json::json!({ "name": name }));
+            SyncCommand::with_temp_id(SyncCommandType::ProjectAdd, &temp_id, serde_json::json!({ "name": name }));
         let response = self.execute(vec![command]).await?;
         response
             .real_id(&temp_id)
@@ -237,7 +237,7 @@ impl WorkflowTestContext {
     ) -> Result<String, Box<dyn std::error::Error>> {
         let temp_id = uuid::Uuid::new_v4().to_string();
         let command = SyncCommand::with_temp_id(
-            "section_add",
+            SyncCommandType::SectionAdd,
             &temp_id,
             serde_json::json!({ "name": name, "project_id": project_id }),
         );
@@ -252,7 +252,7 @@ impl WorkflowTestContext {
     async fn create_label(&mut self, name: &str) -> Result<String, Box<dyn std::error::Error>> {
         let temp_id = uuid::Uuid::new_v4().to_string();
         let command =
-            SyncCommand::with_temp_id("label_add", &temp_id, serde_json::json!({ "name": name }));
+            SyncCommand::with_temp_id(SyncCommandType::LabelAdd, &temp_id, serde_json::json!({ "name": name }));
         let response = self.execute(vec![command]).await?;
         response
             .real_id(&temp_id)
@@ -262,7 +262,7 @@ impl WorkflowTestContext {
 
     /// Complete a task
     async fn complete_task(&mut self, task_id: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let command = SyncCommand::new("item_close", serde_json::json!({"id": task_id}));
+        let command = SyncCommand::new(SyncCommandType::ItemClose, serde_json::json!({"id": task_id}));
         let response = self.execute(vec![command]).await?;
         if response.has_errors() {
             return Err(format!("item_close failed: {:?}", response.errors()).into());
@@ -277,7 +277,7 @@ impl WorkflowTestContext {
         project_id: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let command = SyncCommand::new(
-            "item_move",
+            SyncCommandType::ItemMove,
             serde_json::json!({"id": task_id, "project_id": project_id}),
         );
         let response = self.execute(vec![command]).await?;
@@ -294,7 +294,7 @@ impl WorkflowTestContext {
         labels: &[&str],
     ) -> Result<(), Box<dyn std::error::Error>> {
         let command = SyncCommand::new(
-            "item_update",
+            SyncCommandType::ItemUpdate,
             serde_json::json!({"id": task_id, "labels": labels}),
         );
         let response = self.execute(vec![command]).await?;
@@ -311,7 +311,7 @@ impl WorkflowTestContext {
         priority: i32,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let command = SyncCommand::new(
-            "item_update",
+            SyncCommandType::ItemUpdate,
             serde_json::json!({"id": task_id, "priority": priority}),
         );
         let response = self.execute(vec![command]).await?;
@@ -328,7 +328,7 @@ impl WorkflowTestContext {
         new_name: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let command = SyncCommand::new(
-            "label_update",
+            SyncCommandType::LabelUpdate,
             serde_json::json!({"id": label_id, "name": new_name}),
         );
         let response = self.execute(vec![command]).await?;
@@ -350,25 +350,25 @@ impl WorkflowTestContext {
 
         for id in task_ids {
             commands.push(SyncCommand::new(
-                "item_delete",
+                SyncCommandType::ItemDelete,
                 serde_json::json!({"id": id}),
             ));
         }
         for id in section_ids {
             commands.push(SyncCommand::new(
-                "section_delete",
+                SyncCommandType::SectionDelete,
                 serde_json::json!({"id": id}),
             ));
         }
         for id in project_ids {
             commands.push(SyncCommand::new(
-                "project_delete",
+                SyncCommandType::ProjectDelete,
                 serde_json::json!({"id": id}),
             ));
         }
         for id in label_ids {
             commands.push(SyncCommand::new(
-                "label_delete",
+                SyncCommandType::LabelDelete,
                 serde_json::json!({"id": id}),
             ));
         }
@@ -714,7 +714,7 @@ async fn test_workflow_bulk_task_creation() {
         .enumerate()
         .map(|(i, temp_id)| {
             SyncCommand::with_temp_id(
-                "item_add",
+                SyncCommandType::ItemAdd,
                 temp_id,
                 serde_json::json!({
                     "content": format!("E2E bulk task {}", i + 1),

@@ -12,7 +12,7 @@ use std::fs;
 
 use chrono::Local;
 use todoist_api_rs::client::TodoistClient;
-use todoist_api_rs::sync::{SyncCommand, SyncRequest};
+use todoist_api_rs::sync::{SyncCommand, SyncCommandType, SyncRequest};
 use todoist_cache_rs::filter::{FilterContext, FilterEvaluator, FilterParser};
 use todoist_cache_rs::{CacheStore, SyncManager};
 
@@ -73,7 +73,7 @@ async fn test_e2e_filter_today_returns_correct_items() {
     let today = today_str();
     let temp_id_today = uuid::Uuid::new_v4().to_string();
     let add_today = SyncCommand::with_temp_id(
-        "item_add",
+        SyncCommandType::ItemAdd,
         &temp_id_today,
         serde_json::json!({
             "content": "E2E filter test - due today",
@@ -85,7 +85,7 @@ async fn test_e2e_filter_today_returns_correct_items() {
     // Create a task with no due date
     let temp_id_nodate = uuid::Uuid::new_v4().to_string();
     let add_nodate = SyncCommand::with_temp_id(
-        "item_add",
+        SyncCommandType::ItemAdd,
         &temp_id_nodate,
         serde_json::json!({
             "content": "E2E filter test - no due date",
@@ -146,8 +146,8 @@ async fn test_e2e_filter_today_returns_correct_items() {
 
     // Clean up: delete the test items
     let delete_commands = vec![
-        SyncCommand::new("item_delete", serde_json::json!({"id": today_item_id})),
-        SyncCommand::new("item_delete", serde_json::json!({"id": nodate_item_id})),
+        SyncCommand::new(SyncCommandType::ItemDelete, serde_json::json!({"id": today_item_id})),
+        SyncCommand::new(SyncCommandType::ItemDelete, serde_json::json!({"id": nodate_item_id})),
     ];
     let delete_response = client
         .sync(SyncRequest::with_commands(delete_commands))
@@ -196,7 +196,7 @@ async fn test_e2e_filter_priority_and_label_intersection() {
     let label_temp_id = uuid::Uuid::new_v4().to_string();
     if !urgent_label_exists {
         let add_label = SyncCommand::with_temp_id(
-            "label_add",
+            SyncCommandType::LabelAdd,
             &label_temp_id,
             serde_json::json!({
                 "name": "urgent"
@@ -222,7 +222,7 @@ async fn test_e2e_filter_priority_and_label_intersection() {
 
     let temp_id_p1_urgent = uuid::Uuid::new_v4().to_string();
     let add_p1_urgent = SyncCommand::with_temp_id(
-        "item_add",
+        SyncCommandType::ItemAdd,
         &temp_id_p1_urgent,
         serde_json::json!({
             "content": "E2E filter test - p1 with urgent label",
@@ -234,7 +234,7 @@ async fn test_e2e_filter_priority_and_label_intersection() {
 
     let temp_id_p1_only = uuid::Uuid::new_v4().to_string();
     let add_p1_only = SyncCommand::with_temp_id(
-        "item_add",
+        SyncCommandType::ItemAdd,
         &temp_id_p1_only,
         serde_json::json!({
             "content": "E2E filter test - p1 only",
@@ -245,7 +245,7 @@ async fn test_e2e_filter_priority_and_label_intersection() {
 
     let temp_id_urgent_only = uuid::Uuid::new_v4().to_string();
     let add_urgent_only = SyncCommand::with_temp_id(
-        "item_add",
+        SyncCommandType::ItemAdd,
         &temp_id_urgent_only,
         serde_json::json!({
             "content": "E2E filter test - urgent only",
@@ -256,7 +256,7 @@ async fn test_e2e_filter_priority_and_label_intersection() {
 
     let temp_id_p2_urgent = uuid::Uuid::new_v4().to_string();
     let add_p2_urgent = SyncCommand::with_temp_id(
-        "item_add",
+        SyncCommandType::ItemAdd,
         &temp_id_p2_urgent,
         serde_json::json!({
             "content": "E2E filter test - p2 with urgent",
@@ -336,17 +336,17 @@ async fn test_e2e_filter_priority_and_label_intersection() {
 
     // Clean up: delete the test items
     let mut delete_commands = vec![
-        SyncCommand::new("item_delete", serde_json::json!({"id": p1_urgent_id})),
-        SyncCommand::new("item_delete", serde_json::json!({"id": p1_only_id})),
-        SyncCommand::new("item_delete", serde_json::json!({"id": urgent_only_id})),
-        SyncCommand::new("item_delete", serde_json::json!({"id": p2_urgent_id})),
+        SyncCommand::new(SyncCommandType::ItemDelete, serde_json::json!({"id": p1_urgent_id})),
+        SyncCommand::new(SyncCommandType::ItemDelete, serde_json::json!({"id": p1_only_id})),
+        SyncCommand::new(SyncCommandType::ItemDelete, serde_json::json!({"id": urgent_only_id})),
+        SyncCommand::new(SyncCommandType::ItemDelete, serde_json::json!({"id": p2_urgent_id})),
     ];
 
     // If we created the label, delete it too
     if !urgent_label_exists {
         if let Some(real_label_id) = add_response.real_id(&label_temp_id) {
             delete_commands.push(SyncCommand::new(
-                "label_delete",
+                SyncCommandType::LabelDelete,
                 serde_json::json!({"id": real_label_id}),
             ));
         }
@@ -395,7 +395,7 @@ async fn test_e2e_filter_project_matches() {
     let project_name = format!("E2E_FilterTest_{}", uuid::Uuid::new_v4());
     let project_temp_id = uuid::Uuid::new_v4().to_string();
     let add_project = SyncCommand::with_temp_id(
-        "project_add",
+        SyncCommandType::ProjectAdd,
         &project_temp_id,
         serde_json::json!({
             "name": project_name
@@ -426,7 +426,7 @@ async fn test_e2e_filter_project_matches() {
 
     let temp_id_in_project = uuid::Uuid::new_v4().to_string();
     let add_in_project = SyncCommand::with_temp_id(
-        "item_add",
+        SyncCommandType::ItemAdd,
         &temp_id_in_project,
         serde_json::json!({
             "content": "E2E filter test - in test project",
@@ -436,7 +436,7 @@ async fn test_e2e_filter_project_matches() {
 
     let temp_id_in_inbox = uuid::Uuid::new_v4().to_string();
     let add_in_inbox = SyncCommand::with_temp_id(
-        "item_add",
+        SyncCommandType::ItemAdd,
         &temp_id_in_inbox,
         serde_json::json!({
             "content": "E2E filter test - in inbox",
@@ -499,9 +499,9 @@ async fn test_e2e_filter_project_matches() {
 
     // Clean up: delete the test items and project
     let delete_commands = vec![
-        SyncCommand::new("item_delete", serde_json::json!({"id": in_project_id})),
-        SyncCommand::new("item_delete", serde_json::json!({"id": in_inbox_id})),
-        SyncCommand::new("project_delete", serde_json::json!({"id": project_id})),
+        SyncCommand::new(SyncCommandType::ItemDelete, serde_json::json!({"id": in_project_id})),
+        SyncCommand::new(SyncCommandType::ItemDelete, serde_json::json!({"id": in_inbox_id})),
+        SyncCommand::new(SyncCommandType::ProjectDelete, serde_json::json!({"id": project_id})),
     ];
 
     let delete_response = client
