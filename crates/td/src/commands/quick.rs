@@ -66,7 +66,7 @@ impl QuickResult {
 ///
 /// Returns an error if the API call fails.
 pub async fn execute(ctx: &CommandContext, opts: &QuickOptions, token: &str) -> Result<()> {
-    let client = TodoistClient::new(token);
+    let client = TodoistClient::new(token)?;
 
     // Build the quick add request
     let mut request =
@@ -128,7 +128,7 @@ async fn resolve_project_name(token: &str, response: &QuickAddResponse) -> Optio
     }
 
     // Fall back to looking up in cache
-    let client = TodoistClient::new(token);
+    let client = TodoistClient::new(token).ok()?;
     let store = CacheStore::new().ok()?;
     let manager = SyncManager::new(client, store).ok()?;
     let cache = manager.cache();

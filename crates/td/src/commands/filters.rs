@@ -33,7 +33,7 @@ pub struct FiltersListOptions {
 /// Returns an error if syncing fails.
 pub async fn execute(ctx: &CommandContext, opts: &FiltersListOptions, token: &str) -> Result<()> {
     // Initialize sync manager
-    let client = TodoistClient::new(token);
+    let client = TodoistClient::new(token)?;
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
@@ -142,7 +142,7 @@ pub async fn execute_add(
     }
 
     // Initialize sync manager (loads cache from disk)
-    let client = TodoistClient::new(token);
+    let client = TodoistClient::new(token)?;
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
@@ -288,7 +288,7 @@ pub async fn execute_show(
     token: &str,
 ) -> Result<()> {
     // Initialize sync manager to resolve filter ID
-    let client = TodoistClient::new(token);
+    let client = TodoistClient::new(token)?;
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
@@ -379,7 +379,7 @@ pub async fn execute_edit(
     }
 
     // Initialize sync manager (loads cache from disk)
-    let client = TodoistClient::new(token);
+    let client = TodoistClient::new(token)?;
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
@@ -542,7 +542,7 @@ pub async fn execute_delete(
     token: &str,
 ) -> Result<()> {
     // Initialize sync manager (loads cache from disk)
-    let client = TodoistClient::new(token);
+    let client = TodoistClient::new(token)?;
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
@@ -791,41 +791,41 @@ mod tests {
 
     // Helper function to create a test cache with filters
     fn make_test_cache_with_filters() -> Cache {
-        Cache {
-            sync_token: "test".to_string(),
-            full_sync_date_utc: None,
-            last_sync: None,
-            items: vec![],
-            projects: vec![],
-            labels: vec![],
-            sections: vec![],
-            notes: vec![],
-            project_notes: vec![],
-            reminders: vec![],
-            filters: vec![make_test_filter("filter-123-abc", "Today", "today")],
-            user: None,
-        }
+        Cache::with_data(
+            "test".to_string(),
+            None,
+            None,
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![make_test_filter("filter-123-abc", "Today", "today")],
+            None,
+        )
     }
 
     fn make_cache_with_ambiguous_filter_ids() -> Cache {
-        Cache {
-            sync_token: "test".to_string(),
-            full_sync_date_utc: None,
-            last_sync: None,
-            items: vec![],
-            projects: vec![],
-            labels: vec![],
-            sections: vec![],
-            notes: vec![],
-            project_notes: vec![],
-            reminders: vec![],
-            filters: vec![
+        Cache::with_data(
+            "test".to_string(),
+            None,
+            None,
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![
                 make_test_filter("filter-aaa-111", "Filter 1", "today"),
                 make_test_filter("filter-aaa-222", "Filter 2", "tomorrow"),
                 make_test_filter("filter-bbb-333", "Filter 3", "overdue"),
             ],
-            user: None,
-        }
+            None,
+        )
     }
 
     fn make_test_filter(id: &str, name: &str, query: &str) -> Filter {

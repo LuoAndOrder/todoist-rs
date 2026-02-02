@@ -57,7 +57,7 @@ pub struct AddResult {
 /// Returns an error if project/section lookup fails or the API returns an error.
 pub async fn execute(ctx: &CommandContext, opts: &AddOptions, token: &str) -> Result<()> {
     // Initialize sync manager (loads cache from disk)
-    let client = TodoistClient::new(token);
+    let client = TodoistClient::new(token)?;
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 

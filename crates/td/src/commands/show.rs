@@ -50,7 +50,7 @@ pub struct ShowResult<'a> {
 /// Returns an error if syncing fails or if the task is not found.
 pub async fn execute(ctx: &CommandContext, opts: &ShowOptions, token: &str) -> Result<()> {
     // Initialize sync manager
-    let client = todoist_api_rs::client::TodoistClient::new(token);
+    let client = todoist_api_rs::client::TodoistClient::new(token)?;
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
@@ -243,41 +243,41 @@ mod tests {
 
     // Helper function to create a test cache
     fn make_test_cache() -> Cache {
-        Cache {
-            sync_token: "test".to_string(),
-            full_sync_date_utc: None,
-            last_sync: None,
-            items: vec![make_test_item("item-123-abc", "Test task")],
-            projects: vec![],
-            labels: vec![],
-            sections: vec![],
-            notes: vec![],
-            project_notes: vec![],
-            reminders: vec![],
-            filters: vec![],
-            user: None,
-        }
+        Cache::with_data(
+            "test".to_string(),
+            None,
+            None,
+            vec![make_test_item("item-123-abc", "Test task")],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            None,
+        )
     }
 
     fn make_cache_with_ambiguous_ids() -> Cache {
-        Cache {
-            sync_token: "test".to_string(),
-            full_sync_date_utc: None,
-            last_sync: None,
-            items: vec![
+        Cache::with_data(
+            "test".to_string(),
+            None,
+            None,
+            vec![
                 make_test_item("item-aaa-111", "Task 1"),
                 make_test_item("item-aaa-222", "Task 2"),
                 make_test_item("item-bbb-333", "Task 3"),
             ],
-            projects: vec![],
-            labels: vec![],
-            sections: vec![],
-            notes: vec![],
-            project_notes: vec![],
-            reminders: vec![],
-            filters: vec![],
-            user: None,
-        }
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            None,
+        )
     }
 
     fn make_test_item(id: &str, content: &str) -> todoist_api_rs::sync::Item {

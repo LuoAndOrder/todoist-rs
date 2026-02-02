@@ -45,7 +45,7 @@ pub struct ReopenResult {
 /// Returns an error if syncing fails, task lookup fails, or the API returns an error.
 pub async fn execute(ctx: &CommandContext, opts: &ReopenOptions, token: &str) -> Result<()> {
     // Initialize sync manager (loads cache from disk)
-    let client = TodoistClient::new(token);
+    let client = TodoistClient::new(token)?;
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 

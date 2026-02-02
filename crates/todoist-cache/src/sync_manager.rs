@@ -13,7 +13,7 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     let client = TodoistClient::new("your-api-token");
+//!     let client = TodoistClient::new("your-api-token")?;
 //!     let store = CacheStore::new()?;
 //!     let mut manager = SyncManager::new(client, store)?;
 //!
@@ -130,7 +130,7 @@ pub type Result<T> = std::result::Result<T, SyncError>;
 /// use todoist_cache_rs::{CacheStore, SyncManager};
 ///
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-/// let client = TodoistClient::new("token");
+/// let client = TodoistClient::new("token")?;
 /// let store = CacheStore::new()?;
 /// let manager = Arc::new(Mutex::new(SyncManager::new(client, store)?));
 ///
@@ -367,7 +367,7 @@ impl SyncManager {
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    ///     let client = TodoistClient::new("your-api-token");
+    ///     let client = TodoistClient::new("your-api-token")?;
     ///     let store = CacheStore::new()?;
     ///     let mut manager = SyncManager::new(client, store)?;
     ///
@@ -435,7 +435,7 @@ impl SyncManager {
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    ///     let client = TodoistClient::new("your-api-token");
+    ///     let client = TodoistClient::new("your-api-token")?;
     ///     let store = CacheStore::new()?;
     ///     let mut manager = SyncManager::new(client, store)?;
     ///
@@ -523,7 +523,7 @@ impl SyncManager {
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    ///     let client = TodoistClient::new("your-api-token");
+    ///     let client = TodoistClient::new("your-api-token")?;
     ///     let store = CacheStore::new()?;
     ///     let mut manager = SyncManager::new(client, store)?;
     ///
@@ -626,7 +626,7 @@ impl SyncManager {
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    ///     let client = TodoistClient::new("your-api-token");
+    ///     let client = TodoistClient::new("your-api-token")?;
     ///     let store = CacheStore::new()?;
     ///     let mut manager = SyncManager::new(client, store)?;
     ///
@@ -714,7 +714,7 @@ impl SyncManager {
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    ///     let client = TodoistClient::new("your-api-token");
+    ///     let client = TodoistClient::new("your-api-token")?;
     ///     let store = CacheStore::new()?;
     ///     let mut manager = SyncManager::new(client, store)?;
     ///
@@ -782,7 +782,7 @@ impl SyncManager {
     ///
     /// #[tokio::main]
     /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    ///     let client = TodoistClient::new("your-api-token");
+    ///     let client = TodoistClient::new("your-api-token")?;
     ///     let store = CacheStore::new()?;
     ///     let mut manager = SyncManager::new(client, store)?;
     ///

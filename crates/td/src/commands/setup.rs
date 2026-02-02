@@ -114,7 +114,7 @@ pub async fn run_setup(ctx: &CommandContext) -> Result<String> {
         println!("Validating token...");
     }
 
-    let client = todoist_api_rs::client::TodoistClient::new(&token);
+    let client = todoist_api_rs::client::TodoistClient::new(&token)?;
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 

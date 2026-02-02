@@ -32,7 +32,7 @@ pub struct SectionsListOptions {
 /// Returns an error if syncing fails.
 pub async fn execute(ctx: &CommandContext, opts: &SectionsListOptions, token: &str) -> Result<()> {
     // Initialize sync manager
-    let client = TodoistClient::new(token);
+    let client = TodoistClient::new(token)?;
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
@@ -188,7 +188,7 @@ pub async fn execute_add(
     token: &str,
 ) -> Result<()> {
     // Initialize sync manager (loads cache from disk)
-    let client = TodoistClient::new(token);
+    let client = TodoistClient::new(token)?;
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
@@ -317,7 +317,7 @@ pub async fn execute_edit(
     }
 
     // Initialize sync manager (loads cache from disk)
-    let client = TodoistClient::new(token);
+    let client = TodoistClient::new(token)?;
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
@@ -456,7 +456,7 @@ pub async fn execute_delete(
     token: &str,
 ) -> Result<()> {
     // Initialize sync manager (loads cache from disk)
-    let client = TodoistClient::new(token);
+    let client = TodoistClient::new(token)?;
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
@@ -675,45 +675,45 @@ mod tests {
 
     // Helper function to create a test cache with sections
     fn make_test_cache_with_sections() -> Cache {
-        Cache {
-            sync_token: "test".to_string(),
-            full_sync_date_utc: None,
-            last_sync: None,
-            items: vec![],
-            projects: vec![make_test_project("project-1", "Test Project")],
-            labels: vec![],
-            sections: vec![make_test_section(
+        Cache::with_data(
+            "test".to_string(),
+            None,
+            None,
+            vec![],
+            vec![make_test_project("project-1", "Test Project")],
+            vec![],
+            vec![make_test_section(
                 "section-123-abc",
                 "Groceries",
                 "project-1",
             )],
-            notes: vec![],
-            project_notes: vec![],
-            reminders: vec![],
-            filters: vec![],
-            user: None,
-        }
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            None,
+        )
     }
 
     fn make_cache_with_ambiguous_section_ids() -> Cache {
-        Cache {
-            sync_token: "test".to_string(),
-            full_sync_date_utc: None,
-            last_sync: None,
-            items: vec![],
-            projects: vec![make_test_project("project-1", "Test Project")],
-            labels: vec![],
-            sections: vec![
+        Cache::with_data(
+            "test".to_string(),
+            None,
+            None,
+            vec![],
+            vec![make_test_project("project-1", "Test Project")],
+            vec![],
+            vec![
                 make_test_section("section-aaa-111", "section1", "project-1"),
                 make_test_section("section-aaa-222", "section2", "project-1"),
                 make_test_section("section-bbb-333", "section3", "project-1"),
             ],
-            notes: vec![],
-            project_notes: vec![],
-            reminders: vec![],
-            filters: vec![],
-            user: None,
-        }
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            None,
+        )
     }
 
     fn make_test_section(id: &str, name: &str, project_id: &str) -> Section {

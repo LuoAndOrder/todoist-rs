@@ -30,7 +30,7 @@ pub struct LabelsListOptions {
 /// Returns an error if syncing fails.
 pub async fn execute(ctx: &CommandContext, opts: &LabelsListOptions, token: &str) -> Result<()> {
     // Initialize sync manager
-    let client = TodoistClient::new(token);
+    let client = TodoistClient::new(token)?;
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
@@ -122,7 +122,7 @@ pub struct LabelAddResult {
 /// Returns an error if the API returns an error.
 pub async fn execute_add(ctx: &CommandContext, opts: &LabelsAddOptions, token: &str) -> Result<()> {
     // Initialize sync manager (loads cache from disk)
-    let client = TodoistClient::new(token);
+    let client = TodoistClient::new(token)?;
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
@@ -291,7 +291,7 @@ pub async fn execute_edit(
     }
 
     // Initialize sync manager (loads cache from disk)
-    let client = TodoistClient::new(token);
+    let client = TodoistClient::new(token)?;
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
@@ -449,7 +449,7 @@ pub async fn execute_delete(
     token: &str,
 ) -> Result<()> {
     // Initialize sync manager (loads cache from disk)
-    let client = TodoistClient::new(token);
+    let client = TodoistClient::new(token)?;
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
@@ -684,41 +684,41 @@ mod tests {
 
     // Helper function to create a test cache with labels
     fn make_test_cache_with_labels() -> Cache {
-        Cache {
-            sync_token: "test".to_string(),
-            full_sync_date_utc: None,
-            last_sync: None,
-            items: vec![],
-            projects: vec![],
-            labels: vec![make_test_label("label-123-abc", "urgent")],
-            sections: vec![],
-            notes: vec![],
-            project_notes: vec![],
-            reminders: vec![],
-            filters: vec![],
-            user: None,
-        }
+        Cache::with_data(
+            "test".to_string(),
+            None,
+            None,
+            vec![],
+            vec![],
+            vec![make_test_label("label-123-abc", "urgent")],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            None,
+        )
     }
 
     fn make_cache_with_ambiguous_label_ids() -> Cache {
-        Cache {
-            sync_token: "test".to_string(),
-            full_sync_date_utc: None,
-            last_sync: None,
-            items: vec![],
-            projects: vec![],
-            labels: vec![
+        Cache::with_data(
+            "test".to_string(),
+            None,
+            None,
+            vec![],
+            vec![],
+            vec![
                 make_test_label("label-aaa-111", "label1"),
                 make_test_label("label-aaa-222", "label2"),
                 make_test_label("label-bbb-333", "label3"),
             ],
-            sections: vec![],
-            notes: vec![],
-            project_notes: vec![],
-            reminders: vec![],
-            filters: vec![],
-            user: None,
-        }
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            None,
+        )
     }
 
     fn make_test_label(id: &str, name: &str) -> Label {

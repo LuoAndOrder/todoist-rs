@@ -42,7 +42,7 @@ pub struct TodayResult<'a> {
 /// Returns an error if syncing fails.
 pub async fn execute(ctx: &CommandContext, opts: &TodayOptions, token: &str) -> Result<()> {
     // Initialize sync manager
-    let client = todoist_api_rs::client::TodoistClient::new(token);
+    let client = todoist_api_rs::client::TodoistClient::new(token)?;
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 

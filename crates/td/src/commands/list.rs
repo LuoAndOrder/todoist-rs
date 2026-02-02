@@ -53,7 +53,7 @@ pub struct ListOptions {
 /// Returns an error if syncing fails or if the filter expression is invalid.
 pub async fn execute(ctx: &CommandContext, opts: &ListOptions, token: &str) -> Result<()> {
     // Initialize sync manager
-    let client = todoist_api_rs::client::TodoistClient::new(token);
+    let client = todoist_api_rs::client::TodoistClient::new(token)?;
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 

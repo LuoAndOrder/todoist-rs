@@ -37,7 +37,7 @@ async fn test_quick_add_simple() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let request = QuickAddRequest::new("Buy milk").unwrap();
     let response = client.quick_add(request).await.unwrap();
 
@@ -82,7 +82,7 @@ async fn test_quick_add_with_nlp_parsing() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let request =
         QuickAddRequest::new("Buy groceries tomorrow at 3pm #Shopping p2 @errands @shopping")
             .unwrap();
@@ -132,7 +132,7 @@ async fn test_quick_add_with_note() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let request = QuickAddRequest::new("Call mom")
         .unwrap()
         .with_note("Ask about dinner plans");
@@ -173,7 +173,7 @@ async fn test_quick_add_with_all_options() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let request = QuickAddRequest::new("Team meeting tomorrow at 2pm #Work p1 @work")
         .unwrap()
         .with_note("Prepare agenda")
@@ -230,7 +230,7 @@ async fn test_quick_add_retry_on_rate_limit() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let request = QuickAddRequest::new("Test task").unwrap();
     let response = client.quick_add(request).await.unwrap();
 
@@ -250,7 +250,7 @@ async fn test_quick_add_auth_failure() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("invalid-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("invalid-token", mock_server.uri()).unwrap();
     let request = QuickAddRequest::new("Test task").unwrap();
     let result = client.quick_add(request).await;
 
@@ -306,7 +306,7 @@ async fn test_quick_add_response_to_item() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let request = QuickAddRequest::new("Task for conversion").unwrap();
     let response = client.quick_add(request).await.unwrap();
 

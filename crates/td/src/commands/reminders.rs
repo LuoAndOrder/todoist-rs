@@ -39,7 +39,7 @@ pub async fn execute(ctx: &CommandContext, opts: &RemindersListOptions, token: &
     }
 
     // Initialize sync manager
-    let client = TodoistClient::new(token);
+    let client = TodoistClient::new(token)?;
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
@@ -185,7 +185,7 @@ pub async fn execute_add(
     }
 
     // Initialize sync manager (loads cache from disk)
-    let client = TodoistClient::new(token);
+    let client = TodoistClient::new(token)?;
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
@@ -363,7 +363,7 @@ pub async fn execute_delete(
     token: &str,
 ) -> Result<()> {
     // Initialize sync manager (loads cache from disk)
-    let client = TodoistClient::new(token);
+    let client = TodoistClient::new(token)?;
     let store = CacheStore::new()?;
     let mut manager = SyncManager::new(client, store)?;
 
@@ -612,17 +612,17 @@ mod tests {
 
     // Helper function to create a test cache
     fn make_test_cache() -> Cache {
-        Cache {
-            sync_token: "test".to_string(),
-            full_sync_date_utc: None,
-            last_sync: None,
-            items: vec![make_test_item("task-1", "Test Task", "project-1")],
-            projects: vec![make_test_project("project-1", "Test Project")],
-            labels: vec![],
-            sections: vec![],
-            notes: vec![],
-            project_notes: vec![],
-            reminders: vec![
+        Cache::with_data(
+            "test".to_string(),
+            None,
+            None,
+            vec![make_test_item("task-1", "Test Task", "project-1")],
+            vec![make_test_project("project-1", "Test Project")],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![
                 Reminder {
                     id: "reminder-1".to_string(),
                     item_id: "task-1".to_string(),
@@ -659,9 +659,9 @@ mod tests {
                     radius: None,
                 },
             ],
-            filters: vec![],
-            user: None,
-        }
+            vec![],
+            None,
+        )
     }
 
     fn make_test_item(id: &str, content: &str, project_id: &str) -> Item {

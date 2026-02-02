@@ -73,7 +73,7 @@ async fn test_sync_full_sync() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let request = SyncRequest::full_sync();
     let response = client.sync(request).await.unwrap();
 
@@ -118,7 +118,7 @@ async fn test_sync_incremental() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let request = SyncRequest::incremental("previous-sync-token");
     let response = client.sync(request).await.unwrap();
 
@@ -156,7 +156,7 @@ async fn test_sync_command_execution() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
 
     let commands = vec![
         SyncCommand::with_uuid_and_temp_id(
@@ -216,7 +216,7 @@ async fn test_sync_command_partial_failure() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
 
     let commands = vec![
         SyncCommand::with_uuid_and_temp_id(
@@ -291,7 +291,7 @@ async fn test_sync_specific_resource_types() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let request = SyncRequest::full_sync()
         .with_resource_types(vec!["items".to_string(), "projects".to_string()]);
     let response = client.sync(request).await.unwrap();
@@ -337,7 +337,7 @@ async fn test_sync_retry_on_rate_limit() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let response = client.sync(SyncRequest::full_sync()).await.unwrap();
 
     assert_eq!(response.sync_token, "after-retry-token");
@@ -356,7 +356,7 @@ async fn test_sync_auth_failure() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("invalid-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("invalid-token", mock_server.uri()).unwrap();
     let result = client.sync(SyncRequest::full_sync()).await;
 
     assert!(result.is_err());
@@ -420,7 +420,7 @@ async fn test_sync_combined_read_write() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
 
     let command = SyncCommand::with_uuid_and_temp_id(
         "item_add",
@@ -471,7 +471,7 @@ async fn test_sync_with_user_data() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let request = SyncRequest::full_sync().with_resource_types(vec!["user".to_string()]);
     let response = client.sync(request).await.unwrap();
 
@@ -537,7 +537,7 @@ async fn test_sync_with_sections_and_labels() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
     let request = SyncRequest::full_sync()
         .with_resource_types(vec!["sections".to_string(), "labels".to_string()]);
     let response = client.sync(request).await.unwrap();
@@ -573,7 +573,7 @@ async fn test_sync_item_close_command() {
         .mount(&mock_server)
         .await;
 
-    let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+    let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
 
     let command = SyncCommand {
         command_type: "item_close".to_string(),

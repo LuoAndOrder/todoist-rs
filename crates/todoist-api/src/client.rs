@@ -64,7 +64,8 @@ impl Default for RetryConfig {
 ///     .initial_backoff(Duration::from_millis(500))
 ///     .max_backoff(Duration::from_secs(60))
 ///     .request_timeout(Duration::from_secs(45))
-///     .build();
+///     .build()
+///     .expect("Failed to build client");
 /// ```
 #[derive(Clone, Debug)]
 pub struct TodoistClientBuilder {
@@ -134,20 +135,27 @@ impl TodoistClientBuilder {
     }
 
     /// Builds the [`TodoistClient`] with the configured settings.
-    pub fn build(self) -> TodoistClient {
-        TodoistClient {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the underlying HTTP client fails to build,
+    /// which can happen due to TLS configuration issues or invalid settings.
+    pub fn build(self) -> Result<TodoistClient> {
+        let http_client = reqwest::Client::builder()
+            .timeout(self.request_timeout)
+            .build()
+            .map_err(Error::Http)?;
+
+        Ok(TodoistClient {
             token: self.token,
-            http_client: reqwest::Client::builder()
-                .timeout(self.request_timeout)
-                .build()
-                .expect("Failed to build HTTP client"),
+            http_client,
             base_url: self.base_url,
             retry_config: RetryConfig {
                 max_retries: self.max_retries,
                 initial_backoff: self.initial_backoff,
                 max_backoff: self.max_backoff,
             },
-        }
+        })
     }
 }
 
@@ -166,7 +174,7 @@ impl TodoistClientBuilder {
 /// use std::sync::Arc;
 /// use todoist_api_rs::client::TodoistClient;
 ///
-/// let client = Arc::new(TodoistClient::new("token"));
+/// let client = Arc::new(TodoistClient::new("token").unwrap());
 ///
 /// // Clone the Arc to share across tasks
 /// let client_clone = Arc::clone(&client);
@@ -186,7 +194,7 @@ impl TodoistClient {
     /// ```
     /// # use todoist_api_rs::client::TodoistClientBuilder;
     /// # let token = "your-api-token";
-    /// TodoistClientBuilder::new(token).build();
+    /// TodoistClientBuilder::new(token).build().unwrap();
     /// ```
     ///
     /// Default configuration:
@@ -194,14 +202,23 @@ impl TodoistClient {
     /// - Max retries: 3
     /// - Initial backoff: 1 second
     /// - Max backoff: 30 seconds
-    pub fn new(token: impl Into<String>) -> Self {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the underlying HTTP client fails to build,
+    /// which can happen due to TLS configuration issues or invalid settings.
+    pub fn new(token: impl Into<String>) -> Result<Self> {
         TodoistClientBuilder::new(token).build()
     }
 
     /// Creates a new TodoistClient with a custom base URL (for testing).
     ///
     /// The client is configured with default retry/timeout settings.
-    pub fn with_base_url(token: impl Into<String>, base_url: impl Into<String>) -> Self {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the underlying HTTP client fails to build.
+    pub fn with_base_url(token: impl Into<String>, base_url: impl Into<String>) -> Result<Self> {
         TodoistClientBuilder::new(token).base_url(base_url).build()
     }
 
@@ -425,7 +442,7 @@ impl TodoistClient {
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client = TodoistClient::new("your-api-token");
+    ///     let client = TodoistClient::new("your-api-token").unwrap();
     ///     let request = SyncRequest::full_sync();
     ///     let response = client.sync(request).await.unwrap();
     ///     println!("Got {} projects", response.projects.len());
@@ -479,7 +496,7 @@ impl TodoistClient {
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let client = TodoistClient::new("your-api-token");
+    ///     let client = TodoistClient::new("your-api-token").unwrap();
     ///     let request = QuickAddRequest::new("Buy milk tomorrow #Shopping p2 @errands").unwrap();
     ///     let response = client.quick_add(request).await.unwrap();
     ///     println!("Created task: {} in project {}", response.content, response.project_id);
@@ -652,7 +669,7 @@ mod tests {
     #[test]
     fn test_todoist_client_new_accepts_token() {
         let token = "test-api-token-12345";
-        let client = TodoistClient::new(token);
+        let client = TodoistClient::new(token).unwrap();
         let _ = client;
     }
 
@@ -660,28 +677,28 @@ mod tests {
     #[test]
     fn test_todoist_client_stores_token() {
         let token = "my-secret-token";
-        let client = TodoistClient::new(token);
+        let client = TodoistClient::new(token).unwrap();
         assert_eq!(client.token(), token);
     }
 
     // Test: TodoistClient should hold a reqwest client internally
     #[test]
     fn test_todoist_client_has_http_client() {
-        let client = TodoistClient::new("test-token");
+        let client = TodoistClient::new("test-token").unwrap();
         let _http_client = client.http_client();
     }
 
     // Test: TodoistClient should implement Clone
     #[test]
     fn test_todoist_client_is_clone() {
-        let client = TodoistClient::new("test-token");
+        let client = TodoistClient::new("test-token").unwrap();
         let _cloned = client.clone();
     }
 
     // Test: TodoistClient should implement Debug
     #[test]
     fn test_todoist_client_is_debug() {
-        let client = TodoistClient::new("test-token");
+        let client = TodoistClient::new("test-token").unwrap();
         let debug_str = format!("{:?}", client);
         assert!(
             !debug_str.contains("test-token"),
@@ -692,21 +709,21 @@ mod tests {
     // Test: TodoistClient should use the default base URL
     #[test]
     fn test_todoist_client_default_base_url() {
-        let client = TodoistClient::new("test-token");
+        let client = TodoistClient::new("test-token").unwrap();
         assert_eq!(client.base_url(), BASE_URL);
     }
 
     // Test: TodoistClient can be created with custom base URL
     #[test]
     fn test_todoist_client_with_custom_base_url() {
-        let client = TodoistClient::with_base_url("test-token", "https://test.example.com");
+        let client = TodoistClient::with_base_url("test-token", "https://test.example.com").unwrap();
         assert_eq!(client.base_url(), "https://test.example.com");
     }
 
     // Test: calculate_backoff uses Retry-After when provided
     #[test]
     fn test_calculate_backoff_with_retry_after() {
-        let client = TodoistClient::new("test-token");
+        let client = TodoistClient::new("test-token").unwrap();
 
         // Should use the retry_after value
         let backoff = client.calculate_backoff(0, Some(5));
@@ -720,7 +737,7 @@ mod tests {
     // Test: calculate_backoff uses exponential backoff when no Retry-After
     #[test]
     fn test_calculate_backoff_exponential() {
-        let client = TodoistClient::new("test-token");
+        let client = TodoistClient::new("test-token").unwrap();
 
         // Attempt 0: 1 second
         let backoff = client.calculate_backoff(0, None);
@@ -742,7 +759,7 @@ mod tests {
     // Test: calculate_backoff caps at max_backoff
     #[test]
     fn test_calculate_backoff_caps_at_max() {
-        let client = TodoistClient::new("test-token");
+        let client = TodoistClient::new("test-token").unwrap();
 
         // Very high attempt number should still cap at max_backoff (default 30 seconds)
         let backoff = client.calculate_backoff(10, None);
@@ -759,7 +776,7 @@ mod tests {
     // Test: TodoistClientBuilder creates client with default values
     #[test]
     fn test_builder_default_values() {
-        let client = TodoistClientBuilder::new("test-token").build();
+        let client = TodoistClientBuilder::new("test-token").build().unwrap();
 
         assert_eq!(client.token(), "test-token");
         assert_eq!(client.base_url(), BASE_URL);
@@ -779,7 +796,8 @@ mod tests {
     fn test_builder_custom_max_retries() {
         let client = TodoistClientBuilder::new("test-token")
             .max_retries(5)
-            .build();
+            .build()
+            .unwrap();
 
         assert_eq!(client.max_retries(), 5);
     }
@@ -789,7 +807,8 @@ mod tests {
     fn test_builder_custom_initial_backoff() {
         let client = TodoistClientBuilder::new("test-token")
             .initial_backoff(Duration::from_millis(500))
-            .build();
+            .build()
+            .unwrap();
 
         assert_eq!(client.initial_backoff(), Duration::from_millis(500));
     }
@@ -799,7 +818,8 @@ mod tests {
     fn test_builder_custom_max_backoff() {
         let client = TodoistClientBuilder::new("test-token")
             .max_backoff(Duration::from_secs(60))
-            .build();
+            .build()
+            .unwrap();
 
         assert_eq!(client.max_backoff(), Duration::from_secs(60));
     }
@@ -813,7 +833,8 @@ mod tests {
             .initial_backoff(Duration::from_millis(500))
             .max_backoff(Duration::from_secs(60))
             .request_timeout(Duration::from_secs(45))
-            .build();
+            .build()
+            .unwrap();
 
         assert_eq!(client.base_url(), "https://custom.example.com");
         assert_eq!(client.max_retries(), 5);
@@ -824,7 +845,7 @@ mod tests {
     // Test: TodoistClient::builder() returns a builder
     #[test]
     fn test_client_builder_method() {
-        let client = TodoistClient::builder("test-token").max_retries(10).build();
+        let client = TodoistClient::builder("test-token").max_retries(10).build().unwrap();
 
         assert_eq!(client.max_retries(), 10);
     }
@@ -834,7 +855,8 @@ mod tests {
     fn test_custom_initial_backoff_affects_calculation() {
         let client = TodoistClientBuilder::new("test-token")
             .initial_backoff(Duration::from_secs(2))
-            .build();
+            .build()
+            .unwrap();
 
         // Attempt 0: 2 seconds (custom initial)
         let backoff = client.calculate_backoff(0, None);
@@ -850,7 +872,8 @@ mod tests {
     fn test_custom_max_backoff_caps_calculation() {
         let client = TodoistClientBuilder::new("test-token")
             .max_backoff(Duration::from_secs(10))
-            .build();
+            .build()
+            .unwrap();
 
         // High attempt should cap at custom max_backoff (10s)
         let backoff = client.calculate_backoff(10, None);
@@ -893,7 +916,7 @@ mod wiremock_tests {
             .mount(&mock_server)
             .await;
 
-        let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+        let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
         let task: TestTask = client.get("/tasks/123").await.unwrap();
 
         assert_eq!(task.id, "123");
@@ -937,7 +960,7 @@ mod wiremock_tests {
             .mount(&mock_server)
             .await;
 
-        let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+        let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
         let task: TestTask = client.get("/tasks/123").await.unwrap();
 
         assert_eq!(task.id, "123");
@@ -972,7 +995,7 @@ mod wiremock_tests {
             .mount(&mock_server)
             .await;
 
-        let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+        let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
         let result: Result<TestTask> = client.get("/tasks/123").await;
 
         assert!(result.is_err());
@@ -999,7 +1022,7 @@ mod wiremock_tests {
             .mount(&mock_server)
             .await;
 
-        let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+        let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
         let task: TestTask = client
             .post("/tasks", &serde_json::json!({"content": "New task"}))
             .await
@@ -1044,7 +1067,7 @@ mod wiremock_tests {
             .mount(&mock_server)
             .await;
 
-        let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+        let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
         let task: TestTask = client
             .post("/tasks", &serde_json::json!({"content": "New task"}))
             .await
@@ -1067,7 +1090,7 @@ mod wiremock_tests {
             .mount(&mock_server)
             .await;
 
-        let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+        let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
         let result = client.delete("/tasks/123").await;
 
         assert!(result.is_ok());
@@ -1105,7 +1128,7 @@ mod wiremock_tests {
             .mount(&mock_server)
             .await;
 
-        let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+        let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
         let result = client.delete("/tasks/123").await;
 
         assert!(result.is_ok());
@@ -1128,7 +1151,7 @@ mod wiremock_tests {
             .mount(&mock_server)
             .await;
 
-        let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+        let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
         let task: TestTask = client.post_empty("/tasks/123/close").await.unwrap();
 
         assert_eq!(task.id, "123");
@@ -1169,7 +1192,7 @@ mod wiremock_tests {
             .mount(&mock_server)
             .await;
 
-        let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+        let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
         let task: TestTask = client.post_empty("/tasks/123/close").await.unwrap();
 
         assert_eq!(task.id, "123");
@@ -1188,7 +1211,7 @@ mod wiremock_tests {
             .mount(&mock_server)
             .await;
 
-        let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+        let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
         let result: Result<TestTask> = client.get("/tasks/123").await;
 
         assert!(result.is_err());
@@ -1210,7 +1233,7 @@ mod wiremock_tests {
             .mount(&mock_server)
             .await;
 
-        let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+        let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
         let result: Result<TestTask> = client.get("/tasks/123").await;
 
         assert!(result.is_err());
@@ -1256,7 +1279,7 @@ mod wiremock_tests {
             .mount(&mock_server)
             .await;
 
-        let client = TodoistClient::with_base_url("test-token", mock_server.uri());
+        let client = TodoistClient::with_base_url("test-token", mock_server.uri()).unwrap();
         let start = std::time::Instant::now();
         let task: TestTask = client.get("/tasks/123").await.unwrap();
         let elapsed = start.elapsed();
@@ -1294,7 +1317,8 @@ mod wiremock_tests {
         let client = TodoistClientBuilder::new("test-token")
             .base_url(mock_server.uri())
             .request_timeout(Duration::from_secs(1))
-            .build();
+            .build()
+            .unwrap();
 
         let result: Result<TestTask> = client.get("/tasks/slow").await;
 

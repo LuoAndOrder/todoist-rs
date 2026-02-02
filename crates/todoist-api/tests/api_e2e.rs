@@ -47,7 +47,7 @@ async fn test_get_projects() {
         return;
     };
 
-    let client = TodoistClient::new(token);
+    let client = TodoistClient::new(token).unwrap();
 
     // GET /projects should return a paginated response with results array
     let result: Result<ListResponse, _> = client.get("/projects").await;
@@ -69,7 +69,7 @@ async fn test_get_tasks() {
         return;
     };
 
-    let client = TodoistClient::new(token);
+    let client = TodoistClient::new(token).unwrap();
 
     // GET /tasks should return a paginated response with results array
     let result: Result<ListResponse, _> = client.get("/tasks").await;
@@ -86,7 +86,7 @@ async fn test_get_tasks() {
 
 #[tokio::test]
 async fn test_auth_failure() {
-    let client = TodoistClient::new("invalid-token");
+    let client = TodoistClient::new("invalid-token").unwrap();
 
     let result: Result<Vec<serde_json::Value>, _> = client.get("/projects").await;
 
@@ -103,7 +103,7 @@ async fn test_create_and_delete_task() {
         return;
     };
 
-    let client = TodoistClient::new(token);
+    let client = TodoistClient::new(token).unwrap();
 
     // Create a test task
     let body = serde_json::json!({
@@ -140,7 +140,7 @@ async fn test_sync_full_sync() {
         return;
     };
 
-    let client = TodoistClient::new(token);
+    let client = TodoistClient::new(token).unwrap();
     let request = SyncRequest::full_sync();
     let response = client.sync(request).await;
 
@@ -176,7 +176,7 @@ async fn test_sync_incremental() {
         return;
     };
 
-    let client = TodoistClient::new(token);
+    let client = TodoistClient::new(token).unwrap();
 
     // First, do a full sync to get a sync token
     let full_sync = client.sync(SyncRequest::full_sync()).await.unwrap();
@@ -206,7 +206,7 @@ async fn test_sync_create_and_complete_item() {
         return;
     };
 
-    let client = TodoistClient::new(token);
+    let client = TodoistClient::new(token).unwrap();
 
     // First sync to get the inbox project ID
     let full_sync = client.sync(SyncRequest::full_sync()).await.unwrap();
@@ -277,7 +277,7 @@ async fn test_sync_specific_resource_types() {
         return;
     };
 
-    let client = TodoistClient::new(token);
+    let client = TodoistClient::new(token).unwrap();
 
     // Request only projects
     let request = SyncRequest::full_sync().with_resource_types(vec!["projects".to_string()]);
@@ -299,7 +299,7 @@ async fn test_quick_add_simple() {
         return;
     };
 
-    let client = TodoistClient::new(token);
+    let client = TodoistClient::new(token).unwrap();
 
     // Create a task using quick add
     let request = QuickAddRequest::new("E2E test quick add task").unwrap();
@@ -341,7 +341,7 @@ async fn test_quick_add_with_nlp() {
         return;
     };
 
-    let client = TodoistClient::new(token);
+    let client = TodoistClient::new(token).unwrap();
 
     // Create a task with NLP parsing (due date and priority)
     let request = QuickAddRequest::new("E2E quick add tomorrow p2").unwrap();
@@ -397,7 +397,7 @@ async fn test_quick_add_with_note() {
         return;
     };
 
-    let client = TodoistClient::new(token);
+    let client = TodoistClient::new(token).unwrap();
 
     // Create a task with a note
     let request = QuickAddRequest::new("E2E quick add with note")
