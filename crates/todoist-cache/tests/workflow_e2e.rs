@@ -11,14 +11,33 @@
 #![cfg(feature = "e2e")]
 
 use std::fs;
+use std::sync::Arc;
 
 use chrono::{Duration, Utc};
 use todoist_api_rs::client::TodoistClient;
 use todoist_api_rs::sync::{SyncCommand, SyncCommandType, SyncRequest, SyncResponse};
+use tokio::sync::{Mutex, OnceCell};
 
 // ============================================================================
-// Test Context for Rate Limit Management
+// Shared Test Context for Rate Limit Management
 // ============================================================================
+
+/// Shared context across all tests - initialized once with a single full sync.
+/// This dramatically reduces API calls since we only do ONE full sync for all 9 tests.
+static SHARED_CONTEXT: OnceCell<Arc<Mutex<WorkflowTestContext>>> = OnceCell::const_new();
+
+/// Get or initialize the shared test context.
+/// First call does a full sync; subsequent calls reuse the existing context.
+async fn get_shared_context(
+) -> Result<Arc<Mutex<WorkflowTestContext>>, Box<dyn std::error::Error + Send + Sync>> {
+    let ctx = SHARED_CONTEXT
+        .get_or_try_init(|| async {
+            let ctx = WorkflowTestContext::new().await?;
+            Ok::<_, Box<dyn std::error::Error + Send + Sync>>(Arc::new(Mutex::new(ctx)))
+        })
+        .await?;
+    Ok(ctx.clone())
+}
 
 /// Reads the API token from .env.local or environment variable.
 fn get_test_token() -> Option<String> {
@@ -68,7 +87,7 @@ struct WorkflowTestContext {
 }
 
 impl WorkflowTestContext {
-    async fn new() -> Result<Self, Box<dyn std::error::Error>> {
+    async fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let token = get_test_token().ok_or("TODOIST_TEST_API_TOKEN not found")?;
         let client = TodoistClient::new(token)?;
 
@@ -439,10 +458,11 @@ fn tomorrow_in_timezone(tz_str: &str) -> String {
 /// 5. Clean up
 #[tokio::test]
 async fn test_workflow_daily_review() {
-    let Ok(mut ctx) = WorkflowTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping test: no API token");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     let inbox_id = ctx.inbox_id().to_string();
     let today = today_in_timezone(ctx.user_timezone());
@@ -521,10 +541,11 @@ async fn test_workflow_daily_review() {
 /// 5. Clean up
 #[tokio::test]
 async fn test_workflow_project_setup() {
-    let Ok(mut ctx) = WorkflowTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping test: no API token");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     // Step 1: Create project
     let project_id = ctx
@@ -604,10 +625,11 @@ async fn test_workflow_project_setup() {
 /// 6. Clean up
 #[tokio::test]
 async fn test_workflow_task_triage() {
-    let Ok(mut ctx) = WorkflowTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping test: no API token");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     let inbox_id = ctx.inbox_id().to_string();
 
@@ -721,10 +743,11 @@ async fn test_workflow_task_triage() {
 /// 3. Clean up
 #[tokio::test]
 async fn test_workflow_bulk_task_creation() {
-    let Ok(mut ctx) = WorkflowTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping test: no API token");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     let inbox_id = ctx.inbox_id().to_string();
     let batch_size = 50;
@@ -800,10 +823,11 @@ async fn test_workflow_bulk_task_creation() {
 /// 5. Clean up
 #[tokio::test]
 async fn test_workflow_search_and_update() {
-    let Ok(mut ctx) = WorkflowTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping test: no API token");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     let inbox_id = ctx.inbox_id().to_string();
 
@@ -894,10 +918,11 @@ async fn test_workflow_search_and_update() {
 /// 5. Clean up
 #[tokio::test]
 async fn test_workflow_project_migration() {
-    let Ok(mut ctx) = WorkflowTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping test: no API token");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     // Step 1: Create Project A with 10 tasks
     let project_a = ctx
@@ -979,10 +1004,11 @@ async fn test_workflow_project_migration() {
 /// 6. Clean up
 #[tokio::test]
 async fn test_workflow_recurring_task_cycle() {
-    let Ok(mut ctx) = WorkflowTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping test: no API token");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     let inbox_id = ctx.inbox_id().to_string();
 
@@ -1074,10 +1100,11 @@ async fn test_workflow_recurring_task_cycle() {
 /// 5. Clean up
 #[tokio::test]
 async fn test_workflow_label_cleanup() {
-    let Ok(mut ctx) = WorkflowTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping test: no API token");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     let inbox_id = ctx.inbox_id().to_string();
 
@@ -1165,10 +1192,11 @@ async fn test_workflow_label_cleanup() {
 /// 5. Clean up
 #[tokio::test]
 async fn test_workflow_end_of_day_cleanup() {
-    let Ok(mut ctx) = WorkflowTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping test: no API token");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     let inbox_id = ctx.inbox_id().to_string();
     let today = today_in_timezone(ctx.user_timezone());

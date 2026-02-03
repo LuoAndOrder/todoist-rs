@@ -9,12 +9,33 @@
 #![cfg(feature = "e2e")]
 
 use std::fs;
+use std::sync::Arc;
 
 use chrono::Utc;
 use todoist_api_rs::client::TodoistClient;
 use todoist_api_rs::sync::{SyncCommand, SyncCommandType, SyncRequest};
 use todoist_cache_rs::filter::{FilterContext, FilterEvaluator, FilterParser};
 use todoist_cache_rs::{CacheStore, SyncManager};
+use tokio::sync::{Mutex, OnceCell};
+
+// ============================================================================
+// Shared Test Context
+// ============================================================================
+
+/// Shared context across all tests - initialized once with a single full sync.
+static SHARED_CONTEXT: OnceCell<Arc<Mutex<FilterTestContext>>> = OnceCell::const_new();
+
+/// Get or initialize the shared test context.
+async fn get_shared_context(
+) -> Result<Arc<Mutex<FilterTestContext>>, Box<dyn std::error::Error + Send + Sync>> {
+    let ctx = SHARED_CONTEXT
+        .get_or_try_init(|| async {
+            let ctx = FilterTestContext::new().await?;
+            Ok::<_, Box<dyn std::error::Error + Send + Sync>>(Arc::new(Mutex::new(ctx)))
+        })
+        .await?;
+    Ok(ctx.clone())
+}
 
 fn get_test_token() -> Option<String> {
     // Try to read from .env.local at workspace root
@@ -54,7 +75,7 @@ struct FilterTestContext {
 }
 
 impl FilterTestContext {
-    async fn new() -> Result<Self, Box<dyn std::error::Error>> {
+    async fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let token = get_test_token().ok_or("No API token found")?;
         let temp_dir = tempfile::tempdir()?;
         let cache_path = temp_dir.path().join("cache.json");
@@ -63,16 +84,13 @@ impl FilterTestContext {
         let store = CacheStore::with_path(cache_path);
         let mut manager = SyncManager::new(client.clone(), store)?;
 
-        // Perform initial sync to get user timezone
-        let response = client.sync(SyncRequest::full_sync()).await?;
-        let user_timezone = response
+        // ONE full sync via manager - also populates user timezone in cache
+        let cache = manager.sync().await?;
+        let user_timezone = cache
             .user
             .as_ref()
             .and_then(|u| u.timezone().map(|s| s.to_string()))
             .unwrap_or_else(|| "UTC".to_string());
-
-        // Sync the manager too
-        manager.sync().await?;
 
         Ok(Self {
             client,
@@ -93,10 +111,11 @@ impl FilterTestContext {
 
 #[tokio::test]
 async fn test_e2e_filter_today_returns_correct_items() {
-    let Ok(mut ctx) = FilterTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping e2e test: no API token found");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     // Get inbox project from cache
     let cache = ctx.manager.sync().await.expect("sync failed");
@@ -213,20 +232,14 @@ async fn test_e2e_filter_today_returns_correct_items() {
 
 #[tokio::test]
 async fn test_e2e_filter_priority_and_label_intersection() {
-    let Some(token) = get_test_token() else {
+    let Ok(shared_ctx) = get_shared_context().await else {
         eprintln!("Skipping e2e test: no API token found");
         return;
     };
+    let mut ctx = shared_ctx.lock().await;
 
-    let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
-    let cache_path = temp_dir.path().join("cache.json");
-
-    let client = TodoistClient::new(&token).unwrap();
-    let store = CacheStore::with_path(cache_path);
-    let mut manager = SyncManager::new(client.clone(), store).expect("failed to create manager");
-
-    // Perform initial sync to get inbox project
-    let cache = manager.sync().await.expect("initial sync failed");
+    // Sync to get latest cache state
+    let cache = ctx.manager.sync().await.expect("sync failed");
     let inbox = cache
         .projects
         .iter()
@@ -248,7 +261,8 @@ async fn test_e2e_filter_priority_and_label_intersection() {
                 "name": "urgent"
             }),
         );
-        let label_response = client
+        let label_response = ctx
+            .client
             .sync(SyncRequest::with_commands(vec![add_label]))
             .await
             .expect("label_add failed");
@@ -312,7 +326,8 @@ async fn test_e2e_filter_priority_and_label_intersection() {
         }),
     );
 
-    let add_response = client
+    let add_response = ctx
+        .client
         .sync(SyncRequest::with_commands(vec![
             add_p1_urgent,
             add_p1_only,
@@ -347,7 +362,7 @@ async fn test_e2e_filter_priority_and_label_intersection() {
     );
 
     // Sync to get the new items in cache
-    let cache = manager.sync().await.expect("sync failed");
+    let cache = ctx.manager.sync().await.expect("sync failed");
 
     // Parse and evaluate "p1 & @urgent" filter
     let filter =
@@ -410,7 +425,8 @@ async fn test_e2e_filter_priority_and_label_intersection() {
         }
     }
 
-    let delete_response = client
+    let delete_response = ctx
+        .client
         .sync(SyncRequest::with_commands(delete_commands))
         .await
         .expect("delete failed");
@@ -428,20 +444,14 @@ async fn test_e2e_filter_priority_and_label_intersection() {
 
 #[tokio::test]
 async fn test_e2e_filter_project_matches() {
-    let Some(token) = get_test_token() else {
+    let Ok(shared_ctx) = get_shared_context().await else {
         eprintln!("Skipping e2e test: no API token found");
         return;
     };
+    let mut ctx = shared_ctx.lock().await;
 
-    let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
-    let cache_path = temp_dir.path().join("cache.json");
-
-    let client = TodoistClient::new(&token).unwrap();
-    let store = CacheStore::with_path(cache_path);
-    let mut manager = SyncManager::new(client.clone(), store).expect("failed to create manager");
-
-    // Perform initial sync
-    let cache = manager.sync().await.expect("initial sync failed");
+    // Sync to get latest cache state
+    let cache = ctx.manager.sync().await.expect("sync failed");
     let inbox = cache
         .projects
         .iter()
@@ -460,7 +470,8 @@ async fn test_e2e_filter_project_matches() {
         }),
     );
 
-    let project_response = client
+    let project_response = ctx
+        .client
         .sync(SyncRequest::with_commands(vec![add_project]))
         .await
         .expect("project_add failed");
@@ -502,7 +513,8 @@ async fn test_e2e_filter_project_matches() {
         }),
     );
 
-    let add_response = client
+    let add_response = ctx
+        .client
         .sync(SyncRequest::with_commands(vec![
             add_in_project,
             add_in_inbox,
@@ -527,7 +539,7 @@ async fn test_e2e_filter_project_matches() {
     );
 
     // Sync to get the new items and project in cache
-    let cache = manager.sync().await.expect("sync failed");
+    let cache = ctx.manager.sync().await.expect("sync failed");
 
     // Parse and evaluate "#ProjectName" filter
     let filter_query = format!("#{}", project_name);
@@ -571,7 +583,8 @@ async fn test_e2e_filter_project_matches() {
         ),
     ];
 
-    let delete_response = client
+    let delete_response = ctx
+        .client
         .sync(SyncRequest::with_commands(delete_commands))
         .await
         .expect("delete failed");

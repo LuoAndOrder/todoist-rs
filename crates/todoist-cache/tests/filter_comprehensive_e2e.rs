@@ -11,15 +11,34 @@
 #![cfg(feature = "e2e")]
 
 use std::fs;
+use std::sync::Arc;
 
 use chrono::{Duration, Utc};
 use todoist_api_rs::client::TodoistClient;
 use todoist_api_rs::sync::{SyncCommand, SyncCommandType, SyncRequest, SyncResponse};
 use todoist_cache_rs::filter::{FilterContext, FilterEvaluator, FilterParser};
+use tokio::sync::{Mutex, OnceCell};
 
 // ============================================================================
-// Test Context for Rate Limit Management
+// Shared Test Context for Rate Limit Management
 // ============================================================================
+
+/// Shared context across all tests - initialized once with a single full sync.
+/// This dramatically reduces API calls since we only do ONE full sync for all 24 tests.
+static SHARED_CONTEXT: OnceCell<Arc<Mutex<FilterTestContext>>> = OnceCell::const_new();
+
+/// Get or initialize the shared test context.
+/// First call does a full sync; subsequent calls reuse the existing context.
+async fn get_shared_context(
+) -> Result<Arc<Mutex<FilterTestContext>>, Box<dyn std::error::Error + Send + Sync>> {
+    let ctx = SHARED_CONTEXT
+        .get_or_try_init(|| async {
+            let ctx = FilterTestContext::new().await?;
+            Ok::<_, Box<dyn std::error::Error + Send + Sync>>(Arc::new(Mutex::new(ctx)))
+        })
+        .await?;
+    Ok(ctx.clone())
+}
 
 /// Reads the API token from .env.local or environment variable.
 fn get_test_token() -> Option<String> {
@@ -69,7 +88,7 @@ struct FilterTestContext {
 }
 
 impl FilterTestContext {
-    async fn new() -> Result<Self, Box<dyn std::error::Error>> {
+    async fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let token = get_test_token().ok_or("TODOIST_TEST_API_TOKEN not found")?;
         let client = TodoistClient::new(token)?;
 
@@ -358,10 +377,11 @@ fn days_from_now_in_timezone(days: i64, tz_str: &str) -> String {
 
 #[tokio::test]
 async fn test_filter_today() {
-    let Ok(mut ctx) = FilterTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping test: no API token");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     let inbox_id = ctx.inbox_id().to_string();
     let today = today_in_timezone(ctx.user_timezone());
@@ -420,10 +440,11 @@ async fn test_filter_today() {
 
 #[tokio::test]
 async fn test_filter_tomorrow() {
-    let Ok(mut ctx) = FilterTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping test: no API token");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     let inbox_id = ctx.inbox_id().to_string();
     let today = today_in_timezone(ctx.user_timezone());
@@ -488,10 +509,11 @@ async fn test_filter_tomorrow() {
 
 #[tokio::test]
 async fn test_filter_overdue() {
-    let Ok(mut ctx) = FilterTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping test: no API token");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     let inbox_id = ctx.inbox_id().to_string();
     let yesterday = yesterday_in_timezone(ctx.user_timezone());
@@ -556,10 +578,11 @@ async fn test_filter_overdue() {
 
 #[tokio::test]
 async fn test_filter_no_date() {
-    let Ok(mut ctx) = FilterTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping test: no API token");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     let inbox_id = ctx.inbox_id().to_string();
     let today = today_in_timezone(ctx.user_timezone());
@@ -600,10 +623,11 @@ async fn test_filter_no_date() {
 
 #[tokio::test]
 async fn test_filter_7_days() {
-    let Ok(mut ctx) = FilterTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping test: no API token");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     let inbox_id = ctx.inbox_id().to_string();
     let today = today_in_timezone(ctx.user_timezone());
@@ -669,10 +693,11 @@ async fn test_filter_7_days() {
 
 #[tokio::test]
 async fn test_filter_p1() {
-    let Ok(mut ctx) = FilterTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping test: no API token");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     let inbox_id = ctx.inbox_id().to_string();
 
@@ -743,10 +768,11 @@ async fn test_filter_p1() {
 
 #[tokio::test]
 async fn test_filter_p1_or_p2() {
-    let Ok(mut ctx) = FilterTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping test: no API token");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     let inbox_id = ctx.inbox_id().to_string();
 
@@ -816,10 +842,11 @@ async fn test_filter_p1_or_p2() {
 
 #[tokio::test]
 async fn test_filter_p4_default_priority() {
-    let Ok(mut ctx) = FilterTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping test: no API token");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     let inbox_id = ctx.inbox_id().to_string();
 
@@ -868,10 +895,11 @@ async fn test_filter_p4_default_priority() {
 
 #[tokio::test]
 async fn test_filter_single_label() {
-    let Ok(mut ctx) = FilterTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping test: no API token");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     let inbox_id = ctx.inbox_id().to_string();
 
@@ -939,10 +967,11 @@ async fn test_filter_single_label() {
 
 #[tokio::test]
 async fn test_filter_no_labels() {
-    let Ok(mut ctx) = FilterTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping test: no API token");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     let inbox_id = ctx.inbox_id().to_string();
 
@@ -994,10 +1023,11 @@ async fn test_filter_no_labels() {
 
 #[tokio::test]
 async fn test_filter_multiple_labels_and() {
-    let Ok(mut ctx) = FilterTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping test: no API token");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     let inbox_id = ctx.inbox_id().to_string();
 
@@ -1069,10 +1099,11 @@ async fn test_filter_multiple_labels_and() {
 
 #[tokio::test]
 async fn test_filter_multiple_labels_or() {
-    let Ok(mut ctx) = FilterTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping test: no API token");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     let inbox_id = ctx.inbox_id().to_string();
 
@@ -1152,10 +1183,11 @@ async fn test_filter_multiple_labels_or() {
 
 #[tokio::test]
 async fn test_filter_project() {
-    let Ok(mut ctx) = FilterTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping test: no API token");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     let inbox_id = ctx.inbox_id().to_string();
 
@@ -1216,10 +1248,11 @@ async fn test_filter_project() {
 
 #[tokio::test]
 async fn test_filter_project_with_subprojects() {
-    let Ok(mut ctx) = FilterTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping test: no API token");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     // Create parent project and subproject
     let parent_project = ctx
@@ -1283,10 +1316,11 @@ async fn test_filter_project_with_subprojects() {
 
 #[tokio::test]
 async fn test_filter_inbox() {
-    let Ok(mut ctx) = FilterTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping test: no API token");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     let inbox_id = ctx.inbox_id().to_string();
 
@@ -1332,10 +1366,11 @@ async fn test_filter_inbox() {
 
 #[tokio::test]
 async fn test_filter_section() {
-    let Ok(mut ctx) = FilterTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping test: no API token");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     // Create project with sections
     let project = ctx
@@ -1407,10 +1442,11 @@ async fn test_filter_section() {
 
 #[tokio::test]
 async fn test_filter_section_in_project() {
-    let Ok(mut ctx) = FilterTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping test: no API token");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     // Create two projects with same-named sections
     let project1 = ctx
@@ -1482,10 +1518,11 @@ async fn test_filter_section_in_project() {
 
 #[tokio::test]
 async fn test_filter_and_precedence() {
-    let Ok(mut ctx) = FilterTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping test: no API token");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     let inbox_id = ctx.inbox_id().to_string();
     let today = today_in_timezone(ctx.user_timezone());
@@ -1581,10 +1618,11 @@ async fn test_filter_and_precedence() {
 
 #[tokio::test]
 async fn test_filter_parentheses() {
-    let Ok(mut ctx) = FilterTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping test: no API token");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     let inbox_id = ctx.inbox_id().to_string();
     let today = today_in_timezone(ctx.user_timezone());
@@ -1673,10 +1711,11 @@ async fn test_filter_parentheses() {
 
 #[tokio::test]
 async fn test_filter_negation_label() {
-    let Ok(mut ctx) = FilterTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping test: no API token");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     let inbox_id = ctx.inbox_id().to_string();
 
@@ -1728,10 +1767,11 @@ async fn test_filter_negation_label() {
 
 #[tokio::test]
 async fn test_filter_negation_project() {
-    let Ok(mut ctx) = FilterTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping test: no API token");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     let inbox_id = ctx.inbox_id().to_string();
 
@@ -1774,10 +1814,11 @@ async fn test_filter_negation_project() {
 
 #[tokio::test]
 async fn test_filter_complex_real_world() {
-    let Ok(mut ctx) = FilterTestContext::new().await else {
+    let Ok(ctx) = get_shared_context().await else {
         eprintln!("Skipping test: no API token");
         return;
     };
+    let mut ctx = ctx.lock().await;
 
     let today = today_in_timezone(ctx.user_timezone());
     let yesterday = yesterday_in_timezone(ctx.user_timezone());

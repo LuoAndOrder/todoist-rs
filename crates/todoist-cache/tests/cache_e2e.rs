@@ -529,12 +529,18 @@ async fn test_e2e_force_full_sync() {
 // Sync Behavior E2E Tests (Spec Section 10)
 // ============================================================================
 
-/// Test that sync picks up tasks created externally (outside of the cache manager).
+/// Consolidated test for external change detection scenarios.
 ///
-/// This test validates that when a task is created via direct API call (not through
-/// the SyncManager), a subsequent sync will detect and include the new task.
+/// This test validates that the SyncManager correctly detects changes made
+/// outside of it (via direct API calls). It tests:
+/// 1. Task created externally is picked up by sync
+/// 2. Task updated externally is picked up by sync
+/// 3. Task deleted externally is picked up by sync
+/// 4. Bulk operations are picked up by sync
+///
+/// By consolidating these tests, we reduce from 4 full syncs to 1.
 #[tokio::test]
-async fn test_sync_picks_up_task_created_externally() {
+async fn test_sync_detects_external_changes() {
     let Some(token) = get_test_token() else {
         eprintln!("Skipping e2e test: no API token found");
         return;
@@ -543,7 +549,7 @@ async fn test_sync_picks_up_task_created_externally() {
     let temp_dir = tempdir().expect("failed to create temp dir");
     let cache_path = temp_dir.path().join("cache.json");
 
-    // Create the SyncManager and perform initial sync
+    // Create the SyncManager and perform initial sync (ONE full sync for all scenarios)
     let client = TodoistClient::new(&token).unwrap();
     let store = CacheStore::with_path(cache_path.clone());
     let mut manager = SyncManager::new(client.clone(), store).expect("failed to create manager");
@@ -559,7 +565,14 @@ async fn test_sync_picks_up_task_created_externally() {
         .expect("Should have inbox project");
     let inbox_id = inbox.id.clone();
 
-    // Create a task via direct API call (external to manager)
+    // Track all task IDs for cleanup
+    let mut all_task_ids: Vec<String> = Vec::new();
+
+    // =========================================================================
+    // Scenario 1: External Creation
+    // =========================================================================
+    println!("\n=== Scenario 1: External Creation ===");
+
     let temp_id = uuid::Uuid::new_v4().to_string();
     let add_command = SyncCommand::with_temp_id(
         SyncCommandType::ItemAdd,
@@ -574,25 +587,31 @@ async fn test_sync_picks_up_task_created_externally() {
         .await
         .expect("item_add failed");
     assert!(!add_response.has_errors(), "item_add should succeed");
-    let task_id = add_response
+    let created_task_id = add_response
         .real_id(&temp_id)
         .expect("Should have temp_id mapping")
         .clone();
-    println!("Created external task with id: {}", task_id);
+    all_task_ids.push(created_task_id.clone());
+    println!("Created external task with id: {}", created_task_id);
 
-    // The manager's cache should NOT contain the task yet (it was created externally)
+    // The manager's cache should NOT contain the task yet
     assert!(
-        manager.cache().items.iter().all(|i| i.id != task_id),
+        manager
+            .cache()
+            .items
+            .iter()
+            .all(|i| i.id != created_task_id),
         "Task should NOT be in manager's cache before sync"
     );
 
-    // Now sync - should pick up the external change
+    // Sync - should pick up the external creation
     let cache = manager.sync().await.expect("sync failed");
-
-    // Task should now be in cache
     assert!(
-        cache.items.iter().any(|i| i.id == task_id && !i.is_deleted),
-        "Task should be in cache after sync"
+        cache
+            .items
+            .iter()
+            .any(|i| i.id == created_task_id && !i.is_deleted),
+        "Created task should be in cache after sync"
     );
     println!(
         "After sync: {} items (was {})",
@@ -600,145 +619,10 @@ async fn test_sync_picks_up_task_created_externally() {
         initial_item_count
     );
 
-    // Clean up
-    let delete_command = SyncCommand::new(
-        SyncCommandType::ItemDelete,
-        serde_json::json!({"id": task_id}),
-    );
-    client
-        .sync(SyncRequest::with_commands(vec![delete_command]))
-        .await
-        .expect("cleanup failed");
-    println!("Cleaned up test task");
-}
-
-/// Test that sync picks up tasks deleted externally (outside of the cache manager).
-///
-/// This test validates that when a task is deleted via direct API call (not through
-/// the SyncManager), a subsequent sync will detect and remove the task from cache.
-#[tokio::test]
-async fn test_sync_picks_up_task_deleted_externally() {
-    let Some(token) = get_test_token() else {
-        eprintln!("Skipping e2e test: no API token found");
-        return;
-    };
-
-    let temp_dir = tempdir().expect("failed to create temp dir");
-    let cache_path = temp_dir.path().join("cache.json");
-
-    let client = TodoistClient::new(&token).unwrap();
-    let store = CacheStore::with_path(cache_path.clone());
-    let mut manager = SyncManager::new(client.clone(), store).expect("failed to create manager");
-
-    // Initial sync
-    let cache = manager.sync().await.expect("initial sync failed");
-
-    // Get inbox ID
-    let inbox = cache
-        .projects
-        .iter()
-        .find(|p| p.inbox_project && !p.is_deleted)
-        .expect("Should have inbox project");
-    let inbox_id = inbox.id.clone();
-
-    // Create a task through the manager so it's in our cache
-    let temp_id = uuid::Uuid::new_v4().to_string();
-    let add_command = SyncCommand::with_temp_id(
-        SyncCommandType::ItemAdd,
-        &temp_id,
-        serde_json::json!({
-            "content": "E2E external deletion test",
-            "project_id": inbox_id
-        }),
-    );
-    let commands = vec![add_command];
-    let response = manager
-        .execute_commands(commands)
-        .await
-        .expect("item_add failed");
-    let task_id = response
-        .real_id(&temp_id)
-        .expect("Should have temp_id mapping")
-        .clone();
-    println!("Created task with id: {}", task_id);
-
-    // Verify task is in cache
-    assert!(
-        manager
-            .cache()
-            .items
-            .iter()
-            .any(|i| i.id == task_id && !i.is_deleted),
-        "Task should be in cache after creation"
-    );
-
-    // Delete the task via direct API call (external to manager)
-    let delete_command = SyncCommand::new(
-        SyncCommandType::ItemDelete,
-        serde_json::json!({"id": task_id}),
-    );
-    let delete_response = client
-        .sync(SyncRequest::with_commands(vec![delete_command]))
-        .await
-        .expect("external delete failed");
-    assert!(!delete_response.has_errors(), "item_delete should succeed");
-    println!("Deleted task externally");
-
-    // The manager's cache should still have the task (marked as not deleted)
-    // because we haven't synced yet
-    let item_in_cache = manager.cache().items.iter().find(|i| i.id == task_id);
-    assert!(
-        item_in_cache.is_some(),
-        "Task should still be in cache (may be marked deleted or not)"
-    );
-
-    // Now sync - should pick up the external deletion
-    let cache = manager.sync().await.expect("sync failed");
-
-    // Task should be marked as deleted or removed from cache
-    let task_after_sync = cache.items.iter().find(|i| i.id == task_id);
-    match task_after_sync {
-        Some(item) => {
-            assert!(
-                item.is_deleted,
-                "Task should be marked as deleted after sync"
-            );
-            println!("Task marked as deleted in cache");
-        }
-        None => {
-            println!("Task removed from cache entirely");
-        }
-    }
-}
-
-/// Test that sync picks up tasks updated externally (outside of the cache manager).
-///
-/// This test validates that when a task is modified via direct API call (not through
-/// the SyncManager), a subsequent sync will detect and update the task in cache.
-#[tokio::test]
-async fn test_sync_picks_up_task_updated_externally() {
-    let Some(token) = get_test_token() else {
-        eprintln!("Skipping e2e test: no API token found");
-        return;
-    };
-
-    let temp_dir = tempdir().expect("failed to create temp dir");
-    let cache_path = temp_dir.path().join("cache.json");
-
-    let client = TodoistClient::new(&token).unwrap();
-    let store = CacheStore::with_path(cache_path.clone());
-    let mut manager = SyncManager::new(client.clone(), store).expect("failed to create manager");
-
-    // Initial sync
-    let cache = manager.sync().await.expect("initial sync failed");
-
-    // Get inbox ID
-    let inbox = cache
-        .projects
-        .iter()
-        .find(|p| p.inbox_project && !p.is_deleted)
-        .expect("Should have inbox project");
-    let inbox_id = inbox.id.clone();
+    // =========================================================================
+    // Scenario 2: External Update
+    // =========================================================================
+    println!("\n=== Scenario 2: External Update ===");
 
     // Create a task through the manager
     let temp_id = uuid::Uuid::new_v4().to_string();
@@ -754,18 +638,19 @@ async fn test_sync_picks_up_task_updated_externally() {
         .execute_commands(vec![add_command])
         .await
         .expect("item_add failed");
-    let task_id = response
+    let update_task_id = response
         .real_id(&temp_id)
         .expect("Should have temp_id mapping")
         .clone();
-    println!("Created task with id: {}", task_id);
+    all_task_ids.push(update_task_id.clone());
+    println!("Created task for update test with id: {}", update_task_id);
 
     // Verify original content
     let task = manager
         .cache()
         .items
         .iter()
-        .find(|i| i.id == task_id)
+        .find(|i| i.id == update_task_id)
         .expect("Task should be in cache");
     assert_eq!(task.content, "Original content");
 
@@ -773,7 +658,7 @@ async fn test_sync_picks_up_task_updated_externally() {
     let update_command = SyncCommand::new(
         SyncCommandType::ItemUpdate,
         serde_json::json!({
-            "id": task_id,
+            "id": update_task_id,
             "content": "Modified content"
         }),
     );
@@ -789,21 +674,19 @@ async fn test_sync_picks_up_task_updated_externally() {
         .cache()
         .items
         .iter()
-        .find(|i| i.id == task_id)
+        .find(|i| i.id == update_task_id)
         .expect("Task should be in cache");
     assert_eq!(
         task_before_sync.content, "Original content",
         "Task should still have original content before sync"
     );
 
-    // Now sync - should pick up the external update
+    // Sync - should pick up the external update
     let cache = manager.sync().await.expect("sync failed");
-
-    // Task should have the updated content
     let task_after_sync = cache
         .items
         .iter()
-        .find(|i| i.id == task_id)
+        .find(|i| i.id == update_task_id)
         .expect("Task should be in cache after sync");
     assert_eq!(
         task_after_sync.content, "Modified content",
@@ -811,47 +694,92 @@ async fn test_sync_picks_up_task_updated_externally() {
     );
     println!("Task content updated to: {}", task_after_sync.content);
 
-    // Clean up
+    // =========================================================================
+    // Scenario 3: External Deletion
+    // =========================================================================
+    println!("\n=== Scenario 3: External Deletion ===");
+
+    // Create a task through the manager
+    let temp_id = uuid::Uuid::new_v4().to_string();
+    let add_command = SyncCommand::with_temp_id(
+        SyncCommandType::ItemAdd,
+        &temp_id,
+        serde_json::json!({
+            "content": "E2E external deletion test",
+            "project_id": inbox_id
+        }),
+    );
+    let response = manager
+        .execute_commands(vec![add_command])
+        .await
+        .expect("item_add failed");
+    let delete_task_id = response
+        .real_id(&temp_id)
+        .expect("Should have temp_id mapping")
+        .clone();
+    // Note: Don't add to all_task_ids since we're deleting it
+    println!("Created task for deletion test with id: {}", delete_task_id);
+
+    // Verify task is in cache
+    assert!(
+        manager
+            .cache()
+            .items
+            .iter()
+            .any(|i| i.id == delete_task_id && !i.is_deleted),
+        "Task should be in cache after creation"
+    );
+
+    // Delete the task via direct API call (external to manager)
     let delete_command = SyncCommand::new(
         SyncCommandType::ItemDelete,
-        serde_json::json!({"id": task_id}),
+        serde_json::json!({"id": delete_task_id}),
     );
-    client
+    let delete_response = client
         .sync(SyncRequest::with_commands(vec![delete_command]))
         .await
-        .expect("cleanup failed");
-    println!("Cleaned up test task");
-}
+        .expect("external delete failed");
+    assert!(!delete_response.has_errors(), "item_delete should succeed");
+    println!("Deleted task externally");
 
-/// Test that bulk operations sync correctly.
-///
-/// This test creates 20 tasks in one sync command batch and verifies
-/// all tasks appear in the cache after syncing.
-#[tokio::test]
-async fn test_sync_after_bulk_operations() {
-    let Some(token) = get_test_token() else {
-        eprintln!("Skipping e2e test: no API token found");
-        return;
-    };
-
-    let temp_dir = tempdir().expect("failed to create temp dir");
-    let cache_path = temp_dir.path().join("cache.json");
-
-    let client = TodoistClient::new(&token).unwrap();
-    let store = CacheStore::with_path(cache_path.clone());
-    let mut manager = SyncManager::new(client.clone(), store).expect("failed to create manager");
-
-    // Initial sync
-    let cache = manager.sync().await.expect("initial sync failed");
-    let initial_item_count = cache.items.iter().filter(|i| !i.is_deleted).count();
-
-    // Get inbox ID
-    let inbox = cache
-        .projects
+    // The manager's cache should still have the task
+    let item_in_cache = manager
+        .cache()
+        .items
         .iter()
-        .find(|p| p.inbox_project && !p.is_deleted)
-        .expect("Should have inbox project");
-    let inbox_id = inbox.id.clone();
+        .find(|i| i.id == delete_task_id);
+    assert!(
+        item_in_cache.is_some(),
+        "Task should still be in cache (may be marked deleted or not)"
+    );
+
+    // Sync - should pick up the external deletion
+    let cache = manager.sync().await.expect("sync failed");
+    let task_after_sync = cache.items.iter().find(|i| i.id == delete_task_id);
+    match task_after_sync {
+        Some(item) => {
+            assert!(
+                item.is_deleted,
+                "Task should be marked as deleted after sync"
+            );
+            println!("Task marked as deleted in cache");
+        }
+        None => {
+            println!("Task removed from cache entirely");
+        }
+    }
+
+    // =========================================================================
+    // Scenario 4: Bulk Operations
+    // =========================================================================
+    println!("\n=== Scenario 4: Bulk Operations ===");
+
+    let current_item_count = manager
+        .cache()
+        .items
+        .iter()
+        .filter(|i| !i.is_deleted)
+        .count();
 
     // Create 20 tasks in one batch via direct API call
     let batch_size = 20;
@@ -881,7 +809,7 @@ async fn test_sync_after_bulk_operations() {
     assert!(!add_response.has_errors(), "Bulk item_add should succeed");
 
     // Get real IDs
-    let task_ids: Vec<String> = temp_ids
+    let bulk_task_ids: Vec<String> = temp_ids
         .iter()
         .map(|tid| {
             add_response
@@ -890,14 +818,15 @@ async fn test_sync_after_bulk_operations() {
                 .clone()
         })
         .collect();
-    println!("Created {} tasks via bulk operation", task_ids.len());
+    all_task_ids.extend(bulk_task_ids.clone());
+    println!("Created {} tasks via bulk operation", bulk_task_ids.len());
 
     // Sync to pick up the bulk changes
     let cache = manager.sync().await.expect("sync failed");
 
-    // Verify all tasks are in cache
+    // Verify all bulk tasks are in cache
     let mut found_count = 0;
-    for task_id in &task_ids {
+    for task_id in &bulk_task_ids {
         if cache
             .items
             .iter()
@@ -915,20 +844,28 @@ async fn test_sync_after_bulk_operations() {
     let new_item_count = cache.items.iter().filter(|i| !i.is_deleted).count();
     println!(
         "After bulk sync: {} items (was {}), {} new tasks found",
-        new_item_count, initial_item_count, found_count
+        new_item_count, current_item_count, found_count
     );
 
-    // Clean up - batch delete all created tasks
-    let delete_commands: Vec<SyncCommand> = task_ids
+    // =========================================================================
+    // Cleanup
+    // =========================================================================
+    println!("\n=== Cleanup ===");
+
+    let delete_commands: Vec<SyncCommand> = all_task_ids
         .iter()
         .map(|id| SyncCommand::new(SyncCommandType::ItemDelete, serde_json::json!({"id": id})))
         .collect();
 
-    client
-        .sync(SyncRequest::with_commands(delete_commands))
-        .await
-        .expect("cleanup failed");
-    println!("Cleaned up {} test tasks", batch_size);
+    if !delete_commands.is_empty() {
+        client
+            .sync(SyncRequest::with_commands(delete_commands))
+            .await
+            .expect("cleanup failed");
+        println!("Cleaned up {} test tasks", all_task_ids.len());
+    }
+
+    println!("\n=== All external change detection scenarios passed ===");
 }
 
 /// Test that sync token survives restart (persistence).
