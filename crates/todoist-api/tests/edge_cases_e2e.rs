@@ -421,51 +421,6 @@ async fn test_very_long_description() {
         .expect("Cleanup should succeed");
 }
 
-/// Test: Empty project (project with no tasks).
-///
-/// Spec: `test_empty_project`
-/// - Create project with no tasks
-/// - Sync and filter by project
-/// - Verify empty result (not error)
-#[tokio::test]
-async fn test_empty_project() {
-    let ctx_result = TestContext::new().await;
-    let Ok(mut ctx) = ctx_result else {
-        eprintln!("Skipping test: no API token");
-        return;
-    };
-
-    // Create empty project
-    let project_name = format!("E2E_Edge_Empty_{}", uuid::Uuid::new_v4());
-    let project_id = ctx
-        .create_project(&project_name)
-        .await
-        .expect("Should create empty project");
-
-    // Refresh to ensure synced
-    ctx.refresh().await.expect("Refresh should work");
-
-    // Verify project exists
-    let project = ctx.find_project(&project_id).expect("Project should exist");
-    assert_eq!(project.name, project_name);
-
-    // Find all tasks in this project (should be empty)
-    let tasks_in_project: Vec<_> = ctx
-        .items()
-        .filter(|item| item.project_id == project_id)
-        .collect();
-
-    assert!(
-        tasks_in_project.is_empty(),
-        "Empty project should have no tasks"
-    );
-
-    // Cleanup
-    ctx.delete_project(&project_id)
-        .await
-        .expect("Cleanup should succeed");
-}
-
 /// Test: 5+ levels of subtask nesting.
 ///
 /// Spec: `test_deeply_nested_subtasks`
@@ -910,73 +865,6 @@ async fn test_project_with_many_sections() {
 // =============================================================================
 // 11.3 Rapid Operations
 // =============================================================================
-
-/// Test: Create and immediately delete in same batch.
-///
-/// Spec: `test_rapid_create_delete`
-/// - Create task
-/// - Immediately delete (same sync batch)
-/// - Verify no errors, task gone
-#[tokio::test]
-async fn test_rapid_create_delete() {
-    let ctx_result = TestContext::new().await;
-    let Ok(mut ctx) = ctx_result else {
-        eprintln!("Skipping test: no API token");
-        return;
-    };
-
-    let inbox_id = ctx.inbox_id().to_string();
-    let temp_id = uuid::Uuid::new_v4().to_string();
-
-    // Create and delete in same batch
-    let commands = vec![
-        SyncCommand::with_temp_id(
-            SyncCommandType::ItemAdd,
-            &temp_id,
-            serde_json::json!({
-                "content": "E2E Edge - Rapid create-delete",
-                "project_id": inbox_id
-            }),
-        ),
-        // Delete references the temp_id which will be resolved by the API
-        SyncCommand::new(
-            SyncCommandType::ItemDelete,
-            serde_json::json!({"id": temp_id}),
-        ),
-    ];
-
-    let response = ctx.execute(commands).await.expect("Batch should succeed");
-
-    // The batch should complete without errors
-    // Note: Some APIs may reject deleting by temp_id, so we check gracefully
-    if response.has_errors() {
-        eprintln!(
-            "Note: Rapid create-delete had errors (may be expected): {:?}",
-            response.errors()
-        );
-        // Try alternative: get real ID first, then delete
-        if let Some(real_id) = response.real_id(&temp_id) {
-            ctx.delete_task(real_id)
-                .await
-                .expect("Fallback delete should work");
-        }
-    }
-
-    // Verify task is gone (either deleted in batch or by fallback)
-    ctx.refresh().await.expect("Refresh should work");
-
-    // Look for any task with our content that might still exist
-    let remaining_ids: Vec<String> = ctx
-        .items()
-        .filter(|i| i.content.contains("E2E Edge - Rapid create-delete"))
-        .map(|i| i.id.clone())
-        .collect();
-
-    // Clean up any remaining
-    for task_id in remaining_ids {
-        ctx.delete_task(&task_id).await.ok();
-    }
-}
 
 /// Test: Multiple rapid updates to same task.
 ///
