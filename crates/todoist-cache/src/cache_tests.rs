@@ -2,6 +2,7 @@
 
 use super::*;
 use chrono::Timelike;
+use todoist_api_rs::sync::TzInfo;
 
 #[test]
 fn test_cache_new_defaults() {
@@ -164,7 +165,13 @@ fn test_cache_serde_roundtrip_with_data() {
             id: "user-1".to_string(),
             email: Some("test@example.com".to_string()),
             full_name: Some("Test User".to_string()),
-            timezone: Some("America/New_York".to_string()),
+            tz_info: Some(TzInfo {
+                timezone: "America/New_York".to_string(),
+                gmt_string: Some("-05:00".to_string()),
+                hours: -5,
+                minutes: 0,
+                is_dst: 0,
+            }),
             inbox_project_id: Some("inbox-123".to_string()),
             start_page: None,
             start_day: None,
@@ -377,7 +384,13 @@ mod test_helpers {
             id: id.to_string(),
             email: Some("test@example.com".to_string()),
             full_name: Some("Test User".to_string()),
-            timezone: Some("UTC".to_string()),
+            tz_info: Some(TzInfo {
+                timezone: "UTC".to_string(),
+                gmt_string: Some("+00:00".to_string()),
+                hours: 0,
+                minutes: 0,
+                is_dst: 0,
+            }),
             inbox_project_id: None,
             start_page: None,
             start_day: None,
