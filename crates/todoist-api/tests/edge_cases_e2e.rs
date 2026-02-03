@@ -939,7 +939,10 @@ async fn test_rapid_create_delete() {
             }),
         ),
         // Delete references the temp_id which will be resolved by the API
-        SyncCommand::new(SyncCommandType::ItemDelete, serde_json::json!({"id": temp_id})),
+        SyncCommand::new(
+            SyncCommandType::ItemDelete,
+            serde_json::json!({"id": temp_id}),
+        ),
     ];
 
     let response = ctx.execute(commands).await.expect("Batch should succeed");

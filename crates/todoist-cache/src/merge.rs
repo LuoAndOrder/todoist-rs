@@ -243,8 +243,12 @@ pub(crate) fn apply_mutation_response(cache: &mut Cache, response: &SyncResponse
 ///
 /// This reduces memory allocations during merge operations, especially
 /// for large caches with 10,000+ items.
-pub(crate) fn merge_resources<T, F, D>(existing: &mut Vec<T>, incoming: &[T], get_id: F, is_deleted: D)
-where
+pub(crate) fn merge_resources<T, F, D>(
+    existing: &mut Vec<T>,
+    incoming: &[T],
+    get_id: F,
+    is_deleted: D,
+) where
     T: Clone,
     F: Fn(&T) -> &str,
     D: Fn(&T) -> bool,

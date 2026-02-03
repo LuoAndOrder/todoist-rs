@@ -292,13 +292,12 @@ impl CacheStore {
     /// `ErrorKind::NotFound`. Use [`load_or_default_async()`](Self::load_or_default_async)
     /// to get a default cache when the file is missing.
     pub async fn load_async(&self) -> Result<Cache> {
-        let contents =
-            tokio::fs::read_to_string(&self.path)
-                .await
-                .map_err(|e| CacheStoreError::ReadError {
-                    path: self.path.clone(),
-                    source: e,
-                })?;
+        let contents = tokio::fs::read_to_string(&self.path).await.map_err(|e| {
+            CacheStoreError::ReadError {
+                path: self.path.clone(),
+                source: e,
+            }
+        })?;
         let mut cache: Cache = serde_json::from_str(&contents)?;
         // Rebuild indexes since they are not serialized
         cache.rebuild_indexes();
@@ -344,12 +343,12 @@ impl CacheStore {
     pub async fn save_async(&self, cache: &Cache) -> Result<()> {
         // Ensure parent directory exists
         if let Some(parent) = self.path.parent() {
-            tokio::fs::create_dir_all(parent)
-                .await
-                .map_err(|e| CacheStoreError::CreateDirError {
+            tokio::fs::create_dir_all(parent).await.map_err(|e| {
+                CacheStoreError::CreateDirError {
                     path: parent.to_path_buf(),
                     source: e,
-                })?;
+                }
+            })?;
         }
 
         let json = serde_json::to_string_pretty(cache)?;
@@ -727,7 +726,11 @@ mod tests {
         use tempfile::tempdir;
 
         let temp_dir = tempdir().expect("failed to create temp dir");
-        let path = temp_dir.path().join("subdir").join("nested").join("cache.json");
+        let path = temp_dir
+            .path()
+            .join("subdir")
+            .join("nested")
+            .join("cache.json");
         let store = CacheStore::with_path(path.clone());
 
         // Parent directory doesn't exist

@@ -189,7 +189,10 @@ fn test_builder_chaining() {
 // Test: TodoistClient::builder() returns a builder
 #[test]
 fn test_client_builder_method() {
-    let client = TodoistClient::builder("test-token").max_retries(10).build().unwrap();
+    let client = TodoistClient::builder("test-token")
+        .max_retries(10)
+        .build()
+        .unwrap();
 
     assert_eq!(client.max_retries(), 10);
 }

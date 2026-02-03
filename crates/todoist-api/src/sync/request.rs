@@ -691,7 +691,10 @@ mod tests {
 
     #[test]
     fn test_sync_request_with_commands() {
-        let cmd = SyncCommand::new(SyncCommandType::ItemAdd, serde_json::json!({"content": "Test"}));
+        let cmd = SyncCommand::new(
+            SyncCommandType::ItemAdd,
+            serde_json::json!({"content": "Test"}),
+        );
         let request = SyncRequest::with_commands(vec![cmd]);
         assert_eq!(request.commands.len(), 1);
         assert!(request.resource_types.is_empty());
@@ -765,7 +768,10 @@ mod tests {
 
     #[test]
     fn test_sync_command_new() {
-        let cmd = SyncCommand::new(SyncCommandType::ItemAdd, serde_json::json!({"content": "Test"}));
+        let cmd = SyncCommand::new(
+            SyncCommandType::ItemAdd,
+            serde_json::json!({"content": "Test"}),
+        );
         assert_eq!(cmd.command_type, SyncCommandType::ItemAdd);
         assert!(cmd.temp_id.is_none());
         // UUID should be a valid UUID
@@ -861,43 +867,118 @@ mod tests {
     #[test]
     fn test_all_command_types_serialize_correctly() {
         // Item commands
-        assert_eq!(serde_json::to_string(&SyncCommandType::ItemAdd).unwrap(), "\"item_add\"");
-        assert_eq!(serde_json::to_string(&SyncCommandType::ItemUpdate).unwrap(), "\"item_update\"");
-        assert_eq!(serde_json::to_string(&SyncCommandType::ItemMove).unwrap(), "\"item_move\"");
-        assert_eq!(serde_json::to_string(&SyncCommandType::ItemDelete).unwrap(), "\"item_delete\"");
-        assert_eq!(serde_json::to_string(&SyncCommandType::ItemClose).unwrap(), "\"item_close\"");
-        assert_eq!(serde_json::to_string(&SyncCommandType::ItemUncomplete).unwrap(), "\"item_uncomplete\"");
+        assert_eq!(
+            serde_json::to_string(&SyncCommandType::ItemAdd).unwrap(),
+            "\"item_add\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SyncCommandType::ItemUpdate).unwrap(),
+            "\"item_update\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SyncCommandType::ItemMove).unwrap(),
+            "\"item_move\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SyncCommandType::ItemDelete).unwrap(),
+            "\"item_delete\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SyncCommandType::ItemClose).unwrap(),
+            "\"item_close\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SyncCommandType::ItemUncomplete).unwrap(),
+            "\"item_uncomplete\""
+        );
 
         // Project commands
-        assert_eq!(serde_json::to_string(&SyncCommandType::ProjectAdd).unwrap(), "\"project_add\"");
-        assert_eq!(serde_json::to_string(&SyncCommandType::ProjectUpdate).unwrap(), "\"project_update\"");
-        assert_eq!(serde_json::to_string(&SyncCommandType::ProjectDelete).unwrap(), "\"project_delete\"");
-        assert_eq!(serde_json::to_string(&SyncCommandType::ProjectArchive).unwrap(), "\"project_archive\"");
-        assert_eq!(serde_json::to_string(&SyncCommandType::ProjectUnarchive).unwrap(), "\"project_unarchive\"");
+        assert_eq!(
+            serde_json::to_string(&SyncCommandType::ProjectAdd).unwrap(),
+            "\"project_add\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SyncCommandType::ProjectUpdate).unwrap(),
+            "\"project_update\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SyncCommandType::ProjectDelete).unwrap(),
+            "\"project_delete\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SyncCommandType::ProjectArchive).unwrap(),
+            "\"project_archive\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SyncCommandType::ProjectUnarchive).unwrap(),
+            "\"project_unarchive\""
+        );
 
         // Section commands
-        assert_eq!(serde_json::to_string(&SyncCommandType::SectionAdd).unwrap(), "\"section_add\"");
-        assert_eq!(serde_json::to_string(&SyncCommandType::SectionDelete).unwrap(), "\"section_delete\"");
-        assert_eq!(serde_json::to_string(&SyncCommandType::SectionArchive).unwrap(), "\"section_archive\"");
-        assert_eq!(serde_json::to_string(&SyncCommandType::SectionUnarchive).unwrap(), "\"section_unarchive\"");
+        assert_eq!(
+            serde_json::to_string(&SyncCommandType::SectionAdd).unwrap(),
+            "\"section_add\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SyncCommandType::SectionDelete).unwrap(),
+            "\"section_delete\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SyncCommandType::SectionArchive).unwrap(),
+            "\"section_archive\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SyncCommandType::SectionUnarchive).unwrap(),
+            "\"section_unarchive\""
+        );
 
         // Label commands
-        assert_eq!(serde_json::to_string(&SyncCommandType::LabelAdd).unwrap(), "\"label_add\"");
-        assert_eq!(serde_json::to_string(&SyncCommandType::LabelDelete).unwrap(), "\"label_delete\"");
+        assert_eq!(
+            serde_json::to_string(&SyncCommandType::LabelAdd).unwrap(),
+            "\"label_add\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SyncCommandType::LabelDelete).unwrap(),
+            "\"label_delete\""
+        );
 
         // Note commands
-        assert_eq!(serde_json::to_string(&SyncCommandType::NoteAdd).unwrap(), "\"note_add\"");
-        assert_eq!(serde_json::to_string(&SyncCommandType::NoteDelete).unwrap(), "\"note_delete\"");
-        assert_eq!(serde_json::to_string(&SyncCommandType::ProjectNoteAdd).unwrap(), "\"project_note_add\"");
-        assert_eq!(serde_json::to_string(&SyncCommandType::ProjectNoteDelete).unwrap(), "\"project_note_delete\"");
+        assert_eq!(
+            serde_json::to_string(&SyncCommandType::NoteAdd).unwrap(),
+            "\"note_add\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SyncCommandType::NoteDelete).unwrap(),
+            "\"note_delete\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SyncCommandType::ProjectNoteAdd).unwrap(),
+            "\"project_note_add\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SyncCommandType::ProjectNoteDelete).unwrap(),
+            "\"project_note_delete\""
+        );
 
         // Reminder commands
-        assert_eq!(serde_json::to_string(&SyncCommandType::ReminderAdd).unwrap(), "\"reminder_add\"");
-        assert_eq!(serde_json::to_string(&SyncCommandType::ReminderDelete).unwrap(), "\"reminder_delete\"");
+        assert_eq!(
+            serde_json::to_string(&SyncCommandType::ReminderAdd).unwrap(),
+            "\"reminder_add\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SyncCommandType::ReminderDelete).unwrap(),
+            "\"reminder_delete\""
+        );
 
         // Filter commands
-        assert_eq!(serde_json::to_string(&SyncCommandType::FilterAdd).unwrap(), "\"filter_add\"");
-        assert_eq!(serde_json::to_string(&SyncCommandType::FilterDelete).unwrap(), "\"filter_delete\"");
+        assert_eq!(
+            serde_json::to_string(&SyncCommandType::FilterAdd).unwrap(),
+            "\"filter_add\""
+        );
+        assert_eq!(
+            serde_json::to_string(&SyncCommandType::FilterDelete).unwrap(),
+            "\"filter_delete\""
+        );
     }
 
     #[test]

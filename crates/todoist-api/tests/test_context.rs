@@ -455,7 +455,10 @@ impl TestContext {
 
     /// Deletes a task.
     pub async fn delete_task(&mut self, task_id: &str) -> Result<(), todoist_api_rs::error::Error> {
-        let command = SyncCommand::new(SyncCommandType::ItemDelete, serde_json::json!({"id": task_id}));
+        let command = SyncCommand::new(
+            SyncCommandType::ItemDelete,
+            serde_json::json!({"id": task_id}),
+        );
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
@@ -473,7 +476,10 @@ impl TestContext {
         &mut self,
         project_id: &str,
     ) -> Result<(), todoist_api_rs::error::Error> {
-        let command = SyncCommand::new(SyncCommandType::ProjectDelete, serde_json::json!({"id": project_id}));
+        let command = SyncCommand::new(
+            SyncCommandType::ProjectDelete,
+            serde_json::json!({"id": project_id}),
+        );
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
@@ -491,7 +497,10 @@ impl TestContext {
         &mut self,
         section_id: &str,
     ) -> Result<(), todoist_api_rs::error::Error> {
-        let command = SyncCommand::new(SyncCommandType::SectionDelete, serde_json::json!({"id": section_id}));
+        let command = SyncCommand::new(
+            SyncCommandType::SectionDelete,
+            serde_json::json!({"id": section_id}),
+        );
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
@@ -509,7 +518,10 @@ impl TestContext {
         &mut self,
         label_id: &str,
     ) -> Result<(), todoist_api_rs::error::Error> {
-        let command = SyncCommand::new(SyncCommandType::LabelDelete, serde_json::json!({"id": label_id}));
+        let command = SyncCommand::new(
+            SyncCommandType::LabelDelete,
+            serde_json::json!({"id": label_id}),
+        );
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
@@ -594,7 +606,10 @@ impl TestContext {
         &mut self,
         reminder_id: &str,
     ) -> Result<(), todoist_api_rs::error::Error> {
-        let command = SyncCommand::new(SyncCommandType::ReminderDelete, serde_json::json!({"id": reminder_id}));
+        let command = SyncCommand::new(
+            SyncCommandType::ReminderDelete,
+            serde_json::json!({"id": reminder_id}),
+        );
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
@@ -678,7 +693,10 @@ impl TestContext {
 
     /// Deletes a task comment (note).
     pub async fn delete_note(&mut self, note_id: &str) -> Result<(), todoist_api_rs::error::Error> {
-        let command = SyncCommand::new(SyncCommandType::NoteDelete, serde_json::json!({"id": note_id}));
+        let command = SyncCommand::new(
+            SyncCommandType::NoteDelete,
+            serde_json::json!({"id": note_id}),
+        );
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {
@@ -725,7 +743,10 @@ impl TestContext {
         &mut self,
         note_id: &str,
     ) -> Result<(), todoist_api_rs::error::Error> {
-        let command = SyncCommand::new(SyncCommandType::ProjectNoteDelete, serde_json::json!({"id": note_id}));
+        let command = SyncCommand::new(
+            SyncCommandType::ProjectNoteDelete,
+            serde_json::json!({"id": note_id}),
+        );
         let response = self.execute(vec![command]).await?;
 
         if response.has_errors() {

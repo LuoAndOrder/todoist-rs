@@ -650,8 +650,10 @@ async fn test_archive_project() {
     );
 
     // Archive project
-    let archive_command =
-        SyncCommand::new(SyncCommandType::ProjectArchive, serde_json::json!({"id": project_id}));
+    let archive_command = SyncCommand::new(
+        SyncCommandType::ProjectArchive,
+        serde_json::json!({"id": project_id}),
+    );
     let response = ctx.execute(vec![archive_command]).await.unwrap();
     assert!(!response.has_errors(), "project_archive should succeed");
 
@@ -667,8 +669,10 @@ async fn test_archive_project() {
     println!("Task after archive: {:?}", task.map(|t| &t.content));
 
     // Clean up: unarchive first, then delete
-    let unarchive_command =
-        SyncCommand::new(SyncCommandType::ProjectUnarchive, serde_json::json!({"id": project_id}));
+    let unarchive_command = SyncCommand::new(
+        SyncCommandType::ProjectUnarchive,
+        serde_json::json!({"id": project_id}),
+    );
     ctx.execute(vec![unarchive_command]).await.unwrap();
 
     ctx.batch_delete(&[&task_id], &[&project_id], &[], &[])
@@ -689,8 +693,10 @@ async fn test_unarchive_project() {
         .await
         .expect("create_project failed");
 
-    let archive_command =
-        SyncCommand::new(SyncCommandType::ProjectArchive, serde_json::json!({"id": project_id}));
+    let archive_command = SyncCommand::new(
+        SyncCommandType::ProjectArchive,
+        serde_json::json!({"id": project_id}),
+    );
     let response = ctx.execute(vec![archive_command]).await.unwrap();
     assert!(!response.has_errors());
 
@@ -699,8 +705,10 @@ async fn test_unarchive_project() {
     assert!(project.is_archived, "Project should be archived");
 
     // Unarchive project
-    let unarchive_command =
-        SyncCommand::new(SyncCommandType::ProjectUnarchive, serde_json::json!({"id": project_id}));
+    let unarchive_command = SyncCommand::new(
+        SyncCommandType::ProjectUnarchive,
+        serde_json::json!({"id": project_id}),
+    );
     let response = ctx.execute(vec![unarchive_command]).await.unwrap();
     assert!(!response.has_errors(), "project_unarchive should succeed");
 
@@ -753,8 +761,10 @@ async fn test_archived_project_excluded_from_filters() {
     println!("Tasks due today before archive: {}", count_before);
 
     // Archive project
-    let archive_command =
-        SyncCommand::new(SyncCommandType::ProjectArchive, serde_json::json!({"id": project_id}));
+    let archive_command = SyncCommand::new(
+        SyncCommandType::ProjectArchive,
+        serde_json::json!({"id": project_id}),
+    );
     let response = ctx.execute(vec![archive_command]).await.unwrap();
     assert!(!response.has_errors(), "project_archive should succeed");
 
@@ -788,8 +798,10 @@ async fn test_archived_project_excluded_from_filters() {
     );
 
     // Clean up: unarchive first
-    let unarchive_command =
-        SyncCommand::new(SyncCommandType::ProjectUnarchive, serde_json::json!({"id": project_id}));
+    let unarchive_command = SyncCommand::new(
+        SyncCommandType::ProjectUnarchive,
+        serde_json::json!({"id": project_id}),
+    );
     ctx.execute(vec![unarchive_command]).await.unwrap();
 
     ctx.batch_delete(&[&task_id], &[&project_id], &[], &[])
@@ -1237,8 +1249,10 @@ async fn test_archive_section() {
     );
 
     // Archive section
-    let archive_command =
-        SyncCommand::new(SyncCommandType::SectionArchive, serde_json::json!({"id": section_id}));
+    let archive_command = SyncCommand::new(
+        SyncCommandType::SectionArchive,
+        serde_json::json!({"id": section_id}),
+    );
     let response = ctx.execute(vec![archive_command]).await.unwrap();
     assert!(!response.has_errors(), "section_archive should succeed");
 
@@ -1249,8 +1263,10 @@ async fn test_archive_section() {
     assert!(section.is_archived, "Section should be archived");
 
     // Clean up: unarchive first, then delete
-    let unarchive_command =
-        SyncCommand::new(SyncCommandType::SectionUnarchive, serde_json::json!({"id": section_id}));
+    let unarchive_command = SyncCommand::new(
+        SyncCommandType::SectionUnarchive,
+        serde_json::json!({"id": section_id}),
+    );
     ctx.execute(vec![unarchive_command]).await.unwrap();
 
     ctx.batch_delete(&[&task_id], &[&project_id], &[&section_id], &[])
@@ -1276,8 +1292,10 @@ async fn test_unarchive_section() {
         .expect("create_section failed");
 
     // Archive section
-    let archive_command =
-        SyncCommand::new(SyncCommandType::SectionArchive, serde_json::json!({"id": section_id}));
+    let archive_command = SyncCommand::new(
+        SyncCommandType::SectionArchive,
+        serde_json::json!({"id": section_id}),
+    );
     let response = ctx.execute(vec![archive_command]).await.unwrap();
     assert!(!response.has_errors());
 
@@ -1286,8 +1304,10 @@ async fn test_unarchive_section() {
     assert!(section.is_archived, "Section should be archived");
 
     // Unarchive section
-    let unarchive_command =
-        SyncCommand::new(SyncCommandType::SectionUnarchive, serde_json::json!({"id": section_id}));
+    let unarchive_command = SyncCommand::new(
+        SyncCommandType::SectionUnarchive,
+        serde_json::json!({"id": section_id}),
+    );
     let response = ctx.execute(vec![unarchive_command]).await.unwrap();
     assert!(!response.has_errors(), "section_unarchive should succeed");
 

@@ -220,8 +220,11 @@ impl WorkflowTestContext {
     /// Create a project
     async fn create_project(&mut self, name: &str) -> Result<String, Box<dyn std::error::Error>> {
         let temp_id = uuid::Uuid::new_v4().to_string();
-        let command =
-            SyncCommand::with_temp_id(SyncCommandType::ProjectAdd, &temp_id, serde_json::json!({ "name": name }));
+        let command = SyncCommand::with_temp_id(
+            SyncCommandType::ProjectAdd,
+            &temp_id,
+            serde_json::json!({ "name": name }),
+        );
         let response = self.execute(vec![command]).await?;
         response
             .real_id(&temp_id)
@@ -251,8 +254,11 @@ impl WorkflowTestContext {
     /// Create a label
     async fn create_label(&mut self, name: &str) -> Result<String, Box<dyn std::error::Error>> {
         let temp_id = uuid::Uuid::new_v4().to_string();
-        let command =
-            SyncCommand::with_temp_id(SyncCommandType::LabelAdd, &temp_id, serde_json::json!({ "name": name }));
+        let command = SyncCommand::with_temp_id(
+            SyncCommandType::LabelAdd,
+            &temp_id,
+            serde_json::json!({ "name": name }),
+        );
         let response = self.execute(vec![command]).await?;
         response
             .real_id(&temp_id)
@@ -262,7 +268,10 @@ impl WorkflowTestContext {
 
     /// Complete a task
     async fn complete_task(&mut self, task_id: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let command = SyncCommand::new(SyncCommandType::ItemClose, serde_json::json!({"id": task_id}));
+        let command = SyncCommand::new(
+            SyncCommandType::ItemClose,
+            serde_json::json!({"id": task_id}),
+        );
         let response = self.execute(vec![command]).await?;
         if response.has_errors() {
             return Err(format!("item_close failed: {:?}", response.errors()).into());

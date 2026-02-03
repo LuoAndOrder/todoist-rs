@@ -187,7 +187,10 @@ async fn test_e2e_incremental_sync_updates_cache() {
     );
 
     // Clean up: delete the item
-    let delete_command = SyncCommand::new(SyncCommandType::ItemDelete, serde_json::json!({"id": real_id}));
+    let delete_command = SyncCommand::new(
+        SyncCommandType::ItemDelete,
+        serde_json::json!({"id": real_id}),
+    );
     let delete_response = client
         .sync(SyncRequest::with_commands(vec![delete_command]))
         .await
@@ -341,7 +344,10 @@ async fn test_e2e_cache_persistence_across_syncs() {
     );
 
     // Clean up
-    let delete_command = SyncCommand::new(SyncCommandType::ItemDelete, serde_json::json!({"id": real_id}));
+    let delete_command = SyncCommand::new(
+        SyncCommandType::ItemDelete,
+        serde_json::json!({"id": real_id}),
+    );
     client
         .sync(SyncRequest::with_commands(vec![delete_command]))
         .await
@@ -595,7 +601,10 @@ async fn test_sync_picks_up_task_created_externally() {
     );
 
     // Clean up
-    let delete_command = SyncCommand::new(SyncCommandType::ItemDelete, serde_json::json!({"id": task_id}));
+    let delete_command = SyncCommand::new(
+        SyncCommandType::ItemDelete,
+        serde_json::json!({"id": task_id}),
+    );
     client
         .sync(SyncRequest::with_commands(vec![delete_command]))
         .await
@@ -664,7 +673,10 @@ async fn test_sync_picks_up_task_deleted_externally() {
     );
 
     // Delete the task via direct API call (external to manager)
-    let delete_command = SyncCommand::new(SyncCommandType::ItemDelete, serde_json::json!({"id": task_id}));
+    let delete_command = SyncCommand::new(
+        SyncCommandType::ItemDelete,
+        serde_json::json!({"id": task_id}),
+    );
     let delete_response = client
         .sync(SyncRequest::with_commands(vec![delete_command]))
         .await
@@ -800,7 +812,10 @@ async fn test_sync_picks_up_task_updated_externally() {
     println!("Task content updated to: {}", task_after_sync.content);
 
     // Clean up
-    let delete_command = SyncCommand::new(SyncCommandType::ItemDelete, serde_json::json!({"id": task_id}));
+    let delete_command = SyncCommand::new(
+        SyncCommandType::ItemDelete,
+        serde_json::json!({"id": task_id}),
+    );
     client
         .sync(SyncRequest::with_commands(vec![delete_command]))
         .await

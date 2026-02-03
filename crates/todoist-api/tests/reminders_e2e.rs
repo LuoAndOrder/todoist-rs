@@ -488,7 +488,10 @@ async fn test_reminder_on_recurring_task() {
     );
 
     // Complete the recurring task (this advances to next occurrence)
-    let complete_command = SyncCommand::new(SyncCommandType::ItemClose, serde_json::json!({"id": task_id}));
+    let complete_command = SyncCommand::new(
+        SyncCommandType::ItemClose,
+        serde_json::json!({"id": task_id}),
+    );
     let response = ctx.execute(vec![complete_command]).await.unwrap();
     assert!(!response.has_errors(), "item_close should succeed");
 

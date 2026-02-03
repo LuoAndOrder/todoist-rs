@@ -192,8 +192,11 @@ impl FilterTestContext {
     /// Create a project
     async fn create_project(&mut self, name: &str) -> Result<String, Box<dyn std::error::Error>> {
         let temp_id = uuid::Uuid::new_v4().to_string();
-        let command =
-            SyncCommand::with_temp_id(SyncCommandType::ProjectAdd, &temp_id, serde_json::json!({ "name": name }));
+        let command = SyncCommand::with_temp_id(
+            SyncCommandType::ProjectAdd,
+            &temp_id,
+            serde_json::json!({ "name": name }),
+        );
         let response = self.execute(vec![command]).await?;
         response
             .real_id(&temp_id)
@@ -242,8 +245,11 @@ impl FilterTestContext {
     /// Create a label
     async fn create_label(&mut self, name: &str) -> Result<String, Box<dyn std::error::Error>> {
         let temp_id = uuid::Uuid::new_v4().to_string();
-        let command =
-            SyncCommand::with_temp_id(SyncCommandType::LabelAdd, &temp_id, serde_json::json!({ "name": name }));
+        let command = SyncCommand::with_temp_id(
+            SyncCommandType::LabelAdd,
+            &temp_id,
+            serde_json::json!({ "name": name }),
+        );
         let response = self.execute(vec![command]).await?;
         response
             .real_id(&temp_id)

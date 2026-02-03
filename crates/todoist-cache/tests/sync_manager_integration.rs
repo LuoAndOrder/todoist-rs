@@ -565,7 +565,10 @@ async fn test_execute_commands_handles_api_error() {
     let store = CacheStore::with_path(cache_path.clone());
     let mut manager = SyncManager::new(client, store).expect("failed to create manager");
 
-    let cmd = SyncCommand::new(SyncCommandType::ItemAdd, serde_json::json!({"content": "Test"}));
+    let cmd = SyncCommand::new(
+        SyncCommandType::ItemAdd,
+        serde_json::json!({"content": "Test"}),
+    );
     let result = manager.execute_commands(vec![cmd]).await;
 
     // Should return error
@@ -608,7 +611,10 @@ async fn test_execute_commands_updates_last_sync() {
     assert!(manager.cache().last_sync.is_none());
 
     let before = chrono::Utc::now();
-    let cmd = SyncCommand::new(SyncCommandType::ItemAdd, serde_json::json!({"content": "Test"}));
+    let cmd = SyncCommand::new(
+        SyncCommandType::ItemAdd,
+        serde_json::json!({"content": "Test"}),
+    );
     manager
         .execute_commands(vec![cmd])
         .await
@@ -749,7 +755,10 @@ async fn test_execute_commands_removes_item_on_delete() {
         .any(|i| i.id == "item-to-delete"));
 
     // Execute item_delete command
-    let cmd = SyncCommand::new(SyncCommandType::ItemDelete, serde_json::json!({"id": "item-to-delete"}));
+    let cmd = SyncCommand::new(
+        SyncCommandType::ItemDelete,
+        serde_json::json!({"id": "item-to-delete"}),
+    );
     manager
         .execute_commands(vec![cmd])
         .await
@@ -2039,7 +2048,10 @@ async fn test_deleted_item_not_visible_without_sync() {
     );
 
     // Delete the item (simulates: td delete item-to-delete)
-    let cmd = SyncCommand::new(SyncCommandType::ItemDelete, serde_json::json!({"id": "item-to-delete"}));
+    let cmd = SyncCommand::new(
+        SyncCommandType::ItemDelete,
+        serde_json::json!({"id": "item-to-delete"}),
+    );
     manager
         .execute_commands(vec![cmd])
         .await

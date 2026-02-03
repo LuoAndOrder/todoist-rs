@@ -259,9 +259,7 @@ impl Cache {
         for (i, label) in self.labels.iter().enumerate() {
             if !label.is_deleted {
                 indexes.labels_by_id.insert(label.id.clone(), i);
-                indexes
-                    .labels_by_name
-                    .insert(label.name.to_lowercase(), i);
+                indexes.labels_by_name.insert(label.name.to_lowercase(), i);
             }
         }
 

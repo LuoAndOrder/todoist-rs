@@ -34,9 +34,9 @@ use todoist_api_rs::sync::{SyncCommand, SyncRequest, SyncResponse};
 use crate::{Cache, CacheStore, CacheStoreError};
 
 // Re-export lookup utilities for error formatting and tests
-pub(crate) use lookups::format_not_found_error;
 #[cfg(test)]
 pub(crate) use lookups::find_similar_name;
+pub(crate) use lookups::format_not_found_error;
 
 /// Default staleness threshold in minutes.
 const DEFAULT_STALE_MINUTES: i64 = 5;

@@ -82,7 +82,9 @@ pub async fn execute(ctx: &CommandContext, opts: &DeleteOptions, token: &str) ->
     // Build commands for all tasks using item_delete
     let commands: Vec<SyncCommand> = resolved_items
         .iter()
-        .map(|(id, _)| SyncCommand::new(SyncCommandType::ItemDelete, serde_json::json!({ "id": id })))
+        .map(|(id, _)| {
+            SyncCommand::new(SyncCommandType::ItemDelete, serde_json::json!({ "id": id }))
+        })
         .collect();
 
     // Execute the commands via SyncManager

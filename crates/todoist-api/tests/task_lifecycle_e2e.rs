@@ -447,7 +447,10 @@ async fn test_complete_task_with_item_close() {
     assert!(!task.checked, "Task should not be completed initially");
 
     // Complete task with item_close
-    let close_command = SyncCommand::new(SyncCommandType::ItemClose, serde_json::json!({"id": task_id}));
+    let close_command = SyncCommand::new(
+        SyncCommandType::ItemClose,
+        serde_json::json!({"id": task_id}),
+    );
     let response = ctx.execute(vec![close_command]).await.unwrap();
     assert!(!response.has_errors(), "item_close should succeed");
 
@@ -508,7 +511,10 @@ async fn test_uncomplete_task() {
         .await
         .expect("create_task failed");
 
-    let close_command = SyncCommand::new(SyncCommandType::ItemClose, serde_json::json!({"id": task_id}));
+    let close_command = SyncCommand::new(
+        SyncCommandType::ItemClose,
+        serde_json::json!({"id": task_id}),
+    );
     let response = ctx.execute(vec![close_command]).await.unwrap();
     assert!(!response.has_errors());
 
@@ -517,8 +523,10 @@ async fn test_uncomplete_task() {
     assert!(task.checked, "Task should be completed");
 
     // Uncomplete task
-    let uncomplete_command =
-        SyncCommand::new(SyncCommandType::ItemUncomplete, serde_json::json!({"id": task_id}));
+    let uncomplete_command = SyncCommand::new(
+        SyncCommandType::ItemUncomplete,
+        serde_json::json!({"id": task_id}),
+    );
     let response = ctx.execute(vec![uncomplete_command]).await.unwrap();
     assert!(!response.has_errors(), "item_uncomplete should succeed");
 
@@ -561,7 +569,10 @@ async fn test_complete_recurring_task() {
     );
 
     // Complete recurring task
-    let close_command = SyncCommand::new(SyncCommandType::ItemClose, serde_json::json!({"id": task_id}));
+    let close_command = SyncCommand::new(
+        SyncCommandType::ItemClose,
+        serde_json::json!({"id": task_id}),
+    );
     let response = ctx.execute(vec![close_command]).await.unwrap();
     assert!(!response.has_errors(), "item_close should succeed");
 
@@ -828,7 +839,10 @@ async fn test_complete_parent_with_subtasks() {
         .expect("create_task failed");
 
     // Complete parent
-    let close_command = SyncCommand::new(SyncCommandType::ItemClose, serde_json::json!({"id": parent_id}));
+    let close_command = SyncCommand::new(
+        SyncCommandType::ItemClose,
+        serde_json::json!({"id": parent_id}),
+    );
     let response = ctx.execute(vec![close_command]).await.unwrap();
     assert!(!response.has_errors(), "item_close should succeed");
 
