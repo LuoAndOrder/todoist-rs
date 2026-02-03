@@ -122,7 +122,7 @@ impl TestContext {
         let user_timezone = response
             .user
             .as_ref()
-            .and_then(|u| u.timezone.clone())
+            .and_then(|u| u.timezone().map(|s| s.to_string()))
             .unwrap_or_else(|| "UTC".to_string());
 
         Ok(Self {

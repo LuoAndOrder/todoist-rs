@@ -595,6 +595,29 @@ pub struct Filter {
     pub is_favorite: bool,
 }
 
+/// Timezone information for a user.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TzInfo {
+    /// The timezone name (e.g., "America/New_York").
+    pub timezone: String,
+
+    /// GMT offset string (e.g., "-05:00").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gmt_string: Option<String>,
+
+    /// Hours offset from GMT.
+    #[serde(default)]
+    pub hours: i32,
+
+    /// Minutes offset from GMT.
+    #[serde(default)]
+    pub minutes: i32,
+
+    /// Whether daylight saving time is in effect.
+    #[serde(default)]
+    pub is_dst: i32,
+}
+
 /// User information.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct User {
@@ -609,9 +632,9 @@ pub struct User {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub full_name: Option<String>,
 
-    /// The user's timezone.
+    /// The user's timezone info.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub timezone: Option<String>,
+    pub tz_info: Option<TzInfo>,
 
     /// Inbox project ID.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -636,6 +659,13 @@ pub struct User {
     /// Whether user has premium.
     #[serde(default)]
     pub is_premium: bool,
+}
+
+impl User {
+    /// Returns the user's timezone string (e.g., "America/New_York").
+    pub fn timezone(&self) -> Option<&str> {
+        self.tz_info.as_ref().map(|tz| tz.timezone.as_str())
+    }
 }
 
 /// A collaborator on a shared project.
