@@ -12,7 +12,7 @@
 
 use std::fs;
 
-use chrono::{Duration, Local};
+use chrono::{Duration, Utc};
 use todoist_api_rs::client::TodoistClient;
 use todoist_api_rs::sync::{SyncCommand, SyncCommandType, SyncRequest, SyncResponse};
 
@@ -60,6 +60,7 @@ struct WorkflowTestContext {
     client: TodoistClient,
     sync_token: String,
     inbox_id: String,
+    user_timezone: String,
     items: Vec<todoist_api_rs::sync::Item>,
     projects: Vec<todoist_api_rs::sync::Project>,
     sections: Vec<todoist_api_rs::sync::Section>,
@@ -82,10 +83,17 @@ impl WorkflowTestContext {
             .id
             .clone();
 
+        let user_timezone = response
+            .user
+            .as_ref()
+            .and_then(|u| u.timezone.clone())
+            .unwrap_or_else(|| "UTC".to_string());
+
         Ok(Self {
             client,
             sync_token: response.sync_token,
             inbox_id,
+            user_timezone,
             items: response.items,
             projects: response.projects,
             sections: response.sections,
@@ -95,6 +103,10 @@ impl WorkflowTestContext {
 
     fn inbox_id(&self) -> &str {
         &self.inbox_id
+    }
+
+    fn user_timezone(&self) -> &str {
+        &self.user_timezone
     }
 
     async fn execute(
@@ -400,12 +412,16 @@ impl WorkflowTestContext {
 // Date Helpers
 // ============================================================================
 
-fn today_str() -> String {
-    Local::now().format("%Y-%m-%d").to_string()
+fn today_in_timezone(tz_str: &str) -> String {
+    use chrono_tz::Tz;
+    let tz: Tz = tz_str.parse().unwrap_or(chrono_tz::UTC);
+    Utc::now().with_timezone(&tz).format("%Y-%m-%d").to_string()
 }
 
-fn tomorrow_str() -> String {
-    (Local::now() + Duration::days(1))
+fn tomorrow_in_timezone(tz_str: &str) -> String {
+    use chrono_tz::Tz;
+    let tz: Tz = tz_str.parse().unwrap_or(chrono_tz::UTC);
+    (Utc::now().with_timezone(&tz) + Duration::days(1))
         .format("%Y-%m-%d")
         .to_string()
 }
@@ -429,7 +445,7 @@ async fn test_workflow_daily_review() {
     };
 
     let inbox_id = ctx.inbox_id().to_string();
-    let today = today_str();
+    let today = today_in_timezone(ctx.user_timezone());
 
     // Step 1: Create tasks due today for the review
     let task_ids: Vec<String> = {
@@ -1155,8 +1171,8 @@ async fn test_workflow_end_of_day_cleanup() {
     };
 
     let inbox_id = ctx.inbox_id().to_string();
-    let today = today_str();
-    let tomorrow = tomorrow_str();
+    let today = today_in_timezone(ctx.user_timezone());
+    let tomorrow = tomorrow_in_timezone(ctx.user_timezone());
 
     // Step 1: Create 5 tasks due today
     let mut today_task_ids = Vec::new();

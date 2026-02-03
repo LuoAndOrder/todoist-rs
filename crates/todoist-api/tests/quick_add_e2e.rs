@@ -24,20 +24,28 @@
 
 mod test_context;
 
-use chrono::{Duration, Local, NaiveDate};
+use chrono::{Duration, NaiveDate, Utc};
+use chrono_tz::Tz;
 use test_context::TestContext;
 use todoist_api_rs::quick_add::QuickAddRequest;
 
-/// Helper to get today's date string in YYYY-MM-DD format.
-fn today_date_string() -> String {
-    Local::now().format("%Y-%m-%d").to_string()
+/// Helper to get today's date string in the user's timezone.
+fn today_in_timezone(tz_str: &str) -> String {
+    let tz: Tz = tz_str.parse().unwrap_or(chrono_tz::UTC);
+    Utc::now().with_timezone(&tz).format("%Y-%m-%d").to_string()
 }
 
-/// Helper to get tomorrow's date string in YYYY-MM-DD format.
-fn tomorrow_date_string() -> String {
-    (Local::now() + Duration::days(1))
+/// Helper to get tomorrow's date string in the user's timezone.
+fn tomorrow_in_timezone(tz_str: &str) -> String {
+    let tz: Tz = tz_str.parse().unwrap_or(chrono_tz::UTC);
+    (Utc::now().with_timezone(&tz) + Duration::days(1))
         .format("%Y-%m-%d")
         .to_string()
+}
+
+/// Extract just the date portion from a date/datetime string.
+fn date_part(date_str: &str) -> &str {
+    date_str.split('T').next().unwrap_or(date_str)
 }
 
 // =============================================================================
@@ -110,14 +118,15 @@ async fn test_quick_add_due_today() {
 
     let task_id = response.id.clone();
 
-    // Verify due date is today
+    // Verify due date is today in the user's timezone
     assert!(response.due.is_some(), "Should have a due date");
     let due = response.due.as_ref().unwrap();
+    let expected_today = today_in_timezone(ctx.user_timezone());
     assert_eq!(
-        due.date,
-        today_date_string(),
-        "Due date should be today: {}",
-        today_date_string()
+        date_part(&due.date),
+        expected_today,
+        "Due date should be today in user's timezone ({})",
+        ctx.user_timezone()
     );
 
     // Content may or may not have "today" removed - that's API behavior
@@ -155,14 +164,15 @@ async fn test_quick_add_due_tomorrow() {
 
     let task_id = response.id.clone();
 
-    // Verify due date is tomorrow
+    // Verify due date is tomorrow in the user's timezone
     assert!(response.due.is_some(), "Should have a due date");
     let due = response.due.as_ref().unwrap();
+    let expected_tomorrow = tomorrow_in_timezone(ctx.user_timezone());
     assert_eq!(
-        due.date,
-        tomorrow_date_string(),
-        "Due date should be tomorrow: {}",
-        tomorrow_date_string()
+        date_part(&due.date),
+        expected_tomorrow,
+        "Due date should be tomorrow in user's timezone ({})",
+        ctx.user_timezone()
     );
 
     // Cleanup
@@ -670,13 +680,15 @@ async fn test_quick_add_combined() {
     let task_id = response.id.clone();
 
     // Verify all elements
-    // 1. Due date is tomorrow
+    // 1. Due date is tomorrow in the user's timezone
     assert!(response.due.is_some(), "Should have due date");
     let due = response.due.as_ref().unwrap();
+    let expected_tomorrow = tomorrow_in_timezone(ctx.user_timezone());
     assert_eq!(
-        due.date,
-        tomorrow_date_string(),
-        "Due date should be tomorrow"
+        date_part(&due.date),
+        expected_tomorrow,
+        "Due date should be tomorrow in user's timezone ({})",
+        ctx.user_timezone()
     );
 
     // 2. Priority is 3 (p2)
@@ -789,18 +801,19 @@ async fn test_quick_add_due_with_time() {
     assert!(response.due.is_some(), "Should have a due date");
     let due = response.due.as_ref().unwrap();
 
-    // When time is specified, the API returns datetime with time in UTC
-    // The date field contains the datetime string, not just the date
-    // We verify it's today by checking the date portion starts with today's date
-    let today = today_date_string();
+    // When time is specified, the API returns datetime with time
+    // The date field may contain the datetime string with time
+    // We verify it's today by checking the date portion matches today in user's timezone
+    let today = today_in_timezone(ctx.user_timezone());
     assert!(
-        due.date.starts_with(&today)
+        date_part(&due.date) == today
             || due
                 .datetime
                 .as_ref()
-                .is_some_and(|dt| dt.starts_with(&today)),
-        "Should be due today ({}), got date: {}, datetime: {:?}",
+                .is_some_and(|dt| date_part(dt) == today),
+        "Should be due today ({}) in user's timezone ({}), got date: {}, datetime: {:?}",
         today,
+        ctx.user_timezone(),
         due.date,
         due.datetime
     );

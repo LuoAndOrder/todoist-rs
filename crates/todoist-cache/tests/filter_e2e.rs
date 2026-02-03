@@ -10,7 +10,7 @@
 
 use std::fs;
 
-use chrono::Local;
+use chrono::Utc;
 use todoist_api_rs::client::TodoistClient;
 use todoist_api_rs::sync::{SyncCommand, SyncCommandType, SyncRequest};
 use todoist_cache_rs::filter::{FilterContext, FilterEvaluator, FilterParser};
@@ -38,8 +38,53 @@ fn get_test_token() -> Option<String> {
         .ok()
 }
 
-fn today_str() -> String {
-    Local::now().format("%Y-%m-%d").to_string()
+fn today_in_timezone(tz_str: &str) -> String {
+    use chrono_tz::Tz;
+    let tz: Tz = tz_str.parse().unwrap_or(chrono_tz::UTC);
+    Utc::now().with_timezone(&tz).format("%Y-%m-%d").to_string()
+}
+
+/// Test context for filter e2e tests
+struct FilterTestContext {
+    client: TodoistClient,
+    manager: SyncManager,
+    user_timezone: String,
+    #[allow(dead_code)]
+    temp_dir: tempfile::TempDir,
+}
+
+impl FilterTestContext {
+    async fn new() -> Result<Self, Box<dyn std::error::Error>> {
+        let token = get_test_token().ok_or("No API token found")?;
+        let temp_dir = tempfile::tempdir()?;
+        let cache_path = temp_dir.path().join("cache.json");
+
+        let client = TodoistClient::new(&token)?;
+        let store = CacheStore::with_path(cache_path);
+        let mut manager = SyncManager::new(client.clone(), store)?;
+
+        // Perform initial sync to get user timezone
+        let response = client.sync(SyncRequest::full_sync()).await?;
+        let user_timezone = response
+            .user
+            .as_ref()
+            .and_then(|u| u.timezone.clone())
+            .unwrap_or_else(|| "UTC".to_string());
+
+        // Sync the manager too
+        manager.sync().await?;
+
+        Ok(Self {
+            client,
+            manager,
+            user_timezone,
+            temp_dir,
+        })
+    }
+
+    fn user_timezone(&self) -> &str {
+        &self.user_timezone
+    }
 }
 
 // ============================================================================
@@ -48,20 +93,13 @@ fn today_str() -> String {
 
 #[tokio::test]
 async fn test_e2e_filter_today_returns_correct_items() {
-    let Some(token) = get_test_token() else {
+    let Ok(mut ctx) = FilterTestContext::new().await else {
         eprintln!("Skipping e2e test: no API token found");
         return;
     };
 
-    let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
-    let cache_path = temp_dir.path().join("cache.json");
-
-    let client = TodoistClient::new(&token).unwrap();
-    let store = CacheStore::with_path(cache_path);
-    let mut manager = SyncManager::new(client.clone(), store).expect("failed to create manager");
-
-    // Perform initial sync to get inbox project
-    let cache = manager.sync().await.expect("initial sync failed");
+    // Get inbox project from cache
+    let cache = ctx.manager.sync().await.expect("sync failed");
     let inbox = cache
         .projects
         .iter()
@@ -70,7 +108,7 @@ async fn test_e2e_filter_today_returns_correct_items() {
     let inbox_id = inbox.id.clone();
 
     // Create a task due today
-    let today = today_str();
+    let today = today_in_timezone(ctx.user_timezone());
     let temp_id_today = uuid::Uuid::new_v4().to_string();
     let add_today = SyncCommand::with_temp_id(
         SyncCommandType::ItemAdd,
@@ -93,7 +131,8 @@ async fn test_e2e_filter_today_returns_correct_items() {
         }),
     );
 
-    let add_response = client
+    let add_response = ctx
+        .client
         .sync(SyncRequest::with_commands(vec![add_today, add_nodate]))
         .await
         .expect("item_add failed");
@@ -113,7 +152,7 @@ async fn test_e2e_filter_today_returns_correct_items() {
     );
 
     // Sync to get the new items in cache
-    let cache = manager.sync().await.expect("sync failed");
+    let cache = ctx.manager.sync().await.expect("sync failed");
 
     // Parse and evaluate "today" filter
     let filter = FilterParser::parse("today").expect("Failed to parse 'today' filter");
@@ -155,7 +194,8 @@ async fn test_e2e_filter_today_returns_correct_items() {
             serde_json::json!({"id": nodate_item_id}),
         ),
     ];
-    let delete_response = client
+    let delete_response = ctx
+        .client
         .sync(SyncRequest::with_commands(delete_commands))
         .await
         .expect("item_delete failed");

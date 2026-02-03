@@ -19,8 +19,17 @@
 
 mod test_context;
 
+use chrono_tz::Tz;
 use test_context::TestContext;
 use todoist_api_rs::sync::{SyncCommand, SyncCommandType};
+
+fn today_in_timezone(tz_str: &str) -> String {
+    let tz: Tz = tz_str.parse().unwrap_or(chrono_tz::UTC);
+    chrono::Utc::now()
+        .with_timezone(&tz)
+        .format("%Y-%m-%d")
+        .to_string()
+}
 
 // ============================================================================
 // 1.1 Basic CRUD Tests
@@ -1022,7 +1031,7 @@ async fn test_update_day_orders() {
     let inbox_id = ctx.inbox_id().to_string();
 
     // Create 3 tasks due today
-    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let today = today_in_timezone(ctx.user_timezone());
     let task1_id = ctx
         .create_task(
             "E2E test - day order 1",
@@ -1391,7 +1400,7 @@ async fn test_overdue_task() {
     // Verify task is considered overdue (checking date is before today)
     let due_date = chrono::NaiveDate::parse_from_str(&task.due.as_ref().unwrap().date, "%Y-%m-%d")
         .expect("Should parse due date");
-    let today = chrono::Local::now().date_naive();
+    let today = chrono::Utc::now().date_naive();
     assert!(
         due_date < today,
         "Due date should be before today (overdue)"

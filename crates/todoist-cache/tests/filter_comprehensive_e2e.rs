@@ -12,7 +12,7 @@
 
 use std::fs;
 
-use chrono::{Duration, Local};
+use chrono::{Duration, Utc};
 use todoist_api_rs::client::TodoistClient;
 use todoist_api_rs::sync::{SyncCommand, SyncCommandType, SyncRequest, SyncResponse};
 use todoist_cache_rs::filter::{FilterContext, FilterEvaluator, FilterParser};
@@ -61,6 +61,7 @@ struct FilterTestContext {
     client: TodoistClient,
     sync_token: String,
     inbox_id: String,
+    user_timezone: String,
     items: Vec<todoist_api_rs::sync::Item>,
     projects: Vec<todoist_api_rs::sync::Project>,
     sections: Vec<todoist_api_rs::sync::Section>,
@@ -83,10 +84,17 @@ impl FilterTestContext {
             .id
             .clone();
 
+        let user_timezone = response
+            .user
+            .as_ref()
+            .and_then(|u| u.timezone.clone())
+            .unwrap_or_else(|| "UTC".to_string());
+
         Ok(Self {
             client,
             sync_token: response.sync_token,
             inbox_id,
+            user_timezone,
             items: response.items,
             projects: response.projects,
             sections: response.sections,
@@ -96,6 +104,10 @@ impl FilterTestContext {
 
     fn inbox_id(&self) -> &str {
         &self.inbox_id
+    }
+
+    fn user_timezone(&self) -> &str {
+        &self.user_timezone
     }
 
     async fn execute(
@@ -310,24 +322,32 @@ impl FilterTestContext {
 // Date Helpers
 // ============================================================================
 
-fn today_str() -> String {
-    Local::now().format("%Y-%m-%d").to_string()
+fn today_in_timezone(tz_str: &str) -> String {
+    use chrono_tz::Tz;
+    let tz: Tz = tz_str.parse().unwrap_or(chrono_tz::UTC);
+    Utc::now().with_timezone(&tz).format("%Y-%m-%d").to_string()
 }
 
-fn tomorrow_str() -> String {
-    (Local::now() + Duration::days(1))
+fn tomorrow_in_timezone(tz_str: &str) -> String {
+    use chrono_tz::Tz;
+    let tz: Tz = tz_str.parse().unwrap_or(chrono_tz::UTC);
+    (Utc::now().with_timezone(&tz) + Duration::days(1))
         .format("%Y-%m-%d")
         .to_string()
 }
 
-fn yesterday_str() -> String {
-    (Local::now() - Duration::days(1))
+fn yesterday_in_timezone(tz_str: &str) -> String {
+    use chrono_tz::Tz;
+    let tz: Tz = tz_str.parse().unwrap_or(chrono_tz::UTC);
+    (Utc::now().with_timezone(&tz) - Duration::days(1))
         .format("%Y-%m-%d")
         .to_string()
 }
 
-fn days_from_now(days: i64) -> String {
-    (Local::now() + Duration::days(days))
+fn days_from_now_in_timezone(days: i64, tz_str: &str) -> String {
+    use chrono_tz::Tz;
+    let tz: Tz = tz_str.parse().unwrap_or(chrono_tz::UTC);
+    (Utc::now().with_timezone(&tz) + Duration::days(days))
         .format("%Y-%m-%d")
         .to_string()
 }
@@ -344,8 +364,8 @@ async fn test_filter_today() {
     };
 
     let inbox_id = ctx.inbox_id().to_string();
-    let today = today_str();
-    let tomorrow = tomorrow_str();
+    let today = today_in_timezone(ctx.user_timezone());
+    let tomorrow = tomorrow_in_timezone(ctx.user_timezone());
 
     // Create: task due today, task due tomorrow, task with no date
     let task_today = ctx
@@ -406,9 +426,9 @@ async fn test_filter_tomorrow() {
     };
 
     let inbox_id = ctx.inbox_id().to_string();
-    let today = today_str();
-    let tomorrow = tomorrow_str();
-    let next_week = days_from_now(7);
+    let today = today_in_timezone(ctx.user_timezone());
+    let tomorrow = tomorrow_in_timezone(ctx.user_timezone());
+    let next_week = days_from_now_in_timezone(7, ctx.user_timezone());
 
     // Create tasks
     let task_today = ctx
@@ -474,9 +494,9 @@ async fn test_filter_overdue() {
     };
 
     let inbox_id = ctx.inbox_id().to_string();
-    let yesterday = yesterday_str();
-    let today = today_str();
-    let tomorrow = tomorrow_str();
+    let yesterday = yesterday_in_timezone(ctx.user_timezone());
+    let today = today_in_timezone(ctx.user_timezone());
+    let tomorrow = tomorrow_in_timezone(ctx.user_timezone());
 
     // Create tasks
     let task_yesterday = ctx
@@ -542,7 +562,7 @@ async fn test_filter_no_date() {
     };
 
     let inbox_id = ctx.inbox_id().to_string();
-    let today = today_str();
+    let today = today_in_timezone(ctx.user_timezone());
 
     // Create tasks
     let task_with_date = ctx
@@ -586,9 +606,9 @@ async fn test_filter_7_days() {
     };
 
     let inbox_id = ctx.inbox_id().to_string();
-    let today = today_str();
-    let in_5_days = days_from_now(5);
-    let in_10_days = days_from_now(10);
+    let today = today_in_timezone(ctx.user_timezone());
+    let in_5_days = days_from_now_in_timezone(5, ctx.user_timezone());
+    let in_10_days = days_from_now_in_timezone(10, ctx.user_timezone());
 
     // Create tasks
     let task_today = ctx
@@ -1468,7 +1488,7 @@ async fn test_filter_and_precedence() {
     };
 
     let inbox_id = ctx.inbox_id().to_string();
-    let today = today_str();
+    let today = today_in_timezone(ctx.user_timezone());
 
     // Create label
     let label_urgent = ctx
@@ -1567,9 +1587,9 @@ async fn test_filter_parentheses() {
     };
 
     let inbox_id = ctx.inbox_id().to_string();
-    let today = today_str();
-    let tomorrow = tomorrow_str();
-    let next_week = days_from_now(7);
+    let today = today_in_timezone(ctx.user_timezone());
+    let tomorrow = tomorrow_in_timezone(ctx.user_timezone());
+    let next_week = days_from_now_in_timezone(7, ctx.user_timezone());
 
     // Test: "(today | tomorrow) & p1"
     // Task: today + p1 (should match)
@@ -1759,9 +1779,9 @@ async fn test_filter_complex_real_world() {
         return;
     };
 
-    let today = today_str();
-    let yesterday = yesterday_str();
-    let next_week = days_from_now(7);
+    let today = today_in_timezone(ctx.user_timezone());
+    let yesterday = yesterday_in_timezone(ctx.user_timezone());
+    let next_week = days_from_now_in_timezone(7, ctx.user_timezone());
 
     // Create project hierarchy
     let work_project = ctx

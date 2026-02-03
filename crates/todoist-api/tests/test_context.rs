@@ -86,6 +86,7 @@ pub struct TestContext {
     client: TodoistClient,
     sync_token: String,
     inbox_id: String,
+    user_timezone: String,
     // Cached state from syncs
     items: Vec<Item>,
     projects: Vec<Project>,
@@ -117,10 +118,18 @@ impl TestContext {
             .id
             .clone();
 
+        // Extract user timezone, default to UTC if not available
+        let user_timezone = response
+            .user
+            .as_ref()
+            .and_then(|u| u.timezone.clone())
+            .unwrap_or_else(|| "UTC".to_string());
+
         Ok(Self {
             client,
             sync_token: response.sync_token,
             inbox_id,
+            user_timezone,
             items: response.items,
             projects: response.projects,
             sections: response.sections,
@@ -135,6 +144,11 @@ impl TestContext {
     /// Returns the inbox project ID.
     pub fn inbox_id(&self) -> &str {
         &self.inbox_id
+    }
+
+    /// Returns the user's timezone (e.g., "America/New_York").
+    pub fn user_timezone(&self) -> &str {
+        &self.user_timezone
     }
 
     /// Returns a reference to the API client.

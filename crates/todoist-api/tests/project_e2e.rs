@@ -22,6 +22,15 @@ mod test_context;
 use test_context::TestContext;
 use todoist_api_rs::sync::{SyncCommand, SyncCommandType};
 
+fn today_in_timezone(tz_str: &str) -> String {
+    use chrono_tz::Tz;
+    let tz: Tz = tz_str.parse().unwrap_or(chrono_tz::UTC);
+    chrono::Utc::now()
+        .with_timezone(&tz)
+        .format("%Y-%m-%d")
+        .to_string()
+}
+
 // ============================================================================
 // 3.1 Basic CRUD Tests
 // ============================================================================
@@ -737,7 +746,7 @@ async fn test_archived_project_excluded_from_filters() {
         .await
         .expect("create_project failed");
 
-    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let today = today_in_timezone(ctx.user_timezone());
     let task_id = ctx
         .create_task(
             "E2E test - task due today in project",
