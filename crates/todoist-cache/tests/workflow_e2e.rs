@@ -6,9 +6,9 @@
 //! They require a valid Todoist API token set in .env.local as:
 //! TODOIST_TEST_API_TOKEN=<token>
 //!
-//! Run with: cargo test --package todoist-cache --features e2e --test workflow_e2e
+//! Run with: cargo test -p todoist-cache-rs --features extended-e2e --test workflow_e2e
 
-#![cfg(feature = "e2e")]
+#![cfg(feature = "extended-e2e")]
 
 use std::fs;
 use std::sync::Arc;

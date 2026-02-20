@@ -13,10 +13,10 @@
 //! ## Running
 //!
 //! ```bash
-//! cargo test --package todoist-api --features e2e --test edge_cases_e2e
+//! cargo test -p todoist-api-rs --features extended-e2e --test edge_cases_e2e
 //! ```
 
-#![cfg(feature = "e2e")]
+#![cfg(feature = "extended-e2e")]
 
 mod test_context;
 

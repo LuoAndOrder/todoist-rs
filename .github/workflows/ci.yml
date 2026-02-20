@@ -85,4 +85,6 @@ jobs:
           TODOIST_TEST_API_TOKEN: ${{ secrets.TODOIST_TEST_API_TOKEN }}
         run: |
           echo "TODOIST_TEST_API_TOKEN=$TODOIST_TEST_API_TOKEN" > .env.local
-          cargo test --features e2e -- --test-threads=1
+          cargo test --features e2e -p todoist-api-rs --test api_e2e -- --test-threads=1
+          cargo test --features e2e -p todoist-cache-rs --test cache_e2e -- --test-threads=1
+          cargo test --features e2e -p todoist-cli-rs --test cli_e2e -- --test-threads=1

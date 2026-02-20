@@ -2,7 +2,7 @@
 //!
 //! These tests validate task and project comment CRUD operations against the real Todoist API.
 //!
-//! Run with: cargo test --package todoist-api --features e2e --test comments_e2e
+//! Run with: cargo test -p todoist-api-rs --features extended-e2e --test comments_e2e
 //!
 //! Tests follow the naming convention from specs/E2E_TEST_SPEC.md section 7.
 //!
@@ -19,7 +19,7 @@
 //! Comments may require Todoist Pro for some features. If the test account does
 //! not have Pro or comments are not available, tests will gracefully skip.
 
-#![cfg(feature = "e2e")]
+#![cfg(feature = "extended-e2e")]
 
 mod test_context;
 

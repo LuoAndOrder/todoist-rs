@@ -13,6 +13,7 @@ path = "src/lib.rs"
 [features]
 default = []
 e2e = []
+extended-e2e = ["e2e"]
 
 [dependencies]
 reqwest.workspace = true

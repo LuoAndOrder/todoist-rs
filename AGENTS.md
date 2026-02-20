@@ -57,42 +57,44 @@ E2E tests run against the real Todoist API and require authentication.
 #### Running E2E Tests
 
 ```bash
-# Run all e2e tests (MUST use single thread due to shared account + rate limits)
-cargo test --features e2e -- --test-threads=1
-
-# Run specific e2e test file
-cargo test --features e2e -p todoist-api-rs --test labels_e2e -- --test-threads=1
-cargo test --features e2e -p todoist-api-rs --test task_lifecycle_e2e -- --test-threads=1
+# Default e2e profile (CI): lean smoke + CLI user scenarios
+cargo test --features e2e -p todoist-api-rs --test api_e2e -- --test-threads=1
 cargo test --features e2e -p todoist-cache-rs --test cache_e2e -- --test-threads=1
+cargo test --features e2e -p todoist-cli-rs --test cli_e2e -- --test-threads=1
 
-# Run a single test
-cargo test --features e2e -p todoist-api-rs --test labels_e2e test_create_label -- --test-threads=1
+# Extended e2e profile (manual/nightly): broad API matrix + workflow suites
+cargo test --features extended-e2e -p todoist-api-rs --test task_lifecycle_e2e -- --test-threads=1
+cargo test --features extended-e2e -p todoist-api-rs --test project_e2e -- --test-threads=1
+cargo test --features extended-e2e -p todoist-api-rs --test labels_e2e -- --test-threads=1
+cargo test --features extended-e2e -p todoist-api-rs --test comments_e2e -- --test-threads=1
+cargo test --features extended-e2e -p todoist-api-rs --test reminders_e2e -- --test-threads=1
+cargo test --features extended-e2e -p todoist-api-rs --test edge_cases_e2e -- --test-threads=1
+cargo test --features extended-e2e -p todoist-cache-rs --test workflow_e2e -- --test-threads=1
 ```
 
 #### Why Single-Threaded?
 
 E2E tests **must** run with `--test-threads=1` because:
 
-1. **Rate limits**: Todoist API allows 100 full syncs / 15 min. Each test initializes a `TestContext` that does a full sync.
+1. **Rate limits**: Todoist API allows 100 full syncs / 15 min. Even the lean profile performs real sync/mutation calls.
 2. **Shared account**: All tests operate on the same Todoist account. Parallel execution causes race conditions.
 3. **Test isolation**: Tests assume stable account state during execution.
 
 #### E2E Test Files
 
-**todoist-api crate:**
-- `api_e2e.rs` - Basic API operations (sync, quick add)
-- `task_lifecycle_e2e.rs` - Task CRUD, movement, completion
-- `project_e2e.rs` - Project/section CRUD, hierarchy, archiving
-- `labels_e2e.rs` - Label CRUD, task labeling
-- `comments_e2e.rs` - Task/project comments
-- `reminders_e2e.rs` - Reminder operations (requires Todoist Pro)
-- `edge_cases_e2e.rs` - Unicode, boundaries, rapid operations
+**Default (`e2e`)**
+- `crates/todoist-api/tests/api_e2e.rs` - API smoke test
+- `crates/todoist-cache/tests/cache_e2e.rs` - Cache/sync smoke test
+- `crates/td/tests/cli_e2e.rs` - Realistic CLI user workflows (project moves, bulk edit/delete, label flow)
 
-**todoist-cache crate:**
-- `cache_e2e.rs` - Cache operations with real API
-- `filter_e2e.rs` - Filter evaluation against real data
-- `filter_comprehensive_e2e.rs` - Comprehensive filter tests
-- `workflow_e2e.rs` - Multi-step workflow scenarios
+**Extended (`extended-e2e`)**
+- `crates/todoist-api/tests/task_lifecycle_e2e.rs`
+- `crates/todoist-api/tests/project_e2e.rs`
+- `crates/todoist-api/tests/labels_e2e.rs`
+- `crates/todoist-api/tests/comments_e2e.rs`
+- `crates/todoist-api/tests/reminders_e2e.rs`
+- `crates/todoist-api/tests/edge_cases_e2e.rs`
+- `crates/todoist-cache/tests/workflow_e2e.rs`
 
 ## Code Conventions
 

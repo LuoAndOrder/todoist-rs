@@ -3,7 +3,7 @@
 //! These tests validate task CRUD, movement, completion, subtasks, and ordering
 //! against the real Todoist API.
 //!
-//! Run with: cargo test --package todoist-api --features e2e --test task_lifecycle_e2e
+//! Run with: cargo test -p todoist-api-rs --features extended-e2e --test task_lifecycle_e2e
 //!
 //! Tests follow the naming convention from specs/E2E_TEST_SPEC.md sections 1.1-1.5.
 //!
@@ -15,7 +15,7 @@
 //! - Full sync: 100 requests / 15 minutes
 //! - Partial sync: 1000 requests / 15 minutes
 
-#![cfg(feature = "e2e")]
+#![cfg(feature = "extended-e2e")]
 
 mod test_context;
 

@@ -15,7 +15,7 @@
 //! By using `TestContext`, tests use partial syncs instead of full syncs,
 //! allowing ~10x more API calls before hitting rate limits.
 
-#![cfg(feature = "e2e")]
+#![cfg(feature = "extended-e2e")]
 #![allow(dead_code)]
 
 use std::fs;

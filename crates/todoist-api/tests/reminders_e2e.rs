@@ -2,7 +2,7 @@
 //!
 //! These tests validate reminder CRUD operations against the real Todoist API.
 //!
-//! Run with: cargo test --package todoist-api --features e2e --test reminders_e2e
+//! Run with: cargo test -p todoist-api-rs --features extended-e2e --test reminders_e2e
 //!
 //! Tests follow the naming convention from specs/E2E_TEST_SPEC.md section 6.
 //!
@@ -20,7 +20,7 @@
 //! reminder operations will fail with an error. Tests handle this gracefully
 //! by checking for errors and skipping if reminders are not available.
 
-#![cfg(feature = "e2e")]
+#![cfg(feature = "extended-e2e")]
 
 mod test_context;
 

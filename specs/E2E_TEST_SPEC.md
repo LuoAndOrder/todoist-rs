@@ -2,10 +2,13 @@
 
 Comprehensive end-to-end test suite for todoist-rs, validating all API functionality against the real Todoist API.
 
+> Note: This document describes the **extended** E2E profile (`--features extended-e2e`).
+> The default CI profile (`--features e2e`) is intentionally smaller and CLI-focused.
+
 ## Overview
 
 All E2E tests:
-- Require `--features e2e` flag
+- Require either `--features e2e` (lean default) or `--features extended-e2e` (full matrix)
 - Require `TODOIST_TEST_API_TOKEN` in `.env.local`
 - Clean up all created resources after each test
 - Are idempotent and can run in any order
@@ -14,8 +17,11 @@ All E2E tests:
 ## Test File Organization
 
 ```
+crates/td/tests/
+  cli_e2e.rs                    # CLI-focused user workflow scenarios (default profile)
+
 crates/todoist-api/tests/
-  api_e2e.rs                    # Basic API connectivity (existing)
+  api_e2e.rs                    # Basic API connectivity (default profile)
   task_lifecycle_e2e.rs         # Task CRUD, move, complete, subtasks
   project_e2e.rs                # Project and section operations
   labels_e2e.rs                 # Label CRUD and task labeling
@@ -24,7 +30,7 @@ crates/todoist-api/tests/
   quick_add_e2e.rs              # NLP parsing scenarios
 
 crates/todoist-cache/tests/
-  cache_e2e.rs                  # Cache and sync behavior (existing)
+  cache_e2e.rs                  # Cache and sync behavior (default profile)
   filter_e2e.rs                 # Filter parsing and evaluation (existing)
   filter_comprehensive_e2e.rs   # Extended filter coverage
   workflow_e2e.rs               # AI agent workflow simulations
@@ -1200,17 +1206,20 @@ Complete all tasks for the day.
 ## Running the Tests
 
 ```bash
-# Run all E2E tests
-cargo test --features e2e
+# Run default (lean) E2E profile
+cargo test --features e2e -p todoist-api-rs --test api_e2e -- --test-threads=1
+cargo test --features e2e -p todoist-cache-rs --test cache_e2e -- --test-threads=1
+cargo test --features e2e -p todoist-cli-rs --test cli_e2e -- --test-threads=1
 
-# Run specific test file
-cargo test --package todoist-api --features e2e --test task_lifecycle_e2e
+# Run extended matrix profile
+cargo test --features extended-e2e -p todoist-api-rs --test task_lifecycle_e2e -- --test-threads=1
+cargo test --features extended-e2e -p todoist-cache-rs --test workflow_e2e -- --test-threads=1
 
 # Run specific test
-cargo test --features e2e test_move_task_between_projects
+cargo test --features extended-e2e -p todoist-api-rs --test task_lifecycle_e2e test_move_task_between_projects -- --test-threads=1
 
 # Run with output
-cargo test --features e2e -- --nocapture
+cargo test --features e2e -p todoist-cli-rs --test cli_e2e -- --test-threads=1 --nocapture
 ```
 
 ## Test Data Naming Convention

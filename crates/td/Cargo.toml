@@ -10,6 +10,11 @@ description = "A Rust CLI for the Todoist API"
 name = "td"
 path = "src/main.rs"
 
+[features]
+default = []
+e2e = []
+extended-e2e = ["e2e"]
+
 [dependencies]
 todoist-api-rs.workspace = true
 todoist-cache-rs.workspace = true
