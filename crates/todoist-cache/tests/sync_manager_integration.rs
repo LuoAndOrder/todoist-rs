@@ -495,6 +495,7 @@ async fn test_execute_commands_adds_item_to_cache() {
     // Set up mock to respond to command
     Mock::given(method("POST"))
         .and(path("/sync"))
+        .and(body_string_contains("sync_token=existing_token"))
         .and(body_string_contains("commands="))
         .respond_with(ResponseTemplate::new(200).set_body_json(mock_command_response()))
         .expect(1)
