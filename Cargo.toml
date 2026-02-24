@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/*"]
 
 [workspace.package]
-version = "0.1.4"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/luoandorder/todoist-rs"
@@ -40,5 +40,5 @@ serial_test = "3"
 chrono-tz = "0.10"
 
 # Workspace crates
-todoist-api-rs = { version = "0.1.2", path = "crates/todoist-api" }
-todoist-cache-rs = { version = "0.1.2", path = "crates/todoist-cache" }
+todoist-api-rs = { version = "0.2.0", path = "crates/todoist-api" }
+todoist-cache-rs = { version = "0.2.0", path = "crates/todoist-cache" }
