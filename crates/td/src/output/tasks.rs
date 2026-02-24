@@ -2,7 +2,7 @@
 
 use owo_colors::OwoColorize;
 use serde::Serialize;
-use todoist_api_rs::sync::Item;
+use todoist_api_rs::sync::{Collaborator, Item};
 use todoist_cache_rs::Cache;
 
 use crate::commands::add::AddResult;
@@ -34,6 +34,8 @@ pub struct TaskOutput<'a> {
     pub project_name: Option<&'a str>,
     pub section_id: Option<&'a str>,
     pub labels: &'a [String],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub assignee: Option<String>,
 }
 
 /// JSON output structure for a created item.
@@ -76,6 +78,12 @@ pub struct TaskDetailsOutput<'a> {
     pub labels: &'a [String],
     pub checked: bool,
     pub created_at: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub assignee: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub assignee_email: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub assigned_by: Option<&'a str>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub comments: Vec<CommentOutput<'a>>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -131,6 +139,8 @@ pub struct SubtaskOutput<'a> {
 
 /// Formats items as JSON.
 pub fn format_items_json(items: &[&Item], cache: &Cache) -> Result<String, serde_json::Error> {
+    let current_user_id = cache.user.as_ref().map(|u| u.id.as_str());
+
     let tasks: Vec<TaskOutput> = items
         .iter()
         .map(|item| {
@@ -139,6 +149,12 @@ pub fn format_items_json(items: &[&Item], cache: &Cache) -> Result<String, serde
                 .iter()
                 .find(|p| p.id == item.project_id)
                 .map(|p| p.name.as_str());
+
+            let assignee = resolve_assignee_display(
+                item.responsible_uid.as_deref(),
+                current_user_id,
+                &cache.collaborators,
+            );
 
             TaskOutput {
                 id: &item.id,
@@ -151,6 +167,7 @@ pub fn format_items_json(items: &[&Item], cache: &Cache) -> Result<String, serde
                 project_name,
                 section_id: item.section_id.as_deref(),
                 labels: &item.labels,
+                assignee,
             }
         })
         .collect();
@@ -251,6 +268,9 @@ pub fn format_item_details_json(result: &ShowResult) -> Result<String, serde_jso
         labels: &result.labels,
         checked: result.item.checked,
         created_at: result.item.added_at.as_deref(),
+        assignee: result.assignee_name.as_deref(),
+        assignee_email: result.assignee_email.as_deref(),
+        assigned_by: result.assigned_by_name.as_deref(),
         comments,
         reminders,
         subtasks,
@@ -298,6 +318,21 @@ pub fn format_item_details_table(result: &ShowResult, use_colors: bool) -> Strin
     if !result.labels.is_empty() {
         let labels_str: Vec<String> = result.labels.iter().map(|l| format!("@{}", l)).collect();
         output.push_str(&format!("Labels: {}\n", labels_str.join(", ")));
+    }
+
+    // Assignee
+    if let Some(ref assignee) = result.assignee_name {
+        let assignee_display = if let Some(ref email) = result.assignee_email {
+            format!("{} ({})", assignee, email)
+        } else {
+            assignee.to_string()
+        };
+        output.push_str(&format!("Assigned to: {}\n", assignee_display));
+    }
+
+    // Assigned by
+    if let Some(ref assigned_by) = result.assigned_by_name {
+        output.push_str(&format!("Assigned by: {}\n", assigned_by));
     }
 
     // Created at
@@ -359,6 +394,7 @@ pub fn format_items_table(items: &[&Item], cache: &Cache, use_colors: bool) -> S
         return "No tasks found.\n".to_string();
     }
 
+    let current_user_id = cache.user.as_ref().map(|u| u.id.as_str());
     let mut output = String::new();
 
     // Header
@@ -385,15 +421,48 @@ pub fn format_items_table(items: &[&Item], cache: &Cache, use_colors: bool) -> S
             .map(|p| truncate_str(&p.name, 15))
             .unwrap_or_default();
         let labels = super::helpers::format_labels(&item.labels, 15);
-        let content = &item.content;
+
+        let assignee = resolve_assignee_display(
+            item.responsible_uid.as_deref(),
+            current_user_id,
+            &cache.collaborators,
+        );
+
+        let content_display = if let Some(ref name) = assignee {
+            format!("{} [@{}]", item.content, name)
+        } else {
+            item.content.to_string()
+        };
 
         let line = format!(
             "{:<8} {:<4} {:<12} {:<15} {:<15} {}",
-            id_prefix, priority, due, project, labels, content
+            id_prefix, priority, due, project, labels, content_display
         );
         output.push_str(&line);
         output.push('\n');
     }
 
     output
+}
+
+/// Resolves a responsible_uid to a display name.
+/// Returns "me" for the current user, full name for others, or None if unassigned.
+fn resolve_assignee_display(
+    responsible_uid: Option<&str>,
+    current_user_id: Option<&str>,
+    collaborators: &[Collaborator],
+) -> Option<String> {
+    let uid = responsible_uid?;
+
+    // Check if it's the current user
+    if current_user_id == Some(uid) {
+        return Some("me".to_string());
+    }
+
+    // Look up collaborator name
+    collaborators
+        .iter()
+        .find(|c| c.id == uid)
+        .and_then(|c| c.full_name.clone())
+        .or_else(|| Some(uid.to_string()))
 }

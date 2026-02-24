@@ -877,3 +877,93 @@ fn test_error_unknown_character_unicode() {
         other => panic!("Expected UnknownCharacters error, got {:?}", other),
     }
 }
+
+// ==================== Assignment Filter Parser Tests ====================
+
+#[test]
+fn test_parse_assigned_to_me() {
+    let filter = FilterParser::parse("assigned to: me").unwrap();
+    assert_eq!(filter, Filter::AssignedTo(AssignedTarget::Me));
+}
+
+#[test]
+fn test_parse_assigned_to_others() {
+    let filter = FilterParser::parse("assigned to: others").unwrap();
+    assert_eq!(filter, Filter::AssignedTo(AssignedTarget::Others));
+}
+
+#[test]
+fn test_parse_assigned_to_name() {
+    let filter = FilterParser::parse("assigned to: Alice").unwrap();
+    assert_eq!(
+        filter,
+        Filter::AssignedTo(AssignedTarget::User("Alice".to_string()))
+    );
+}
+
+#[test]
+fn test_parse_assigned_by_me() {
+    let filter = FilterParser::parse("assigned by: me").unwrap();
+    assert_eq!(filter, Filter::AssignedBy(AssignedTarget::Me));
+}
+
+#[test]
+fn test_parse_assigned_by_name() {
+    let filter = FilterParser::parse("assigned by: Alice").unwrap();
+    assert_eq!(
+        filter,
+        Filter::AssignedBy(AssignedTarget::User("Alice".to_string()))
+    );
+}
+
+#[test]
+fn test_parse_assigned() {
+    let filter = FilterParser::parse("assigned").unwrap();
+    assert_eq!(filter, Filter::Assigned);
+}
+
+#[test]
+fn test_parse_no_assignee() {
+    let filter = FilterParser::parse("no assignee").unwrap();
+    assert_eq!(filter, Filter::NoAssignee);
+}
+
+#[test]
+fn test_parse_assigned_case_insensitive() {
+    assert_eq!(
+        FilterParser::parse("Assigned To: Me").unwrap(),
+        Filter::AssignedTo(AssignedTarget::Me)
+    );
+    assert_eq!(
+        FilterParser::parse("ASSIGNED TO: ME").unwrap(),
+        Filter::AssignedTo(AssignedTarget::Me)
+    );
+    assert_eq!(
+        FilterParser::parse("Assigned By: Me").unwrap(),
+        Filter::AssignedBy(AssignedTarget::Me)
+    );
+}
+
+#[test]
+fn test_parse_assigned_combined() {
+    let filter = FilterParser::parse("assigned to: me & p1").unwrap();
+    assert_eq!(
+        filter,
+        Filter::and(Filter::AssignedTo(AssignedTarget::Me), Filter::Priority1)
+    );
+}
+
+#[test]
+fn test_parse_assigned_to_name_with_spaces() {
+    let filter = FilterParser::parse("assigned to: Alice Smith").unwrap();
+    assert_eq!(
+        filter,
+        Filter::AssignedTo(AssignedTarget::User("Alice Smith".to_string()))
+    );
+}
+
+#[test]
+fn test_parse_not_assigned() {
+    let filter = FilterParser::parse("!assigned").unwrap();
+    assert_eq!(filter, Filter::negate(Filter::Assigned));
+}

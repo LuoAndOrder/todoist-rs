@@ -38,6 +38,8 @@ pub struct ListOptions {
     pub sort: Option<SortField>,
     /// Reverse sort order.
     pub reverse: bool,
+    /// Filter by assignee.
+    pub assigned_to: Option<String>,
 }
 
 /// Executes the list command.
@@ -166,6 +168,42 @@ fn filter_items<'a>(cache: &'a Cache, opts: &ListOptions) -> Result<Vec<&'a Item
         items.retain(|i| i.due.is_none());
     }
 
+    // Apply assigned_to filter
+    if let Some(assigned_to) = &opts.assigned_to {
+        let assigned_to_lower = assigned_to.to_lowercase();
+        if assigned_to_lower == "me" {
+            let current_uid = cache.user.as_ref().map(|u| u.id.as_str());
+            items.retain(|i| i.responsible_uid.as_deref() == current_uid);
+        } else if assigned_to_lower == "others" {
+            let current_uid = cache.user.as_ref().map(|u| u.id.as_str());
+            items.retain(|i| {
+                i.responsible_uid
+                    .as_ref()
+                    .is_some_and(|uid| current_uid != Some(uid.as_str()))
+            });
+        } else {
+            // Resolve user name across all collaborators
+            let matching_uid = cache
+                .collaborators
+                .iter()
+                .find(|c| {
+                    c.full_name
+                        .as_ref()
+                        .is_some_and(|n| n.to_lowercase().contains(&assigned_to_lower))
+                        || c.email
+                            .as_ref()
+                            .is_some_and(|e| e.to_lowercase().contains(&assigned_to_lower))
+                })
+                .map(|c| c.id.as_str());
+
+            if let Some(uid) = matching_uid {
+                items.retain(|i| i.responsible_uid.as_deref() == Some(uid));
+            } else {
+                return Ok(vec![]);
+            }
+        }
+    }
+
     Ok(items)
 }
 
@@ -243,6 +281,7 @@ mod tests {
             cursor: None,
             sort: None,
             reverse: false,
+            assigned_to: None,
         };
 
         assert!(!opts.all);

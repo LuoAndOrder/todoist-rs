@@ -72,6 +72,10 @@ pub enum Commands {
         #[arg(long)]
         no_due: bool,
 
+        /// Filter by assignee (name, email, "me", or "others")
+        #[arg(long, value_name = "USER")]
+        assigned_to: Option<String>,
+
         /// Limit results (default: 50)
         #[arg(long, default_value = "50")]
         limit: u32,
@@ -126,6 +130,10 @@ pub enum Commands {
         /// Task description/notes
         #[arg(long)]
         description: Option<String>,
+
+        /// Assign task to user
+        #[arg(long, value_name = "USER")]
+        assign: Option<String>,
     },
 
     /// Show task details
@@ -188,6 +196,14 @@ pub enum Commands {
         /// Update description
         #[arg(long)]
         description: Option<String>,
+
+        /// Assign task to user
+        #[arg(long, value_name = "USER", conflicts_with = "unassign")]
+        assign: Option<String>,
+
+        /// Remove task assignment
+        #[arg(long, conflicts_with = "assign")]
+        unassign: bool,
     },
 
     /// Complete task(s)
@@ -322,6 +338,13 @@ pub enum Commands {
     Config {
         #[command(subcommand)]
         command: Option<ConfigCommands>,
+    },
+
+    /// List collaborators for a shared project
+    Collaborators {
+        /// Project name or ID (required)
+        #[arg(long, short, required = true)]
+        project: String,
     },
 
     /// Generate shell completions

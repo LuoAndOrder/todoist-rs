@@ -1269,3 +1269,169 @@ fn test_filter_section_excludes_deleted_section() {
     // Filter should not match because section is deleted
     assert!(!evaluator.matches(&item));
 }
+
+// ==================== Assignment Filter Tests ====================
+
+fn make_collaborator(id: &str, name: &str, email: &str) -> todoist_api_rs::sync::Collaborator {
+    todoist_api_rs::sync::Collaborator {
+        id: id.to_string(),
+        email: Some(email.to_string()),
+        full_name: Some(name.to_string()),
+        timezone: None,
+        image_id: None,
+    }
+}
+
+#[test]
+fn test_eval_assigned_to_me() {
+    let collaborators = vec![make_collaborator("user1", "Me", "me@example.com")];
+    let context =
+        FilterContext::new(&[], &[], &[]).with_assignment_context(&collaborators, Some("user1"));
+    let filter = Filter::AssignedTo(AssignedTarget::Me);
+    let evaluator = FilterEvaluator::new(&filter, &context);
+
+    let mut item = make_item("1", "Task");
+    item.responsible_uid = Some("user1".to_string());
+
+    assert!(evaluator.matches(&item));
+}
+
+#[test]
+fn test_eval_assigned_to_me_no_match() {
+    let collaborators = vec![make_collaborator("user1", "Me", "me@example.com")];
+    let context =
+        FilterContext::new(&[], &[], &[]).with_assignment_context(&collaborators, Some("user1"));
+    let filter = Filter::AssignedTo(AssignedTarget::Me);
+    let evaluator = FilterEvaluator::new(&filter, &context);
+
+    let mut item = make_item("1", "Task");
+    item.responsible_uid = Some("user2".to_string());
+
+    assert!(!evaluator.matches(&item));
+}
+
+#[test]
+fn test_eval_assigned_to_others() {
+    let collaborators = vec![
+        make_collaborator("user1", "Me", "me@example.com"),
+        make_collaborator("user2", "Alice", "alice@example.com"),
+    ];
+    let context =
+        FilterContext::new(&[], &[], &[]).with_assignment_context(&collaborators, Some("user1"));
+    let filter = Filter::AssignedTo(AssignedTarget::Others);
+    let evaluator = FilterEvaluator::new(&filter, &context);
+
+    let mut item = make_item("1", "Task");
+    item.responsible_uid = Some("user2".to_string());
+
+    assert!(evaluator.matches(&item));
+}
+
+#[test]
+fn test_eval_assigned_to_others_unassigned() {
+    let collaborators = vec![make_collaborator("user1", "Me", "me@example.com")];
+    let context =
+        FilterContext::new(&[], &[], &[]).with_assignment_context(&collaborators, Some("user1"));
+    let filter = Filter::AssignedTo(AssignedTarget::Others);
+    let evaluator = FilterEvaluator::new(&filter, &context);
+
+    let item = make_item("1", "Task");
+    assert!(!evaluator.matches(&item));
+}
+
+#[test]
+fn test_eval_assigned_to_name() {
+    let collaborators = vec![
+        make_collaborator("user1", "Me", "me@example.com"),
+        make_collaborator("user2", "Alice", "alice@example.com"),
+    ];
+    let context =
+        FilterContext::new(&[], &[], &[]).with_assignment_context(&collaborators, Some("user1"));
+    let filter = Filter::AssignedTo(AssignedTarget::User("Alice".to_string()));
+    let evaluator = FilterEvaluator::new(&filter, &context);
+
+    let mut item = make_item("1", "Task");
+    item.responsible_uid = Some("user2".to_string());
+
+    assert!(evaluator.matches(&item));
+}
+
+#[test]
+fn test_eval_assigned() {
+    let context = FilterContext::new(&[], &[], &[]);
+    let filter = Filter::Assigned;
+    let evaluator = FilterEvaluator::new(&filter, &context);
+
+    let mut item = make_item("1", "Task");
+    item.responsible_uid = Some("user2".to_string());
+
+    assert!(evaluator.matches(&item));
+}
+
+#[test]
+fn test_eval_assigned_unassigned() {
+    let context = FilterContext::new(&[], &[], &[]);
+    let filter = Filter::Assigned;
+    let evaluator = FilterEvaluator::new(&filter, &context);
+
+    let item = make_item("1", "Task");
+    assert!(!evaluator.matches(&item));
+}
+
+#[test]
+fn test_eval_no_assignee() {
+    let context = FilterContext::new(&[], &[], &[]);
+    let filter = Filter::NoAssignee;
+    let evaluator = FilterEvaluator::new(&filter, &context);
+
+    let item = make_item("1", "Task");
+    assert!(evaluator.matches(&item));
+}
+
+#[test]
+fn test_eval_no_assignee_when_assigned() {
+    let context = FilterContext::new(&[], &[], &[]);
+    let filter = Filter::NoAssignee;
+    let evaluator = FilterEvaluator::new(&filter, &context);
+
+    let mut item = make_item("1", "Task");
+    item.responsible_uid = Some("user1".to_string());
+
+    assert!(!evaluator.matches(&item));
+}
+
+#[test]
+fn test_eval_assigned_by_me() {
+    let collaborators = vec![make_collaborator("user1", "Me", "me@example.com")];
+    let context =
+        FilterContext::new(&[], &[], &[]).with_assignment_context(&collaborators, Some("user1"));
+    let filter = Filter::AssignedBy(AssignedTarget::Me);
+    let evaluator = FilterEvaluator::new(&filter, &context);
+
+    let mut item = make_item("1", "Task");
+    item.assigned_by_uid = Some("user1".to_string());
+
+    assert!(evaluator.matches(&item));
+}
+
+#[test]
+fn test_eval_not_assigned() {
+    let context = FilterContext::new(&[], &[], &[]);
+    let filter = Filter::negate(Filter::Assigned);
+    let evaluator = FilterEvaluator::new(&filter, &context);
+
+    let mut item = make_item("1", "Task");
+    item.responsible_uid = Some("user1".to_string());
+
+    assert!(!evaluator.matches(&item));
+}
+
+#[test]
+fn test_eval_not_assigned_unassigned_item() {
+    let context = FilterContext::new(&[], &[], &[]);
+    let filter = Filter::negate(Filter::Assigned);
+    let evaluator = FilterEvaluator::new(&filter, &context);
+
+    let item = make_item("1", "Task");
+    assert!(evaluator.matches(&item));
+}

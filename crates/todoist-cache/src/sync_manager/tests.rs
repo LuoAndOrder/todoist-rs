@@ -2,6 +2,76 @@
 
 use super::*;
 use chrono::{DateTime, Duration, Utc};
+use todoist_api_rs::client::TodoistClient;
+use todoist_api_rs::sync::{Collaborator, CollaboratorState, Project, TzInfo, User};
+
+fn make_test_manager() -> SyncManager {
+    let client = TodoistClient::with_base_url("test-token", "http://localhost").unwrap();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let cache_path = temp_dir.path().join("cache.json");
+    let store = CacheStore::with_path(cache_path);
+    SyncManager::new(client, store).unwrap()
+}
+
+fn make_project(id: &str, name: &str) -> Project {
+    Project {
+        id: id.to_string(),
+        name: name.to_string(),
+        color: None,
+        parent_id: None,
+        child_order: 0,
+        is_collapsed: false,
+        shared: false,
+        can_assign_tasks: false,
+        is_deleted: false,
+        is_archived: false,
+        is_favorite: false,
+        view_style: None,
+        inbox_project: false,
+        folder_id: None,
+        created_at: None,
+        updated_at: None,
+    }
+}
+
+fn make_collaborator(id: &str, name: &str, email: &str) -> Collaborator {
+    Collaborator {
+        id: id.to_string(),
+        email: Some(email.to_string()),
+        full_name: Some(name.to_string()),
+        timezone: Some("UTC".to_string()),
+        image_id: None,
+    }
+}
+
+fn make_collaborator_state(project_id: &str, user_id: &str, state: &str) -> CollaboratorState {
+    CollaboratorState {
+        project_id: project_id.to_string(),
+        user_id: user_id.to_string(),
+        state: state.to_string(),
+    }
+}
+
+fn make_user(id: &str) -> User {
+    User {
+        id: id.to_string(),
+        email: Some("owner@example.com".to_string()),
+        full_name: Some("Owner".to_string()),
+        tz_info: Some(TzInfo {
+            timezone: "UTC".to_string(),
+            gmt_string: Some("+00:00".to_string()),
+            hours: 0,
+            minutes: 0,
+            is_dst: 0,
+        }),
+        inbox_project_id: None,
+        start_page: None,
+        start_day: None,
+        date_format: None,
+        time_format: None,
+        is_premium: false,
+    }
+}
 
 // Test staleness calculation with various scenarios
 
@@ -199,4 +269,224 @@ fn test_format_not_found_error_label_with_suggestion() {
         msg,
         "Label 'urgnt' not found. Try running 'td sync' to refresh your cache. Did you mean 'urgent'?"
     );
+}
+
+#[test]
+fn test_resolve_exact_name_match() {
+    let mut manager = make_test_manager();
+    manager.cache.projects = vec![make_project("proj-1", "Shared Project")];
+    manager.cache.collaborators = vec![make_collaborator(
+        "user-1",
+        "Alice Smith",
+        "alice@example.com",
+    )];
+    manager.cache.collaborator_states = vec![make_collaborator_state("proj-1", "user-1", "active")];
+
+    let resolved = manager
+        .resolve_collaborator("Alice Smith", "proj-1")
+        .unwrap();
+    assert_eq!(resolved.id, "user-1");
+}
+
+#[test]
+fn test_resolve_exact_email_match() {
+    let mut manager = make_test_manager();
+    manager.cache.projects = vec![make_project("proj-1", "Shared Project")];
+    manager.cache.collaborators = vec![make_collaborator(
+        "user-1",
+        "Alice Smith",
+        "alice@example.com",
+    )];
+    manager.cache.collaborator_states = vec![make_collaborator_state("proj-1", "user-1", "active")];
+
+    let resolved = manager
+        .resolve_collaborator("alice@example.com", "proj-1")
+        .unwrap();
+    assert_eq!(resolved.id, "user-1");
+}
+
+#[test]
+fn test_resolve_case_insensitive() {
+    let mut manager = make_test_manager();
+    manager.cache.projects = vec![make_project("proj-1", "Shared Project")];
+    manager.cache.collaborators = vec![make_collaborator(
+        "user-1",
+        "Alice Smith",
+        "alice@example.com",
+    )];
+    manager.cache.collaborator_states = vec![make_collaborator_state("proj-1", "user-1", "active")];
+
+    let resolved = manager
+        .resolve_collaborator("alice smith", "proj-1")
+        .unwrap();
+    assert_eq!(resolved.id, "user-1");
+}
+
+#[test]
+fn test_resolve_partial_name_match() {
+    let mut manager = make_test_manager();
+    manager.cache.projects = vec![make_project("proj-1", "Shared Project")];
+    manager.cache.collaborators = vec![
+        make_collaborator("user-1", "Alice Smith", "alice@example.com"),
+        make_collaborator("user-2", "Bob Chen", "bob@example.com"),
+    ];
+    manager.cache.collaborator_states = vec![
+        make_collaborator_state("proj-1", "user-1", "active"),
+        make_collaborator_state("proj-1", "user-2", "active"),
+    ];
+
+    let resolved = manager.resolve_collaborator("alice", "proj-1").unwrap();
+    assert_eq!(resolved.id, "user-1");
+}
+
+#[test]
+fn test_resolve_no_match_errors() {
+    let mut manager = make_test_manager();
+    manager.cache.projects = vec![make_project("proj-1", "Shared Project")];
+    manager.cache.collaborators = vec![make_collaborator(
+        "user-1",
+        "Alice Smith",
+        "alice@example.com",
+    )];
+    manager.cache.collaborator_states = vec![make_collaborator_state("proj-1", "user-1", "active")];
+
+    let err = manager
+        .resolve_collaborator("nonexistent", "proj-1")
+        .unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "No collaborator matching 'nonexistent' in project 'Shared Project'"
+    );
+}
+
+#[test]
+fn test_resolve_ambiguous_match_errors() {
+    let mut manager = make_test_manager();
+    manager.cache.projects = vec![make_project("proj-1", "Shared Project")];
+    manager.cache.collaborators = vec![
+        make_collaborator("user-1", "Alice Smith", "alice@example.com"),
+        make_collaborator("user-2", "Alicia Chen", "alicia@example.com"),
+    ];
+    manager.cache.collaborator_states = vec![
+        make_collaborator_state("proj-1", "user-1", "active"),
+        make_collaborator_state("proj-1", "user-2", "active"),
+    ];
+
+    let err = manager.resolve_collaborator("ali", "proj-1").unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "Multiple collaborators match 'ali': Alice Smith, Alicia Chen. Please be more specific."
+    );
+}
+
+#[test]
+fn test_resolve_scoped_to_project() {
+    let mut manager = make_test_manager();
+    manager.cache.projects = vec![
+        make_project("proj-1", "Shared Project A"),
+        make_project("proj-2", "Shared Project B"),
+    ];
+    manager.cache.collaborators = vec![make_collaborator(
+        "user-1",
+        "Alice Smith",
+        "alice@example.com",
+    )];
+    manager.cache.collaborator_states = vec![make_collaborator_state("proj-1", "user-1", "active")];
+
+    let err = manager.resolve_collaborator("Alice", "proj-2").unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "No collaborator matching 'Alice' in project 'Shared Project B'"
+    );
+}
+
+#[test]
+fn test_resolve_excludes_invited() {
+    let mut manager = make_test_manager();
+    manager.cache.projects = vec![make_project("proj-1", "Shared Project")];
+    manager.cache.collaborators = vec![make_collaborator(
+        "user-1",
+        "Alice Smith",
+        "alice@example.com",
+    )];
+    manager.cache.collaborator_states =
+        vec![make_collaborator_state("proj-1", "user-1", "invited")];
+
+    let err = manager.resolve_collaborator("Alice", "proj-1").unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "No collaborator matching 'Alice' in project 'Shared Project'"
+    );
+}
+
+#[test]
+fn test_resolve_me_resolves_to_current_user() {
+    let mut manager = make_test_manager();
+    manager.cache.user = Some(make_user("owner-1"));
+    manager.cache.projects = vec![make_project("proj-1", "Shared Project")];
+    manager.cache.collaborators = vec![
+        make_collaborator("owner-1", "Owner", "owner@example.com"),
+        make_collaborator("user-1", "Alice Smith", "alice@example.com"),
+    ];
+    manager.cache.collaborator_states = vec![
+        make_collaborator_state("proj-1", "owner-1", "active"),
+        make_collaborator_state("proj-1", "user-1", "active"),
+    ];
+
+    let resolved = manager.resolve_collaborator("me", "proj-1").unwrap();
+    assert_eq!(resolved.id, "owner-1");
+}
+
+#[test]
+fn test_resolve_me_case_insensitive() {
+    let mut manager = make_test_manager();
+    manager.cache.user = Some(make_user("owner-1"));
+    manager.cache.projects = vec![make_project("proj-1", "Shared Project")];
+    manager.cache.collaborators = vec![make_collaborator("owner-1", "Owner", "owner@example.com")];
+    manager.cache.collaborator_states =
+        vec![make_collaborator_state("proj-1", "owner-1", "active")];
+
+    let resolved = manager.resolve_collaborator("Me", "proj-1").unwrap();
+    assert_eq!(resolved.id, "owner-1");
+}
+
+#[test]
+fn test_resolve_me_errors_when_not_active_on_project() {
+    let mut manager = make_test_manager();
+    manager.cache.user = Some(make_user("owner-1"));
+    manager.cache.projects = vec![make_project("proj-1", "Shared Project")];
+    manager.cache.collaborators = vec![make_collaborator("owner-1", "Owner", "owner@example.com")];
+    // No collaborator_state for owner on this project
+    manager.cache.collaborator_states = vec![];
+
+    let err = manager.resolve_collaborator("me", "proj-1").unwrap_err();
+    assert!(err.to_string().contains("No collaborator matching 'me'"));
+}
+
+#[test]
+fn test_is_shared_project_true() {
+    let mut manager = make_test_manager();
+    manager.cache.user = Some(make_user("owner-1"));
+    manager.cache.collaborator_states = vec![
+        make_collaborator_state("proj-1", "owner-1", "active"),
+        make_collaborator_state("proj-1", "user-1", "active"),
+    ];
+
+    assert!(manager.is_shared_project("proj-1"));
+}
+
+#[test]
+fn test_is_shared_project_false_personal() {
+    let manager = make_test_manager();
+    assert!(!manager.is_shared_project("proj-1"));
+}
+
+#[test]
+fn test_is_shared_project_false_only_owner() {
+    let mut manager = make_test_manager();
+    manager.cache.user = Some(make_user("owner-1"));
+    manager.cache.collaborator_states =
+        vec![make_collaborator_state("proj-1", "owner-1", "active")];
+
+    assert!(!manager.is_shared_project("proj-1"));
 }

@@ -85,6 +85,19 @@ pub enum FilterToken {
     /// A section reference (prefixed with /).
     Section(String),
 
+    // ==================== Assignment ====================
+    /// "assigned to: <target>" keyword.
+    AssignedTo(String),
+
+    /// "assigned by: <target>" keyword.
+    AssignedBy(String),
+
+    /// "assigned" keyword (has any assignee).
+    Assigned,
+
+    /// "no assignee" keyword.
+    NoAssignee,
+
     // ==================== Operators ====================
     /// The AND operator (`&`).
     And,
@@ -204,6 +217,26 @@ impl<'a> Lexer<'a> {
             name.push(self.next_char().unwrap());
         }
         name
+    }
+
+    /// Reads an assignment target: "me", "others", or a user name (possibly with spaces).
+    fn read_assignment_target(&mut self) -> String {
+        // Check for quoted string
+        if let Some(&c) = self.peek() {
+            if c == '"' || c == '\'' {
+                return self.read_quoted_string(c);
+            }
+        }
+
+        // Read until operator or end
+        let mut name = String::new();
+        while let Some(&c) = self.peek() {
+            if c == '&' || c == '|' || c == ')' || c == '(' {
+                break;
+            }
+            name.push(self.next_char().unwrap());
+        }
+        name.trim().to_string()
     }
 
     /// Returns the next token with its position, or None if at end of input.
@@ -410,11 +443,52 @@ impl<'a> Lexer<'a> {
                                 token: FilterToken::NoLabels,
                                 position,
                             });
+                        } else if lower == "assignee" {
+                            return Some(PositionedToken {
+                                token: FilterToken::NoAssignee,
+                                position,
+                            });
                         }
                     }
                 }
                 // Just "no" by itself is not valid, return None
                 None
+            }
+            "assigned" => {
+                // Check for "assigned to:" or "assigned by:"
+                self.skip_whitespace();
+                if let Some(&c) = self.peek() {
+                    if c.is_alphabetic() {
+                        let next_word = self.read_identifier();
+                        let next_lower = next_word.to_lowercase();
+                        if next_lower == "to" || next_lower == "by" {
+                            // Consume the colon if present
+                            self.skip_whitespace();
+                            if self.peek() == Some(&':') {
+                                self.next_char();
+                            }
+                            // Read the target (me, others, or a name)
+                            self.skip_whitespace();
+                            let target = self.read_assignment_target();
+                            if next_lower == "to" {
+                                return Some(PositionedToken {
+                                    token: FilterToken::AssignedTo(target),
+                                    position,
+                                });
+                            } else {
+                                return Some(PositionedToken {
+                                    token: FilterToken::AssignedBy(target),
+                                    position,
+                                });
+                            }
+                        }
+                    }
+                }
+                // Just "assigned" by itself
+                Some(PositionedToken {
+                    token: FilterToken::Assigned,
+                    position,
+                })
             }
             _ => {
                 // Check if it's a month name followed by a day number

@@ -29,6 +29,8 @@ pub struct AddOptions {
     pub parent: Option<String>,
     /// Task description/notes.
     pub description: Option<String>,
+    /// Assign task to user.
+    pub assign: Option<String>,
 }
 
 /// Result of a successful add operation.
@@ -113,6 +115,20 @@ pub async fn execute(ctx: &CommandContext, opts: &AddOptions, token: &str) -> Re
 
     if !opts.labels.is_empty() {
         args["labels"] = serde_json::json!(opts.labels);
+    }
+
+    if let Some(ref assign_to) = opts.assign {
+        // Validate project is shared
+        if !manager.is_shared_project(&project_id) {
+            return Err(CommandError::Config(
+                "Task is in a personal project — share the project first to assign tasks."
+                    .to_string(),
+            ));
+        }
+        let collaborator = manager
+            .resolve_collaborator(assign_to, &project_id)
+            .map_err(|e| CommandError::Config(e.to_string()))?;
+        args["responsible_uid"] = serde_json::json!(collaborator.id);
     }
 
     if let Some(ref section_id) = section_id {
@@ -207,6 +223,7 @@ mod tests {
             section: None,
             parent: None,
             description: None,
+            assign: None,
         };
 
         assert_eq!(opts.content, "Test task");
@@ -225,6 +242,7 @@ mod tests {
             section: Some("In Progress".to_string()),
             parent: Some("parent-123".to_string()),
             description: Some("Task description".to_string()),
+            assign: None,
         };
 
         assert_eq!(opts.content, "Test task");

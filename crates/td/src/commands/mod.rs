@@ -3,6 +3,7 @@
 //! This module contains the actual command handlers that are invoked by the CLI.
 
 pub mod add;
+pub mod collaborators;
 pub mod comments;
 pub mod completions;
 pub mod config;

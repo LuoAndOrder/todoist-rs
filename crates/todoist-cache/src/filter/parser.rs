@@ -1,6 +1,6 @@
 //! Recursive descent parser for filter expressions.
 
-use super::ast::Filter;
+use super::ast::{AssignedTarget, Filter};
 use super::error::{FilterError, FilterResult};
 use super::lexer::{FilterToken, Lexer, PositionedToken};
 
@@ -220,11 +220,30 @@ impl FilterParser {
             FilterToken::ProjectWithSubprojects(name) => Ok(Filter::ProjectWithSubprojects(name)),
             FilterToken::Section(name) => Ok(Filter::Section(name)),
 
+            // Assignment filters
+            FilterToken::AssignedTo(target) => {
+                Ok(Filter::AssignedTo(parse_assigned_target(&target)))
+            }
+            FilterToken::AssignedBy(target) => {
+                Ok(Filter::AssignedBy(parse_assigned_target(&target)))
+            }
+            FilterToken::Assigned => Ok(Filter::Assigned),
+            FilterToken::NoAssignee => Ok(Filter::NoAssignee),
+
             // Unexpected tokens
             FilterToken::And => Err(FilterError::unexpected_token("&", position)),
             FilterToken::Or => Err(FilterError::unexpected_token("|", position)),
             FilterToken::CloseParen => Err(FilterError::unexpected_token(")", position)),
             FilterToken::Not => Err(FilterError::unexpected_token("!", position)),
         }
+    }
+}
+
+/// Parses an assignment target string into an AssignedTarget.
+fn parse_assigned_target(target: &str) -> AssignedTarget {
+    match target.to_lowercase().as_str() {
+        "me" => AssignedTarget::Me,
+        "others" => AssignedTarget::Others,
+        _ => AssignedTarget::User(target.to_string()),
     }
 }

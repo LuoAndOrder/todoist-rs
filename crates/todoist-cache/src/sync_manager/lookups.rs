@@ -4,7 +4,7 @@
 //! and items in the cache with auto-sync fallback and fuzzy matching suggestions.
 
 use strsim::levenshtein;
-use todoist_api_rs::sync::{Item, Label, Project, Section};
+use todoist_api_rs::sync::{Collaborator, Item, Label, Project, Section};
 
 use crate::{SyncError, SyncManager, SyncResult};
 
@@ -154,6 +154,164 @@ impl SyncManager {
             .projects
             .iter()
             .find(|p| !p.is_deleted && (p.name.to_lowercase() == name_lower || p.id == name_or_id))
+    }
+
+    /// Returns whether a project is shared with active collaborators other than the owner.
+    pub fn is_shared_project(&self, project_id: &str) -> bool {
+        let owner_id = self.cache().user.as_ref().map(|user| user.id.as_str());
+
+        self.cache().collaborator_states.iter().any(|state| {
+            state.project_id == project_id
+                && state.state.eq_ignore_ascii_case("active")
+                && owner_id != Some(state.user_id.as_str())
+        })
+    }
+
+    /// Resolves a collaborator in a project by name or email.
+    ///
+    /// Matching order:
+    /// 1. Exact full name (case-insensitive)
+    /// 2. Exact email (case-insensitive)
+    /// 3. Prefix/substring match on full name or email (case-insensitive)
+    pub fn resolve_collaborator(&self, query: &str, project_id: &str) -> SyncResult<&Collaborator> {
+        let query = query.trim();
+        let query_lower = query.to_lowercase();
+        let project_name = self
+            .cache()
+            .projects
+            .iter()
+            .find(|project| !project.is_deleted && project.id == project_id)
+            .map(|project| project.name.as_str())
+            .unwrap_or(project_id);
+
+        // Handle "me" as a special value — resolve to the current user.
+        if query_lower == "me" {
+            if let Some(user) = &self.cache().user {
+                let user_id = &user.id;
+                // Verify the current user is an active collaborator on this project
+                let is_active = self.cache().collaborator_states.iter().any(|state| {
+                    state.project_id == project_id
+                        && state.user_id == *user_id
+                        && state.state.eq_ignore_ascii_case("active")
+                });
+                if is_active {
+                    if let Some(collaborator) =
+                        self.cache().collaborators.iter().find(|c| c.id == *user_id)
+                    {
+                        return Ok(collaborator);
+                    }
+                }
+            }
+            return Err(SyncError::Validation(format!(
+                "No collaborator matching '{}' in project '{}'",
+                query, project_name
+            )));
+        }
+
+        let mut project_collaborators: Vec<&Collaborator> = Vec::new();
+        for state in &self.cache().collaborator_states {
+            if state.project_id != project_id || !state.state.eq_ignore_ascii_case("active") {
+                continue;
+            }
+
+            if let Some(collaborator) = self
+                .cache()
+                .collaborators
+                .iter()
+                .find(|collaborator| collaborator.id == state.user_id)
+            {
+                let already_added = project_collaborators
+                    .iter()
+                    .any(|existing| existing.id == collaborator.id);
+                if !already_added {
+                    project_collaborators.push(collaborator);
+                }
+            }
+        }
+
+        if let Some(collaborator) = Self::single_or_ambiguous(
+            query,
+            project_collaborators
+                .iter()
+                .copied()
+                .filter(|c| {
+                    c.full_name
+                        .as_deref()
+                        .is_some_and(|n| n.eq_ignore_ascii_case(query))
+                })
+                .collect(),
+        )? {
+            return Ok(collaborator);
+        }
+
+        if let Some(collaborator) = Self::single_or_ambiguous(
+            query,
+            project_collaborators
+                .iter()
+                .copied()
+                .filter(|c| {
+                    c.email
+                        .as_deref()
+                        .is_some_and(|e| e.eq_ignore_ascii_case(query))
+                })
+                .collect(),
+        )? {
+            return Ok(collaborator);
+        }
+
+        let partial_matches: Vec<&Collaborator> = project_collaborators
+            .iter()
+            .copied()
+            .filter(|collaborator| {
+                collaborator
+                    .full_name
+                    .as_deref()
+                    .is_some_and(|name| name.to_lowercase().contains(&query_lower))
+                    || collaborator
+                        .email
+                        .as_deref()
+                        .is_some_and(|email| email.to_lowercase().contains(&query_lower))
+            })
+            .collect();
+
+        match Self::single_or_ambiguous(query, partial_matches)? {
+            Some(collaborator) => Ok(collaborator),
+            None => Err(SyncError::Validation(format!(
+                "No collaborator matching '{}' in project '{}'",
+                query, project_name
+            ))),
+        }
+    }
+
+    fn single_or_ambiguous<'a>(
+        query: &str,
+        matches: Vec<&'a Collaborator>,
+    ) -> SyncResult<Option<&'a Collaborator>> {
+        match matches.len() {
+            0 => Ok(None),
+            1 => Ok(matches.into_iter().next()),
+            _ => {
+                let mut names = matches
+                    .iter()
+                    .map(|collaborator| {
+                        collaborator
+                            .full_name
+                            .as_deref()
+                            .or(collaborator.email.as_deref())
+                            .unwrap_or(collaborator.id.as_str())
+                            .to_string()
+                    })
+                    .collect::<Vec<_>>();
+                names.sort_unstable();
+                names.dedup();
+
+                Err(SyncError::Validation(format!(
+                    "Multiple collaborators match '{}': {}. Please be more specific.",
+                    query,
+                    names.join(", ")
+                )))
+            }
+        }
     }
 
     /// Resolves a section by name or ID, with auto-sync fallback.

@@ -53,9 +53,9 @@
 //! ```
 
 use chrono::{Datelike, Local, NaiveDate};
-use todoist_api_rs::sync::{Item, Label, Project, Section};
+use todoist_api_rs::sync::{Collaborator, Item, Label, Project, Section};
 
-use super::ast::Filter;
+use super::ast::{AssignedTarget, Filter};
 
 /// Context for filter evaluation.
 ///
@@ -66,6 +66,8 @@ pub struct FilterContext<'a> {
     projects: &'a [Project],
     sections: &'a [Section],
     labels: &'a [Label],
+    collaborators: &'a [Collaborator],
+    current_user_id: Option<&'a str>,
 }
 
 impl<'a> FilterContext<'a> {
@@ -81,7 +83,33 @@ impl<'a> FilterContext<'a> {
             projects,
             sections,
             labels,
+            collaborators: &[],
+            current_user_id: None,
         }
+    }
+
+    /// Sets collaborators and current user for assignment filter evaluation.
+    pub fn with_assignment_context(
+        mut self,
+        collaborators: &'a [Collaborator],
+        current_user_id: Option<&'a str>,
+    ) -> Self {
+        self.collaborators = collaborators;
+        self.current_user_id = current_user_id;
+        self
+    }
+
+    /// Finds a collaborator by name (case-insensitive substring match).
+    fn find_collaborator_by_name(&self, name: &str) -> Option<&Collaborator> {
+        let name_lower = name.to_lowercase();
+        self.collaborators.iter().find(|c| {
+            c.full_name
+                .as_ref()
+                .is_some_and(|n| n.to_lowercase().contains(&name_lower))
+                || c.email
+                    .as_ref()
+                    .is_some_and(|e| e.to_lowercase().contains(&name_lower))
+        })
     }
 
     /// Finds a project by name (case-insensitive).
@@ -213,6 +241,12 @@ impl<'a> FilterEvaluator<'a> {
             // Section filter
             Filter::Section(name) => self.in_section(item, name),
 
+            // Assignment filters
+            Filter::AssignedTo(target) => self.is_assigned_to(item, target),
+            Filter::AssignedBy(target) => self.is_assigned_by(item, target),
+            Filter::Assigned => item.responsible_uid.is_some(),
+            Filter::NoAssignee => item.responsible_uid.is_none(),
+
             // Boolean operators
             Filter::And(left, right) => {
                 self.evaluate_filter(left, item) && self.evaluate_filter(right, item)
@@ -329,6 +363,58 @@ impl<'a> FilterEvaluator<'a> {
         self.context
             .find_section_by_name(section_name)
             .is_some_and(|section| &section.id == section_id)
+    }
+
+    /// Checks if the item is assigned to the specified target.
+    fn is_assigned_to(&self, item: &Item, target: &AssignedTarget) -> bool {
+        match target {
+            AssignedTarget::Me => {
+                let Some(current_uid) = self.context.current_user_id else {
+                    return false;
+                };
+                item.responsible_uid.as_deref() == Some(current_uid)
+            }
+            AssignedTarget::Others => {
+                let Some(current_uid) = self.context.current_user_id else {
+                    return false;
+                };
+                item.responsible_uid
+                    .as_ref()
+                    .is_some_and(|uid| uid != current_uid)
+            }
+            AssignedTarget::User(name) => {
+                let Some(collaborator) = self.context.find_collaborator_by_name(name) else {
+                    return false;
+                };
+                item.responsible_uid.as_deref() == Some(collaborator.id.as_str())
+            }
+        }
+    }
+
+    /// Checks if the item was assigned by the specified target.
+    fn is_assigned_by(&self, item: &Item, target: &AssignedTarget) -> bool {
+        match target {
+            AssignedTarget::Me => {
+                let Some(current_uid) = self.context.current_user_id else {
+                    return false;
+                };
+                item.assigned_by_uid.as_deref() == Some(current_uid)
+            }
+            AssignedTarget::Others => {
+                let Some(current_uid) = self.context.current_user_id else {
+                    return false;
+                };
+                item.assigned_by_uid
+                    .as_ref()
+                    .is_some_and(|uid| uid != current_uid)
+            }
+            AssignedTarget::User(name) => {
+                let Some(collaborator) = self.context.find_collaborator_by_name(name) else {
+                    return false;
+                };
+                item.assigned_by_uid.as_deref() == Some(collaborator.id.as_str())
+            }
+        }
     }
 }
 

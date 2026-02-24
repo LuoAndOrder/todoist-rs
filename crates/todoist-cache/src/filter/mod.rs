@@ -56,7 +56,7 @@ mod evaluator;
 mod lexer;
 mod parser;
 
-pub use ast::Filter;
+pub use ast::{AssignedTarget, Filter};
 pub use error::{FilterError, FilterResult};
 pub use evaluator::{FilterContext, FilterEvaluator};
 pub use parser::FilterParser;

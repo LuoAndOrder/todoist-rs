@@ -35,6 +35,12 @@ pub struct ShowResult<'a> {
     pub reminders: Vec<&'a Reminder>,
     /// Subtasks of this task.
     pub subtasks: Vec<&'a Item>,
+    /// Assignee name (resolved from responsible_uid).
+    pub assignee_name: Option<String>,
+    /// Assignee email.
+    pub assignee_email: Option<String>,
+    /// Name of the user who assigned the task.
+    pub assigned_by_name: Option<String>,
 }
 
 /// Executes the show command.
@@ -111,6 +117,45 @@ pub async fn execute(ctx: &CommandContext, opts: &ShowOptions, token: &str) -> R
         .filter(|i| i.parent_id.as_ref() == Some(&item.id) && !i.is_deleted && !i.checked)
         .collect();
 
+    // Resolve assignee
+    let (assignee_name, assignee_email) = item
+        .responsible_uid
+        .as_ref()
+        .map(|uid| {
+            if cache.user.as_ref().map(|u| &u.id) == Some(uid) {
+                let user = cache.user.as_ref().unwrap();
+                (
+                    Some(user.full_name.clone().unwrap_or_else(|| "me".to_string())),
+                    user.email.clone(),
+                )
+            } else {
+                cache
+                    .collaborators
+                    .iter()
+                    .find(|c| &c.id == uid)
+                    .map(|c| (c.full_name.clone(), c.email.clone()))
+                    .unwrap_or_else(|| (Some(uid.clone()), None))
+            }
+        })
+        .unwrap_or((None, None));
+
+    let assigned_by_name = item.assigned_by_uid.as_ref().and_then(|uid| {
+        if cache.user.as_ref().map(|u| &u.id) == Some(uid) {
+            cache
+                .user
+                .as_ref()
+                .and_then(|u| u.full_name.clone())
+                .or_else(|| Some("me".to_string()))
+        } else {
+            cache
+                .collaborators
+                .iter()
+                .find(|c| &c.id == uid)
+                .and_then(|c| c.full_name.clone())
+                .or_else(|| Some(uid.clone()))
+        }
+    });
+
     let result = ShowResult {
         item,
         project_name,
@@ -119,6 +164,9 @@ pub async fn execute(ctx: &CommandContext, opts: &ShowOptions, token: &str) -> R
         comments,
         reminders,
         subtasks,
+        assignee_name,
+        assignee_email,
+        assigned_by_name,
     };
 
     // Output

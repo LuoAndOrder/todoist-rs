@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 
 use chrono::Utc;
-use todoist_api_rs::sync::SyncResponse;
+use todoist_api_rs::sync::{CollaboratorState, SyncResponse};
 
 use crate::Cache;
 
@@ -86,6 +86,13 @@ pub(crate) fn apply_sync_response(cache: &mut Cache, response: &SyncResponse) {
             .filter(|f| !f.is_deleted)
             .cloned()
             .collect();
+        cache.collaborators = response.collaborators.clone();
+        cache.collaborator_states = response
+            .collaborator_states
+            .iter()
+            .filter(|state| state.state != "deleted")
+            .cloned()
+            .collect();
     } else {
         // Incremental sync: merge changes
         merge_resources(
@@ -135,6 +142,16 @@ pub(crate) fn apply_sync_response(cache: &mut Cache, response: &SyncResponse) {
             &response.filters,
             |f| &f.id,
             |f| f.is_deleted,
+        );
+        merge_resources(
+            &mut cache.collaborators,
+            &response.collaborators,
+            |c| &c.id,
+            |_| false,
+        );
+        merge_collaborator_states(
+            &mut cache.collaborator_states,
+            &response.collaborator_states,
         );
     }
 
@@ -219,6 +236,16 @@ pub(crate) fn apply_mutation_response(cache: &mut Cache, response: &SyncResponse
         |f| &f.id,
         |f| f.is_deleted,
     );
+    merge_resources(
+        &mut cache.collaborators,
+        &response.collaborators,
+        |c| &c.id,
+        |_| false,
+    );
+    merge_collaborator_states(
+        &mut cache.collaborator_states,
+        &response.collaborator_states,
+    );
 
     // User is replaced if present in response
     if response.user.is_some() {
@@ -227,6 +254,51 @@ pub(crate) fn apply_mutation_response(cache: &mut Cache, response: &SyncResponse
 
     // Rebuild indexes after applying changes
     cache.rebuild_indexes();
+}
+
+/// Merges collaborator state updates into the cache.
+///
+/// Collaborator states are uniquely identified by `(project_id, user_id)`.
+/// A state value of `"deleted"` removes the corresponding entry.
+fn merge_collaborator_states(
+    existing: &mut Vec<CollaboratorState>,
+    incoming: &[CollaboratorState],
+) {
+    let mut index: HashMap<(&str, &str), usize> = HashMap::with_capacity(existing.len());
+    for (i, state) in existing.iter().enumerate() {
+        index.insert((state.project_id.as_str(), state.user_id.as_str()), i);
+    }
+
+    let mut updates: Vec<(usize, &CollaboratorState)> = Vec::with_capacity(incoming.len());
+    let mut inserts: Vec<&CollaboratorState> = Vec::with_capacity(incoming.len() / 4);
+    let mut to_remove: Vec<usize> = Vec::with_capacity(incoming.len() / 10);
+
+    for state in incoming {
+        let key = (state.project_id.as_str(), state.user_id.as_str());
+        let pos = index.get(&key).copied();
+
+        if state.state == "deleted" {
+            if let Some(idx) = pos {
+                to_remove.push(idx);
+            }
+        } else if let Some(idx) = pos {
+            updates.push((idx, state));
+        } else {
+            inserts.push(state);
+        }
+    }
+
+    for (idx, state) in updates {
+        existing[idx] = state.clone();
+    }
+
+    existing.reserve(inserts.len());
+    existing.extend(inserts.into_iter().cloned());
+
+    to_remove.sort_unstable();
+    for idx in to_remove.into_iter().rev() {
+        existing.remove(idx);
+    }
 }
 
 /// Merges a list of resources from a sync response into the cache.

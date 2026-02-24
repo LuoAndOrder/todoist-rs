@@ -36,6 +36,10 @@ pub struct EditOptions {
     pub section: Option<String>,
     /// New description.
     pub description: Option<String>,
+    /// Assign task to user.
+    pub assign: Option<String>,
+    /// Unassign task.
+    pub unassign: bool,
 }
 
 /// Result of a successful edit operation.
@@ -90,7 +94,9 @@ pub async fn execute(ctx: &CommandContext, opts: &EditOptions, token: &str) -> R
         || !opts.labels.is_empty()
         || opts.add_label.is_some()
         || opts.remove_label.is_some()
-        || opts.description.is_some();
+        || opts.description.is_some()
+        || opts.assign.is_some()
+        || opts.unassign;
 
     if has_updates {
         let mut args = serde_json::json!({
@@ -148,6 +154,24 @@ pub async fn execute(ctx: &CommandContext, opts: &EditOptions, token: &str) -> R
         if let Some(ref description) = opts.description {
             args["description"] = serde_json::json!(description);
             updated_fields.push("description".to_string());
+        }
+
+        if opts.unassign {
+            args["responsible_uid"] = serde_json::Value::Null;
+            updated_fields.push("assignee (removed)".to_string());
+        } else if let Some(ref assign_to) = opts.assign {
+            // Validate project is shared
+            if !manager.is_shared_project(&current_project_id) {
+                return Err(CommandError::Config(
+                    "Task is in a personal project — share the project first to assign tasks."
+                        .to_string(),
+                ));
+            }
+            let collaborator = manager
+                .resolve_collaborator(assign_to, &current_project_id)
+                .map_err(|e| CommandError::Config(e.to_string()))?;
+            args["responsible_uid"] = serde_json::json!(collaborator.id);
+            updated_fields.push("assignee".to_string());
         }
 
         let update_command = SyncCommand::new(SyncCommandType::ItemUpdate, args);
@@ -293,6 +317,8 @@ mod tests {
             remove_label: None,
             section: None,
             description: None,
+            assign: None,
+            unassign: false,
         };
 
         assert_eq!(opts.task_id, "abc123");
@@ -315,6 +341,8 @@ mod tests {
             remove_label: None,
             section: Some("In Progress".to_string()),
             description: Some("New description".to_string()),
+            assign: None,
+            unassign: false,
         };
 
         assert_eq!(opts.task_id, "abc123def456");
@@ -342,6 +370,8 @@ mod tests {
             remove_label: None,
             section: None,
             description: None,
+            assign: None,
+            unassign: false,
         };
 
         assert!(opts.no_due);
@@ -362,6 +392,8 @@ mod tests {
             remove_label: Some("old-label".to_string()),
             section: None,
             description: None,
+            assign: None,
+            unassign: false,
         };
 
         assert!(opts.labels.is_empty());

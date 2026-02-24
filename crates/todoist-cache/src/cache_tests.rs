@@ -2,7 +2,7 @@
 
 use super::*;
 use chrono::Timelike;
-use todoist_api_rs::sync::TzInfo;
+use todoist_api_rs::sync::{Collaborator, CollaboratorState, TzInfo};
 
 #[test]
 fn test_cache_new_defaults() {
@@ -19,6 +19,8 @@ fn test_cache_new_defaults() {
     assert!(cache.project_notes.is_empty());
     assert!(cache.reminders.is_empty());
     assert!(cache.filters.is_empty());
+    assert!(cache.collaborators.is_empty());
+    assert!(cache.collaborator_states.is_empty());
     assert!(cache.user.is_none());
 }
 
@@ -161,6 +163,18 @@ fn test_cache_serde_roundtrip_with_data() {
             is_deleted: false,
             is_favorite: true,
         }],
+        collaborators: vec![Collaborator {
+            id: "user-2".to_string(),
+            email: Some("collab@example.com".to_string()),
+            full_name: Some("Collaborator User".to_string()),
+            timezone: Some("UTC".to_string()),
+            image_id: None,
+        }],
+        collaborator_states: vec![CollaboratorState {
+            project_id: "proj-1".to_string(),
+            user_id: "user-2".to_string(),
+            state: "active".to_string(),
+        }],
         user: Some(User {
             id: "user-1".to_string(),
             email: Some("test@example.com".to_string()),
@@ -190,6 +204,11 @@ fn test_cache_serde_roundtrip_with_data() {
     assert_eq!(cache.sync_token, deserialized.sync_token);
     assert_eq!(cache.items.len(), deserialized.items.len());
     assert_eq!(cache.projects.len(), deserialized.projects.len());
+    assert_eq!(cache.collaborators.len(), deserialized.collaborators.len());
+    assert_eq!(
+        cache.collaborator_states.len(),
+        deserialized.collaborator_states.len()
+    );
 }
 
 #[test]
@@ -249,6 +268,8 @@ fn test_cache_clone() {
         project_notes: vec![],
         reminders: vec![],
         filters: vec![],
+        collaborators: vec![],
+        collaborator_states: vec![],
         user: None,
         indexes: CacheIndexes::default(),
     };
@@ -376,6 +397,28 @@ mod test_helpers {
             item_order: 0,
             is_deleted,
             is_favorite: false,
+        }
+    }
+
+    pub fn make_collaborator(id: &str, name: &str, email: &str) -> Collaborator {
+        Collaborator {
+            id: id.to_string(),
+            email: Some(email.to_string()),
+            full_name: Some(name.to_string()),
+            timezone: Some("UTC".to_string()),
+            image_id: None,
+        }
+    }
+
+    pub fn make_collaborator_state(
+        project_id: &str,
+        user_id: &str,
+        state: &str,
+    ) -> CollaboratorState {
+        CollaboratorState {
+            project_id: project_id.to_string(),
+            user_id: user_id.to_string(),
+            state: state.to_string(),
         }
     }
 
@@ -627,6 +670,28 @@ fn test_apply_full_sync_updates_user() {
     assert_eq!(cache.user.as_ref().unwrap().id, "user-1");
 }
 
+#[test]
+fn test_full_sync_populates_collaborators() {
+    use test_helpers::*;
+
+    let mut cache = Cache::new();
+    let mut response = make_sync_response(true, "token");
+    response.collaborators = vec![
+        make_collaborator("user-1", "Alice", "alice@example.com"),
+        make_collaborator("user-2", "Bob", "bob@example.com"),
+    ];
+    response.collaborator_states = vec![
+        make_collaborator_state("proj-1", "user-1", "active"),
+        make_collaborator_state("proj-1", "user-2", "deleted"),
+    ];
+
+    cache.apply_sync_response(&response);
+
+    assert_eq!(cache.collaborators.len(), 2);
+    assert_eq!(cache.collaborator_states.len(), 1);
+    assert_eq!(cache.collaborator_states[0].user_id, "user-1");
+}
+
 // ==================== Incremental Sync Tests ====================
 
 #[test]
@@ -645,6 +710,69 @@ fn test_apply_incremental_sync_adds_new_items() {
     assert_eq!(cache.items.len(), 2);
     assert!(cache.items.iter().any(|i| i.id == "item-1"));
     assert!(cache.items.iter().any(|i| i.id == "item-2"));
+}
+
+#[test]
+fn test_incremental_sync_adds_new_collaborator() {
+    use test_helpers::*;
+
+    let mut cache = Cache::new();
+    cache.collaborators = vec![make_collaborator("user-1", "Alice", "alice@example.com")];
+
+    let mut response = make_sync_response(false, "token");
+    response.collaborators = vec![make_collaborator("user-2", "Bob", "bob@example.com")];
+
+    cache.apply_sync_response(&response);
+
+    assert_eq!(cache.collaborators.len(), 2);
+    assert!(cache.collaborators.iter().any(|c| c.id == "user-1"));
+    assert!(cache.collaborators.iter().any(|c| c.id == "user-2"));
+}
+
+#[test]
+fn test_incremental_sync_updates_collaborator() {
+    use test_helpers::*;
+
+    let mut cache = Cache::new();
+    cache.collaborators = vec![make_collaborator("user-1", "Alice", "alice@example.com")];
+
+    let mut response = make_sync_response(false, "token");
+    response.collaborators = vec![make_collaborator(
+        "user-1",
+        "Alice Updated",
+        "alice.new@example.com",
+    )];
+
+    cache.apply_sync_response(&response);
+
+    assert_eq!(cache.collaborators.len(), 1);
+    assert_eq!(
+        cache.collaborators[0].full_name,
+        Some("Alice Updated".to_string())
+    );
+    assert_eq!(
+        cache.collaborators[0].email,
+        Some("alice.new@example.com".to_string())
+    );
+}
+
+#[test]
+fn test_incremental_sync_removes_deleted_collaborator_state() {
+    use test_helpers::*;
+
+    let mut cache = Cache::new();
+    cache.collaborator_states = vec![
+        make_collaborator_state("proj-1", "user-1", "active"),
+        make_collaborator_state("proj-1", "user-2", "active"),
+    ];
+
+    let mut response = make_sync_response(false, "token");
+    response.collaborator_states = vec![make_collaborator_state("proj-1", "user-2", "deleted")];
+
+    cache.apply_sync_response(&response);
+
+    assert_eq!(cache.collaborator_states.len(), 1);
+    assert_eq!(cache.collaborator_states[0].user_id, "user-1");
 }
 
 #[test]
@@ -1035,6 +1163,72 @@ fn test_apply_incremental_sync_delete_nonexistent_item_is_noop() {
     // Should not error, cache unchanged
     assert_eq!(cache.items.len(), 1);
     assert_eq!(cache.items[0].id, "item-1");
+}
+
+#[test]
+fn test_collaborator_indexes_rebuild() {
+    use test_helpers::*;
+
+    let mut cache = Cache::new();
+    cache.collaborators = vec![
+        make_collaborator("user-1", "Alice", "alice@example.com"),
+        make_collaborator("user-2", "Bob", "bob@example.com"),
+    ];
+    cache.collaborator_states = vec![
+        make_collaborator_state("proj-1", "user-1", "active"),
+        make_collaborator_state("proj-1", "user-2", "active"),
+        make_collaborator_state("proj-2", "user-2", "active"),
+        make_collaborator_state("proj-2", "user-3", "deleted"),
+    ];
+
+    cache.rebuild_indexes();
+
+    assert_eq!(cache.indexes.collaborators_by_id.get("user-1"), Some(&0));
+    assert_eq!(cache.indexes.collaborators_by_id.get("user-2"), Some(&1));
+
+    let proj1_users = cache
+        .indexes
+        .collaborators_by_project
+        .get("proj-1")
+        .expect("proj-1 users should be indexed");
+    assert_eq!(proj1_users.len(), 2);
+    assert!(proj1_users.iter().any(|user_id| user_id == "user-1"));
+    assert!(proj1_users.iter().any(|user_id| user_id == "user-2"));
+
+    let proj2_users = cache
+        .indexes
+        .collaborators_by_project
+        .get("proj-2")
+        .expect("proj-2 users should be indexed");
+    assert_eq!(proj2_users.len(), 1);
+    assert_eq!(proj2_users[0], "user-2");
+}
+
+#[test]
+fn test_cache_serialization_roundtrip_with_collaborators() {
+    use test_helpers::*;
+
+    let mut cache = Cache::new();
+    cache.sync_token = "token123".to_string();
+    cache.collaborators = vec![
+        make_collaborator("user-1", "Alice", "alice@example.com"),
+        make_collaborator("user-2", "Bob", "bob@example.com"),
+    ];
+    cache.collaborator_states = vec![
+        make_collaborator_state("proj-1", "user-1", "active"),
+        make_collaborator_state("proj-1", "user-2", "active"),
+    ];
+
+    let json = serde_json::to_string(&cache).unwrap();
+    let mut deserialized: Cache = serde_json::from_str(&json).unwrap();
+    deserialized.rebuild_indexes();
+
+    assert_eq!(cache.collaborators, deserialized.collaborators);
+    assert_eq!(cache.collaborator_states, deserialized.collaborator_states);
+    assert_eq!(
+        deserialized.indexes.collaborators_by_id.get("user-1"),
+        Some(&0)
+    );
 }
 
 // ==================== Mutation Response Tests ====================

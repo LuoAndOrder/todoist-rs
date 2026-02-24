@@ -92,6 +92,7 @@ pub enum AuthDispatch<'a> {
         section: &'a Option<String>,
         overdue: bool,
         no_due: bool,
+        assigned_to: &'a Option<String>,
         limit: u32,
         all: bool,
         cursor: &'a Option<String>,
@@ -107,6 +108,7 @@ pub enum AuthDispatch<'a> {
         section: &'a Option<String>,
         parent: &'a Option<String>,
         description: &'a Option<String>,
+        assign: &'a Option<String>,
     },
     Show {
         task_id: &'a str,
@@ -125,6 +127,8 @@ pub enum AuthDispatch<'a> {
         remove_label: &'a Option<String>,
         section: &'a Option<String>,
         description: &'a Option<String>,
+        assign: &'a Option<String>,
+        unassign: bool,
     },
     Done {
         task_ids: &'a [String],
@@ -168,6 +172,9 @@ pub enum AuthDispatch<'a> {
         command: &'a Option<RemindersCommands>,
     },
     Filters(&'a Option<FiltersCommands>),
+    Collaborators {
+        project: &'a str,
+    },
 }
 
 impl<'a> AuthDispatch<'a> {
@@ -183,6 +190,7 @@ impl<'a> AuthDispatch<'a> {
                 section,
                 overdue,
                 no_due,
+                assigned_to,
                 limit,
                 all,
                 cursor,
@@ -196,6 +204,7 @@ impl<'a> AuthDispatch<'a> {
                 section,
                 overdue: *overdue,
                 no_due: *no_due,
+                assigned_to,
                 limit: *limit,
                 all: *all,
                 cursor,
@@ -211,6 +220,7 @@ impl<'a> AuthDispatch<'a> {
                 section,
                 parent,
                 description,
+                assign,
             }) => Some(Self::Add {
                 content,
                 project,
@@ -220,6 +230,7 @@ impl<'a> AuthDispatch<'a> {
                 section,
                 parent,
                 description,
+                assign,
             }),
             Some(Commands::Show {
                 task_id,
@@ -242,6 +253,8 @@ impl<'a> AuthDispatch<'a> {
                 remove_label,
                 section,
                 description,
+                assign,
+                unassign,
             }) => Some(Self::Edit {
                 task_id,
                 content,
@@ -254,6 +267,8 @@ impl<'a> AuthDispatch<'a> {
                 remove_label,
                 section,
                 description,
+                assign,
+                unassign: *unassign,
             }),
             Some(Commands::Done {
                 task_ids,
@@ -308,6 +323,7 @@ impl<'a> AuthDispatch<'a> {
             }),
             Some(Commands::Reminders { task, command }) => Some(Self::Reminders { task, command }),
             Some(Commands::Filters { command }) => Some(Self::Filters(command)),
+            Some(Commands::Collaborators { project }) => Some(Self::Collaborators { project }),
             // Already handled by NoAuthDispatch
             Some(Commands::Config { .. }) | Some(Commands::Completions { .. }) | None => None,
         }
@@ -325,6 +341,7 @@ impl AuthCommand for AuthDispatch<'_> {
                 section,
                 overdue,
                 no_due,
+                assigned_to,
                 limit,
                 all,
                 cursor,
@@ -339,6 +356,7 @@ impl AuthCommand for AuthDispatch<'_> {
                     section: (*section).clone(),
                     overdue: *overdue,
                     no_due: *no_due,
+                    assigned_to: (*assigned_to).clone(),
                     limit: *limit,
                     all: *all,
                     cursor: (*cursor).clone(),
@@ -357,6 +375,7 @@ impl AuthCommand for AuthDispatch<'_> {
                 section,
                 parent,
                 description,
+                assign,
             } => {
                 let opts = commands::add::AddOptions {
                     content: (*content).to_string(),
@@ -367,6 +386,7 @@ impl AuthCommand for AuthDispatch<'_> {
                     section: (*section).clone(),
                     parent: (*parent).clone(),
                     description: (*description).clone(),
+                    assign: (*assign).clone(),
                 };
                 commands::add::execute(ctx, &opts, token).await
             }
@@ -396,6 +416,8 @@ impl AuthCommand for AuthDispatch<'_> {
                 remove_label,
                 section,
                 description,
+                assign,
+                unassign,
             } => {
                 let opts = commands::edit::EditOptions {
                     task_id: (*task_id).to_string(),
@@ -409,6 +431,8 @@ impl AuthCommand for AuthDispatch<'_> {
                     remove_label: (*remove_label).clone(),
                     section: (*section).clone(),
                     description: (*description).clone(),
+                    assign: (*assign).clone(),
+                    unassign: *unassign,
                 };
                 commands::edit::execute(ctx, &opts, token).await
             }
@@ -487,6 +511,12 @@ impl AuthCommand for AuthDispatch<'_> {
                 dispatch_reminders(ctx, task, command, token).await
             }
             Self::Filters(command) => dispatch_filters(ctx, command, token).await,
+            Self::Collaborators { project } => {
+                let opts = commands::collaborators::CollaboratorsOptions {
+                    project: (*project).to_string(),
+                };
+                commands::collaborators::execute(ctx, &opts, token).await
+            }
         }
     }
 }

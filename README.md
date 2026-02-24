@@ -180,6 +180,7 @@ Most commands have short aliases for quick access:
 | `projects` | `p` | Manage projects |
 | `labels` | `lb` | Manage labels |
 | `filters` | `f` | Manage saved filters |
+| `collaborators` | | List project collaborators |
 
 ### Task Management
 
@@ -190,6 +191,8 @@ td list --all                     # All tasks, no limit
 td list -f "today & p1"           # Filter: today's priority 1 tasks
 td list -p "Work"                 # Tasks in Work project
 td list -l "urgent"               # Tasks with @urgent label
+td list --assigned-to me          # Tasks assigned to you
+td list --assigned-to "Alice"     # Tasks assigned to Alice
 
 # Show today's agenda
 td today                          # Today's tasks + overdue
@@ -200,6 +203,7 @@ td today --include-upcoming 3     # Include next 3 days
 td add "Buy groceries"
 td add "Review PR" -p "Work" -P 1 -d "tomorrow"
 td add "Research topic" -l "reading" -l "later"
+td add "Fix bug" -p "Shared" --assign "Alice"
 
 # Quick add with natural language
 td quick "Call mom tomorrow at 5pm #Personal @important"
@@ -215,6 +219,8 @@ td edit <task-id> -c "New content"
 td edit <task-id> -d "next week"
 td edit <task-id> --add-label "urgent"
 td edit <task-id> --no-due        # Remove due date
+td edit <task-id> --assign "Alice" # Assign to collaborator
+td edit <task-id> --unassign      # Remove assignment
 
 # Delete tasks
 td delete <task-id>
@@ -280,6 +286,12 @@ td reminders --task <task-id>
 td reminders add --task <id> --due "2025-01-15T09:00:00"
 td reminders add --task <id> --offset 30   # 30 min before due
 td reminders delete <id>
+```
+
+### Collaborators
+
+```bash
+td collaborators -p "Shared Project"  # List collaborators
 ```
 
 ### Saved Filters
@@ -371,6 +383,17 @@ Use the `-f/--filter` flag with `td list` to filter tasks using Todoist's filter
 | `#Project` | Tasks in exact project |
 | `##Project` | Tasks in project and subprojects |
 | `/Section` | Tasks in section |
+
+### Assignment Filters
+
+| Filter | Description |
+|--------|-------------|
+| `assigned to: me` | Tasks assigned to you |
+| `assigned to: others` | Tasks assigned to someone else |
+| `assigned to: Alice` | Tasks assigned to Alice |
+| `assigned by: me` | Tasks you assigned |
+| `assigned` | Tasks with any assignee |
+| `!assigned` | Unassigned tasks |
 
 ### Boolean Operators
 

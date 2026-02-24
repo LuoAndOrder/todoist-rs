@@ -69,6 +69,10 @@ pub enum SyncError {
     /// should perform a full sync to obtain a fresh token.
     #[error("sync token invalid or expired, full sync required")]
     SyncTokenInvalid,
+
+    /// Validation or lookup error for user-provided input.
+    #[error("{0}")]
+    Validation(String),
 }
 
 /// Result type for sync operations.

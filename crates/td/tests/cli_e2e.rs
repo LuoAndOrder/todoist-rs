@@ -582,3 +582,208 @@ fn test_cli_e2e_label_filtering_after_move() {
         "task should be listed in target project after move"
     );
 }
+
+/// Tests the full task assignment workflow against the pre-existing
+/// TEST_SHARED_PROJECT which has at least two collaborators.
+///
+/// Flow:
+///   1. Verify collaborators are visible for the shared project
+///   2. Add a task with --assign to assign on creation
+///   3. Verify assignment in show output (assignee, assigned_by)
+///   4. Verify --assigned-to filter returns the task
+///   5. Reassign to self via edit --assign
+///   6. Verify show reflects new assignee ("me" in list, full name in show)
+///   7. Unassign via edit --unassign
+///   8. Verify show has no assignee fields
+///   9. Verify error: assign in a personal project
+///  10. Verify error: ambiguous collaborator match
+///  11. Verify error: no matching collaborator
+#[test]
+#[serial]
+fn test_cli_e2e_task_assignment_workflow() {
+    let Some(ctx) = setup_context() else {
+        eprintln!("Skipping e2e test: no API token found");
+        return;
+    };
+
+    let mut cleanup = CleanupGuard::new(ctx.clone());
+    let suffix = unique_suffix();
+
+    let shared_project = "TEST_SHARED_PROJECT";
+    let task_content = format!("E2E CLI assign task {}", suffix);
+
+    // ── 1. Verify collaborators are visible ─────────────────────────
+    let collabs = ctx.run_json(&["--json", "collaborators", "--project", shared_project]);
+    let collab_list = collabs
+        .get("collaborators")
+        .and_then(Value::as_array)
+        .expect("collaborators response should have collaborators array");
+    assert!(
+        collab_list.len() >= 2,
+        "TEST_SHARED_PROJECT should have at least 2 collaborators, got {}",
+        collab_list.len()
+    );
+
+    // Pick two distinct collaborators for the workflow.
+    let collab_a = &collab_list[0];
+    let collab_a_name = required_str(collab_a, "name");
+    let collab_a_email = required_str(collab_a, "email");
+
+    let collab_b = &collab_list[1];
+    let collab_b_name = required_str(collab_b, "name");
+
+    // ── 2. Add a task with --assign ─────────────────────────────────
+    let added = ctx.run_json(&[
+        "--json",
+        "add",
+        &task_content,
+        "--project",
+        shared_project,
+        "--assign",
+        &collab_a_name,
+    ]);
+    let task_id = required_str(&added, "id");
+    cleanup.track_task(task_id.clone());
+
+    // ── 3. Verify assignment in show output ─────────────────────────
+    let shown = ctx.run_json(&["--json", "show", &task_id]);
+    assert_eq!(
+        shown.get("assignee").and_then(Value::as_str),
+        Some(collab_a_name.as_str()),
+        "show should display the assignee name"
+    );
+    assert_eq!(
+        shown.get("assignee_email").and_then(Value::as_str),
+        Some(collab_a_email.as_str()),
+        "show should display the assignee email"
+    );
+    assert!(
+        shown.get("assigned_by").and_then(Value::as_str).is_some(),
+        "show should display who assigned the task"
+    );
+
+    // ── 4. Verify --assigned-to filter returns the task ─────────────
+    let filtered = ctx.run_json(&["--json", "list", "--assigned-to", &collab_a_name, "--all"]);
+    assert!(
+        list_has_task(&filtered, &task_id),
+        "task should appear in --assigned-to filter results"
+    );
+
+    // Also verify list output includes the assignee field
+    let list_task = filtered
+        .get("tasks")
+        .and_then(Value::as_array)
+        .and_then(|tasks| {
+            tasks
+                .iter()
+                .find(|t| t.get("id").and_then(Value::as_str) == Some(&task_id))
+        })
+        .expect("task should be in filtered list");
+    assert_eq!(
+        list_task.get("assignee").and_then(Value::as_str),
+        Some(collab_a_name.as_str()),
+        "list output should include assignee field"
+    );
+
+    // ── 5. Reassign to a different collaborator ─────────────────────
+    ctx.run_json(&["--json", "edit", &task_id, "--assign", &collab_b_name]);
+
+    // ── 6. Verify show reflects new assignee ────────────────────────
+    let shown_reassigned = ctx.run_json(&["--json", "show", &task_id]);
+    assert_eq!(
+        shown_reassigned.get("assignee").and_then(Value::as_str),
+        Some(collab_b_name.as_str()),
+        "show should display the reassigned collaborator"
+    );
+
+    // Verify the original assignee no longer matches
+    let filtered_old = ctx.run_json(&["--json", "list", "--assigned-to", &collab_a_name, "--all"]);
+    assert!(
+        !list_has_task(&filtered_old, &task_id),
+        "reassigned task should not appear under original assignee filter"
+    );
+
+    // ── 7. Assign to self via --assign me ──────────────────────────
+    ctx.run_json(&["--json", "edit", &task_id, "--assign", "me"]);
+    let shown_me = ctx.run_json(&["--json", "show", &task_id]);
+    assert!(
+        shown_me.get("assignee").and_then(Value::as_str).is_some(),
+        "show should display an assignee after --assign me"
+    );
+
+    // ── 8. Unassign via edit --unassign ─────────────────────────────
+    ctx.run_json(&["--json", "edit", &task_id, "--unassign"]);
+
+    // ── 8. Verify show has no assignee fields ───────────────────────
+    let shown_none = ctx.run_json(&["--json", "show", &task_id]);
+    assert!(
+        shown_none.get("assignee").is_none()
+            || shown_none.get("assignee").and_then(Value::as_str).is_none(),
+        "show should not have an assignee after unassign"
+    );
+
+    // Task should not appear in assigned-to filter
+    let filtered_none = ctx.run_json(&["--json", "list", "--assigned-to", &collab_b_name, "--all"]);
+    assert!(
+        !list_has_task(&filtered_none, &task_id),
+        "unassigned task should not appear in --assigned-to filter"
+    );
+
+    // ── 9. Error: assign in a personal project ──────────────────────
+    let personal_task_content = format!("E2E CLI personal assign {}", suffix);
+    let personal_output = ctx.run_allow_failure(&[
+        "--json",
+        "add",
+        &personal_task_content,
+        "--project",
+        "Inbox",
+        "--assign",
+        &collab_a_name,
+    ]);
+    if let Some(output) = personal_output {
+        assert!(
+            !output.status.success(),
+            "assigning in a personal project should fail"
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("personal project"),
+            "error should mention personal project, got: {}",
+            stderr
+        );
+    }
+
+    // ── 10. Error: ambiguous collaborator match ─────────────────────
+    // Both collaborators in the test project are named "Kevin *",
+    // so "Kevin" should be ambiguous.
+    let ambiguous_output =
+        ctx.run_allow_failure(&["--json", "edit", &task_id, "--assign", "Kevin"]);
+    if let Some(output) = ambiguous_output {
+        assert!(
+            !output.status.success(),
+            "ambiguous collaborator match should fail"
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("Multiple collaborators match"),
+            "error should mention multiple matches, got: {}",
+            stderr
+        );
+    }
+
+    // ── 11. Error: no matching collaborator ─────────────────────────
+    let no_match_output =
+        ctx.run_allow_failure(&["--json", "edit", &task_id, "--assign", "nonexistent-user"]);
+    if let Some(output) = no_match_output {
+        assert!(
+            !output.status.success(),
+            "non-matching collaborator should fail"
+        );
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("No collaborator matching"),
+            "error should mention no match, got: {}",
+            stderr
+        );
+    }
+}

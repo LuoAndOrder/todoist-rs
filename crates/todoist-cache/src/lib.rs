@@ -42,7 +42,8 @@ use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use todoist_api_rs::sync::{
-    Filter, Item, Label, Note, Project, ProjectNote, Reminder, Section, User,
+    Collaborator, CollaboratorState, Filter, Item, Label, Note, Project, ProjectNote, Reminder,
+    Section, User,
 };
 
 /// Indexes for O(1) cache lookups.
@@ -67,6 +68,10 @@ pub struct CacheIndexes {
     pub labels_by_name: HashMap<String, usize>,
     /// Item ID -> index in items vec.
     pub items_by_id: HashMap<String, usize>,
+    /// Collaborator user ID -> index in collaborators vec.
+    pub collaborators_by_id: HashMap<String, usize>,
+    /// Project ID -> list of collaborator user IDs for that project.
+    pub collaborators_by_project: HashMap<String, Vec<String>>,
 }
 
 /// Local cache for Todoist data.
@@ -144,6 +149,14 @@ pub struct Cache {
     #[serde(default)]
     pub filters: Vec<Filter>,
 
+    /// Cached collaborators for shared projects.
+    #[serde(default)]
+    pub collaborators: Vec<Collaborator>,
+
+    /// Cached collaborator membership states by project.
+    #[serde(default)]
+    pub collaborator_states: Vec<CollaboratorState>,
+
     /// Cached user information.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user: Option<User>,
@@ -174,6 +187,8 @@ impl Cache {
             project_notes: Vec::new(),
             reminders: Vec::new(),
             filters: Vec::new(),
+            collaborators: Vec::new(),
+            collaborator_states: Vec::new(),
             user: None,
             indexes: CacheIndexes::default(),
         }
@@ -210,6 +225,8 @@ impl Cache {
             project_notes,
             reminders,
             filters,
+            collaborators: Vec::new(),
+            collaborator_states: Vec::new(),
             user,
             indexes: CacheIndexes::default(),
         };
@@ -232,6 +249,12 @@ impl Cache {
         indexes.labels_by_id.reserve(self.labels.len());
         indexes.labels_by_name.reserve(self.labels.len());
         indexes.items_by_id.reserve(self.items.len());
+        indexes
+            .collaborators_by_id
+            .reserve(self.collaborators.len());
+        indexes
+            .collaborators_by_project
+            .reserve(self.collaborator_states.len());
 
         // Index projects
         for (i, project) in self.projects.iter().enumerate() {
@@ -267,6 +290,24 @@ impl Cache {
         for (i, item) in self.items.iter().enumerate() {
             if !item.is_deleted {
                 indexes.items_by_id.insert(item.id.clone(), i);
+            }
+        }
+
+        // Index collaborators
+        for (i, collaborator) in self.collaborators.iter().enumerate() {
+            indexes
+                .collaborators_by_id
+                .insert(collaborator.id.clone(), i);
+        }
+
+        // Index collaborator states by project (excluding deleted states)
+        for collaborator_state in &self.collaborator_states {
+            if collaborator_state.state != "deleted" {
+                indexes
+                    .collaborators_by_project
+                    .entry(collaborator_state.project_id.clone())
+                    .or_default()
+                    .push(collaborator_state.user_id.clone());
             }
         }
 

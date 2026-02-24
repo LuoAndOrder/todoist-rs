@@ -51,9 +51,14 @@ td list -f "p1 | p2" --sync
 # By label
 td list -l "urgent" --sync
 
+# By assignee (shared projects)
+td list --assigned-to me --sync
+td list --assigned-to "Alice" --sync
+
 # Complex filters
 td list -f "today & p1" --sync
 td list -f "(today | overdue) & !@waiting_on" --sync
+td list -f "assigned to: me & p1" --sync
 ```
 
 ### Add Tasks
@@ -72,6 +77,9 @@ td add "Task content" \
   -d "today" \
   -l "urgent"
 
+# Assign on creation (shared projects only)
+td add "Review design" -p "Shared Project" --assign "Alice"
+
 # With description
 td add "Prepare quarterly report" -P 1 -d "friday" \
   --description "Include sales metrics and customer feedback summary"
@@ -85,6 +93,7 @@ Options:
 - `--description` - task description/notes (shown below task title)
 - `--section` - target section within project
 - `--parent` - parent task ID (creates subtask)
+- `--assign` - assign to collaborator (shared projects only)
 
 ### Complete Tasks
 
@@ -106,6 +115,9 @@ td edit <task-id> --remove-label "next"
 td edit <task-id> --no-due             # Remove due date
 td edit <task-id> --section "Next Actions"
 td edit <task-id> -p "Work"            # Move to different project
+td edit <task-id> --assign "Alice"    # Assign to collaborator
+td edit <task-id> --assign me         # Assign to yourself
+td edit <task-id> --unassign          # Remove assignment
 ```
 
 Edit options:
@@ -119,6 +131,8 @@ Edit options:
 - `--remove-label` - remove a label
 - `-p, --project` - move to different project
 - `--section` - move to section within project
+- `--assign` - assign to collaborator (name, email, or "me")
+- `--unassign` - remove assignment
 
 ### Show Task Details
 
@@ -150,6 +164,9 @@ td projects show <id>
 # Labels
 td labels                              # List all
 td labels add "urgent"
+
+# Collaborators (shared projects)
+td collaborators -p "Shared Project"
 ```
 
 ## Filter Syntax
@@ -161,6 +178,7 @@ Use with `-f/--filter`:
 - Negation: `!@waiting_on`
 - Priority: `p1`, `p2`, `p3`, `p4`
 - Dates: `today`, `tomorrow`, `overdue`, `no date`, `7 days`
+- Assignment: `assigned to: me`, `assigned to: others`, `assigned to: Alice`, `assigned by: me`, `assigned`, `!assigned`
 
 ## Workflow Tips
 

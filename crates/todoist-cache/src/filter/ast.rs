@@ -1,5 +1,16 @@
 //! Abstract Syntax Tree (AST) for filter expressions.
 
+/// Target for assignment filters.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AssignedTarget {
+    /// The current user ("me").
+    Me,
+    /// Anyone other than the current user ("others").
+    Others,
+    /// A specific user by name.
+    User(String),
+}
+
 /// Represents a parsed filter expression.
 ///
 /// The `Filter` enum is the AST for Todoist filter expressions. Each variant
@@ -61,6 +72,19 @@ pub enum Filter {
     // ==================== Section Filter ====================
     /// Matches items in the specified section.
     Section(String),
+
+    // ==================== Assignment Filters ====================
+    /// Matches items assigned to someone.
+    AssignedTo(AssignedTarget),
+
+    /// Matches items assigned by someone.
+    AssignedBy(AssignedTarget),
+
+    /// Matches items that have any assignee.
+    Assigned,
+
+    /// Matches items that have no assignee.
+    NoAssignee,
 
     // ==================== Boolean Operators ====================
     /// Logical AND of two filters.
