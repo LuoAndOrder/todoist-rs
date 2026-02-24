@@ -283,6 +283,7 @@ fn save_setup_config(token: &str, storage: TokenStorage) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     #[test]
     fn test_token_storage_as_str() {
@@ -299,6 +300,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_is_first_run_without_token() {
         use std::env;
         use tempfile::TempDir;
@@ -322,6 +324,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_is_first_run_with_config_token() {
         use std::env;
         use std::fs;
@@ -350,6 +353,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_save_setup_config_with_token() {
         use std::env;
         use std::fs;
@@ -378,6 +382,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_save_setup_config_env_only() {
         use std::env;
         use std::fs;
@@ -407,6 +412,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    #[serial]
     fn test_save_setup_config_sets_permissions() {
         use std::env;
         use std::fs;
